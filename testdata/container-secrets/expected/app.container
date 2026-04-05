@@ -1,0 +1,10 @@
+
+[Container]
+Image=docker.io/myapp:latest
+Secret=raw-secret,type=env,target=RAW_VAR
+Secret=my-api-key,type=env,target=API_KEY
+Secret=tls-cert,type=mount,target=/etc/ssl/cert.pem,uid=1000,gid=1000,mode=0400
+Secret=simple-secret
+
+[Install]
+WantedBy=default.target

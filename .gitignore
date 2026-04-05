@@ -1,0 +1,10 @@
+.mise/config.local.toml
+
+# Go / release build artifacts
+/bin/
+/dist/
+
+# Pre-migration scratch (not part of the project)
+/testing-old/
+/repro-pipe-loss-isolate.ts
+/nohup.out

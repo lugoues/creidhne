@@ -1,0 +1,8 @@
+
+[Container]
+Image=docker.io/myapp:latest
+ContainerName=webapp-app
+Pod=webapp.pod
+
+[Install]
+WantedBy=multi-user.target

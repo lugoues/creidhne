@@ -1,0 +1,7 @@
+
+[Container]
+Image=docker.io/myapp:latest
+ServiceName=custom-myapp
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "tombi-toml.tombi",
+    "cuelangorg.vscode-cue",
+    "denoland.vscode-deno"
+  ]
+}

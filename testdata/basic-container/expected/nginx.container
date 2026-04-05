@@ -1,0 +1,7 @@
+
+[Container]
+Image=docker.io/nginx:latest
+ContainerName=nginx
+
+[Install]
+WantedBy=default.target

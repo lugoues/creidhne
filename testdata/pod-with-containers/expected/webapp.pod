@@ -1,0 +1,7 @@
+[Unit]
+After=tailscaled.service
+Requires=tailscaled.service
+
+[Pod]
+PodName=webapp
+PublishPort=0.0.0.0:8080:8080

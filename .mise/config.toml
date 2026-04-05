@@ -1,0 +1,35 @@
+# Developer tooling for the Creidhne repo. mise provisions the toolchain and
+# wraps common dev tasks; it is NOT required to *use* the binary.
+
+[tools]
+cue = "0.16.0"
+go = "latest"
+
+[settings]
+task.output = "keep-order"
+
+# --- Dev tasks ---
+
+[tasks.build]
+description = "Build the crei binary into ./bin"
+run = "go build -o bin/crei ./cmd/crei"
+
+[tasks.test]
+description = "Run Go tests and validate the CUE schema"
+run = ["go test -v ./...", "cd creidhne && cue vet ./..."]
+
+[tasks.vet]
+description = "Validate the CUE schema module"
+run = "cd creidhne && cue vet ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.tidy]
+description = "Tidy Go module dependencies"
+run = "go mod tidy"
+
+[tasks.snapshot]
+description = "Build a local release snapshot with goreleaser"
+run = "goreleaser release --snapshot --clean"

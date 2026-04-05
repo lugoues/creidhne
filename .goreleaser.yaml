@@ -1,0 +1,53 @@
+version: 2
+
+project_name: creidhne
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: crei
+    main: ./cmd/crei
+    binary: crei
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/lugoues/creidhne/internal/cli.version={{ .Version }}
+      - -X github.com/lugoues/creidhne/internal/cli.commit={{ .Commit }}
+      - -X github.com/lugoues/creidhne/internal/cli.date={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# To publish a Homebrew formula, create a `lugoues/homebrew-tap` repo, provide a
+# HOMEBREW_TAP_GITHUB_TOKEN secret to the release workflow, and uncomment:
+#
+# brews:
+#   - repository:
+#       owner: lugoues
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     homepage: "https://github.com/lugoues/creidhne"
+#     description: "Generate and apply Podman Quadlet systemd units from CUE"
+#     install: |
+#       bin.install "crei"
