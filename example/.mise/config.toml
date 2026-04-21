@@ -1,0 +1,9 @@
+[env]
+QUADLET_DIR = "/etc/containers/systemd"
+
+
+[task_config]
+includes = [
+  "../mise/tasks"
+  # "git::ssh://git@github.com/lugoues/quadlets-cue.git//mise/tasks?ref=v0.0.25"
+]

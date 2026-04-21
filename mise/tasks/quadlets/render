@@ -1,0 +1,13 @@
+#!/usr/bin/env -S deno run --allow-all
+//MISE description="Render all quadlet files to stdout"
+
+import { $, getFiles } from "./lib.ts";
+
+const files = await getFiles();
+const filenames = Object.keys(files).sort();
+
+$.log(`# ${filenames.length} quadlet file(s)\n`);
+for (const fname of filenames) {
+  $.log(`--- ${fname} ---`);
+  $.log(files[fname]);
+}
