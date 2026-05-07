@@ -1,0 +1,24 @@
+# FileName=myapp
+
+[Container]
+Image=localhost/myapp:latest
+ContainerName=myapp
+
+[Install]
+WantedBy=default.target
+
+---
+# FileName=myapp-main
+
+[Build]
+ImageTag=localhost/myapp:latest
+SetWorkingDirectory=unit
+File=images/myapp-main.Containerfile
+
+---
+# FileName=myapp-sidecar
+
+[Build]
+ImageTag=localhost/myapp-sidecar:latest
+SetWorkingDirectory=unit
+File=images/myapp-sidecar.Containerfile

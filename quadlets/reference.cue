@@ -24,10 +24,10 @@ package quadlets
 		if name != _|_ {name}
 		if name == _|_ {#unitName}
 	}
-	_stem: {
+	stem: {
 		if _key == "" {_name}
 		if _key != "" {"\(_name)-\(_key)"}
 	}
-	#ref:     "\(_stem).\(#unitType)"
-	#service: "\(_stem)\(#serviceSuffix).service"
+	#ref:     "\(stem).\(#unitType)"
+	#service: "\(stem)\(#serviceSuffix).service"
 }

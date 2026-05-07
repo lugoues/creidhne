@@ -5,8 +5,6 @@ import { red, green, yellow, dim } from "jsr:@std/fmt/colors";
 
 export { $, red, green, yellow, dim };
 
-$.setPrintCommand(true);
-
 export const QUADLET_EXTENSIONS = new Set([
   ".container", ".pod", ".volume", ".network",
   ".kube", ".build", ".image", ".artifact",
@@ -43,7 +41,7 @@ export async function computePlan(
     }
   }
 
-  const onDisk = await listExistingQuadlets(dir);
+  const onDisk = await listExistingFiles(dir);
   for (const name of [...onDisk].sort()) {
     if (expected.has(name)) continue;
     changes.push({ action: "remove", name });
@@ -98,19 +96,40 @@ export function getQuadletDir(): string {
 }
 
 // List existing quadlet files in a directory
-export async function listExistingQuadlets(dir: string): Promise<Set<string>> {
+export async function listExistingFiles(dir: string): Promise<Set<string>> {
   const existing = new Set<string>();
-  const path = $.path(dir);
-  if (!(await path.exists())) return existing;
+  const root = $.path(dir);
+  if (!(await root.exists())) return existing;
 
-  for await (const entry of path.readDir()) {
+  // Flat quadlet files
+  for await (const entry of root.readDir()) {
     if (!entry.isFile) continue;
     const ext = entry.name.substring(entry.name.lastIndexOf("."));
     if (QUADLET_EXTENSIONS.has(ext)) {
       existing.add(entry.name);
     }
   }
+
+  // images/ subdirectory
+  const imagesDir = root.join("images");
+  if (await imagesDir.exists()) {
+    for await (const entry of imagesDir.readDir()) {
+      if (!entry.isFile) continue;
+      if (entry.name.endsWith(".Containerfile")) {
+        existing.add(`images/${entry.name}`);
+      }
+    }
+  }
+
   return existing;
+}
+
+// Check if the quadlet directory requires elevated permissions.
+// Returns true if the directory exists and is not writable by the current user.
+export async function needsElevation(dir: string): Promise<boolean> {
+  const exists = await $.path(dir).exists();
+  if (!exists) return false;
+  return !(await isWritable(dir));
 }
 
 // Check if a directory is writable by the current user.
@@ -127,12 +146,19 @@ export async function isWritable(dir: string): Promise<boolean> {
 
 // Write a file, using sudo if needsElevation is true.
 export async function writeFile(path: string, content: string, elevated: boolean): Promise<void> {
+  const parent = $.path(path).parent()!;
+  if (!(await parent.exists())) {
+    if (elevated) {
+      await $`sudo mkdir -p ${parent.toString()}`;
+    } else {
+      await parent.mkdir({ recursive: true });
+    }
+  }
   if (elevated) {
     const tmp = await Deno.makeTempFile();
     try {
       await Deno.writeTextFile(tmp, content);
       await $`sudo cp ${tmp} ${path}`;
-      await $`sudo chmod 0755 ${path}`;
     } finally {
       await Deno.remove(tmp);
     }
@@ -182,3 +208,4 @@ export async function runDiff(
     await tmp.remove();
   }
 }
+

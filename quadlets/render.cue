@@ -14,7 +14,7 @@ import (
 // Produces per-type maps of rendered unit files and a combined .quadlets output.
 //
 // Primary units (#container, #pod, etc.) are merged into the plural maps
-// (containers, pods, etc.) keyed by their _stem, so output.containers
+// (containers, pods, etc.) keyed by their stem, so output.containers
 // contains all containers regardless of how they were declared.
 Render: {
 	#input: #Units
@@ -23,66 +23,77 @@ Render: {
 
 	containers: {
 		try {
-			("\(#input.#container?._stem)"): template.Execute(templates.Container, #input.#container?)
+			("\(#input.#container?.stem)"): template.Execute(templates.Container, #input.#container?)
 		}
 		for name, def in #input.containers {
-			("\(def._stem)"): template.Execute(templates.Container, def)
+			("\(def.stem)"): template.Execute(templates.Container, def)
 		}
 	}
 	pods: {
 		try {
-			("\(#input.#pod?._stem)"): template.Execute(templates.Pod, #input.#pod?)
+			("\(#input.#pod?.stem)"): template.Execute(templates.Pod, #input.#pod?)
 		}
 		for name, def in #input.pods {
-			("\(def._stem)"): template.Execute(templates.Pod, def)
+			("\(def.stem)"): template.Execute(templates.Pod, def)
 		}
 	}
 	volumes: {
 		try {
-			("\(#input.#volume?._stem)"): template.Execute(templates.Volume, #input.#volume?)
+			("\(#input.#volume?.stem)"): template.Execute(templates.Volume, #input.#volume?)
 		}
 		for name, def in #input.volumes {
-			("\(def._stem)"): template.Execute(templates.Volume, def)
+			("\(def.stem)"): template.Execute(templates.Volume, def)
 		}
 	}
 	networks: {
 		try {
-			("\(#input.#network?._stem)"): template.Execute(templates.Network, #input.#network?)
+			("\(#input.#network?.stem)"): template.Execute(templates.Network, #input.#network?)
 		}
 		for name, def in #input.networks {
-			("\(def._stem)"): template.Execute(templates.Network, def)
+			("\(def.stem)"): template.Execute(templates.Network, def)
 		}
 	}
 	kubes: {
 		try {
-			("\(#input.#kube?._stem)"): template.Execute(templates.Kube, #input.#kube?)
+			("\(#input.#kube?.stem)"): template.Execute(templates.Kube, #input.#kube?)
 		}
 		for name, def in #input.kubes {
-			("\(def._stem)"): template.Execute(templates.Kube, def)
+			("\(def.stem)"): template.Execute(templates.Kube, def)
 		}
 	}
 	builds: {
 		try {
-			("\(#input.#build?._stem)"): template.Execute(templates.Build, #input.#build?)
+			let _b = #input.#build?
+			("\(_b.stem)"): template.Execute(templates.Build, {
+				_b
+				if _b.ContainerFile != _|_ {
+					containerfilePath: "images/\(_b.stem).Containerfile"
+				}
+			})
 		}
 		for name, def in #input.builds {
-			("\(def._stem)"): template.Execute(templates.Build, def)
+			("\(def.stem)"): template.Execute(templates.Build, {
+				def
+				if def.ContainerFile != _|_ {
+					containerfilePath: "images/\(def.stem).Containerfile"
+				}
+			})
 		}
 	}
 	images: {
 		try {
-			("\(#input.#image?._stem)"): template.Execute(templates.Image, #input.#image?)
+			("\(#input.#image?.stem)"): template.Execute(templates.Image, #input.#image?)
 		}
 		for name, def in #input.images {
-			("\(def._stem)"): template.Execute(templates.Image, def)
+			("\(def.stem)"): template.Execute(templates.Image, def)
 		}
 	}
 	artifacts: {
 		try {
-			("\(#input.#artifact?._stem)"): template.Execute(templates.Artifact, #input.#artifact?)
+			("\(#input.#artifact?.stem)"): template.Execute(templates.Artifact, #input.#artifact?)
 		}
 		for name, def in #input.artifacts {
-			("\(def._stem)"): template.Execute(templates.Artifact, def)
+			("\(def.stem)"): template.Execute(templates.Artifact, def)
 		}
 	}
 
@@ -97,6 +108,18 @@ Render: {
 		for stem, content in builds { "\(stem).build": content }
 		for stem, content in images { "\(stem).image": content }
 		for stem, content in artifacts { "\(stem).artifact": content }
+
+		// Inline Containerfiles from builds
+		try {
+			if #input.#build?.ContainerFile != _|_ {
+				"images/\(#input.#build?.stem).Containerfile": #input.#build?.ContainerFile
+			}
+		}
+		for _name, def in #input.builds {
+			if def.ContainerFile != _|_ {
+				"images/\(def.stem).Containerfile": def.ContainerFile
+			}
+		}
 	}
 
 	// --- Combined .quadlets output ---

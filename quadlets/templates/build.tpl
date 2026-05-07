@@ -52,9 +52,13 @@
 {{ end -}}
 {{ if .Build.ServiceName -}}ServiceName={{ .Build.ServiceName }}
 {{ end -}}
+{{ if .ContainerFile -}}SetWorkingDirectory=unit
+File={{ .containerfilePath }}
+{{ else -}}
 {{ if .Build.SetWorkingDirectory -}}SetWorkingDirectory={{ .Build.SetWorkingDirectory }}
 {{ end -}}
 {{ if .Build.File -}}File={{ .Build.File }}
+{{ end -}}
 {{ end -}}
 {{ if .Build.IgnoreFile -}}IgnoreFile={{ .Build.IgnoreFile }}
 {{ end -}}
