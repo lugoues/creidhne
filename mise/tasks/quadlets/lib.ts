@@ -78,7 +78,23 @@ export function planSummary(changes: FileChange[]): { added: number; changed: nu
 // Export CUE files as JSON map of filename -> content or {content, mode}
 // Walks all top-level values and merges their output.files maps.
 export async function getFiles(): Promise<Record<string, FileValue>> {
-  const root = await $`cue export ./... --out json`.json();
+  const result = await $`cue export ./... --out json`
+    .stdout("piped").stderr("piped").noThrow();
+
+  if (result.code !== 0) {
+    $.logError("cue export failed:");
+    console.error(result.stderr);
+    Deno.exit(1);
+  }
+
+  let root: Record<string, unknown>;
+  try {
+    root = JSON.parse(result.stdout);
+  } catch {
+    $.logError("cue export produced invalid JSON. Raw output:");
+    console.error(result.stdout.slice(0, 500));
+    Deno.exit(1);
+  }
 
   const files: Record<string, FileValue> = {};
   for (const val of Object.values(root)) {
