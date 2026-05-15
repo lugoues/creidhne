@@ -1,0 +1,177 @@
+[env]
+QUADLET_DIR = "~/.config/containers/systemd"
+DIFF_TOOL = "delta"
+
+[tools]
+cue = "0.16.0"
+deno = "latest"
+
+[tasks.vet]
+description = "Validate CUE module"
+run = "cd quadlets && cue vet ./..."
+
+[tasks.test]
+description = "Run golden file tests via cue vet"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd testing
+
+failed=0
+passed=0
+
+for dir in */; do
+    [[ "$dir" == "cue.mod/" ]] && continue
+
+    name=$(basename "$dir")
+
+    if cue vet "./$dir" 2>&1; then
+        echo "PASS  $name"
+        passed=$((passed + 1))
+    else
+        echo "FAIL  $name"
+        failed=$((failed + 1))
+    fi
+done
+
+echo ""
+echo "Results: $passed passed, $failed failed"
+[[ $failed -eq 0 ]]
+"""
+
+[tasks."test:update"]
+description = "Regenerate golden files from current output"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd testing
+
+for dir in */; do
+    [[ "$dir" == "cue.mod/" ]] && continue
+
+    name=$(basename "$dir")
+    cue eval -t mode=update "./$dir" -e test.actual --out text | head -c -1 > "$dir/expected.quadlets"
+    echo "UPDATED  $name"
+done
+
+echo ""
+echo "All golden files regenerated."
+"""
+
+[tasks."test:verify"]
+description = "Verify golden files are up to date"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd testing
+
+stale=0
+
+for dir in */; do
+    [[ "$dir" == "cue.mod/" ]] && continue
+
+    name=$(basename "$dir")
+    actual=$(cue eval -t mode=update "./$dir" -e test.actual --out text | head -c -1)
+    expected=$(cat "$dir/expected.quadlets")
+
+    if [ "$actual" != "$expected" ]; then
+        echo "STALE  $name (run 'mise run test:update' locally)"
+        diff <(echo "$expected") <(echo "$actual") || true
+        stale=$((stale + 1))
+    fi
+done
+
+if [ "$stale" -gt 0 ]; then
+    echo ""
+    echo "$stale golden file(s) are stale."
+    exit 1
+fi
+
+echo "All golden files are current."
+"""
+
+# --- Publishing ---
+
+[tasks."ghcr:login"]
+description = "Login to GHCR (uses GITHUB_TOKEN or prompts for credentials)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+GHCR_OWNER="${GHCR_OWNER:-lugoues}"
+
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${GITHUB_ACTOR:-$GHCR_OWNER}" --password-stdin
+else
+    docker login ghcr.io -u "$GHCR_OWNER"
+fi
+"""
+
+[tasks."test:publish"]
+description = "Test module publishing against a local registry"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+port="${CUE_REGISTRY_PORT:-5100}"
+
+# Start registry
+echo "Starting registry on :$port..."
+cue mod registry "localhost:$port" > /tmp/cue-registry.log 2>&1 &
+registry_pid=$!
+trap "kill $registry_pid 2>/dev/null; wait $registry_pid 2>/dev/null" EXIT
+
+sleep 1
+curl -sf "http://localhost:$port/v2/" > /dev/null 2>&1 || {
+    echo "Failed to start registry. Check /tmp/cue-registry.log"
+    exit 1
+}
+echo "Registry started (pid $registry_pid)."
+
+export CUE_REGISTRY="localhost:$port"
+
+cd quadlets
+
+module=$(cue eval -e 'module' ./cue.mod/module.cue --out text)
+version="v0.0.0-test"
+
+echo "Publishing ${module}@${version} to local registry..."
+cue mod publish "$version"
+
+echo "Verifying download..."
+tmpdir=$(mktemp -d)
+trap "rm -rf $tmpdir; kill $registry_pid 2>/dev/null; wait $registry_pid 2>/dev/null" EXIT
+
+cd "$tmpdir"
+cue mod init test.local/verify
+cat > main.cue <<CUE
+package verify
+
+import "${module}"
+CUE
+cue mod tidy
+cue vet ./...
+
+echo "PASS: module published and downloaded successfully."
+"""
+
+[tasks.publish]
+description = "Publish module to GHCR (requires PUBLISH_VERSION, e.g. PUBLISH_VERSION=v0.0.16 mise run publish)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${PUBLISH_VERSION:?Set PUBLISH_VERSION (e.g. v0.0.16)}"
+
+GHCR_OWNER="${GHCR_OWNER:-lugoues}"
+export CUE_REGISTRY='inline:moduleRegistries: "github.com/'"${GHCR_OWNER}"'": {registry: "ghcr.io/'"${GHCR_OWNER}"'/cue-modules", stripPrefix: true}'
+
+cd quadlets
+module=$(cue eval -e 'module' ./cue.mod/module.cue --out text)
+echo "Publishing ${module}@${PUBLISH_VERSION} to ghcr.io/${GHCR_OWNER}/cue-modules ..."
+cue mod publish "$PUBLISH_VERSION"
+echo "Published $PUBLISH_VERSION"
+"""
