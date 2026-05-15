@@ -10,17 +10,27 @@ export const QUADLET_EXTENSIONS = new Set([
   ".kube", ".build", ".image", ".artifact",
 ]);
 
+// File values in the output map are either plain strings (quadlet files,
+// Containerfiles) or structured objects with content and mode (context files).
+export type FileValue = string | { content: string; mode: string };
+
+// Normalize a file value to content string and optional mode.
+export function normalizeFileValue(val: FileValue): { content: string; mode?: string } {
+  if (typeof val === "string") return { content: val };
+  return { content: val.content, mode: val.mode };
+}
+
 // Categorized file change for plan/diff/apply
 export type FileChange =
-  | { action: "add"; name: string; content: string }
-  | { action: "change"; name: string; content: string; existing: string }
+  | { action: "add"; name: string; content: string; mode?: string }
+  | { action: "change"; name: string; content: string; existing: string; mode?: string }
   | { action: "unchanged"; name: string }
   | { action: "remove"; name: string };
 
 // Compare generated files against what's on disk.
 // Returns a sorted list of changes.
 export async function computePlan(
-  files: Record<string, string>,
+  files: Record<string, FileValue>,
   dir: string,
 ): Promise<FileChange[]> {
   const changes: FileChange[] = [];
@@ -28,13 +38,14 @@ export async function computePlan(
   const target = $.path(dir);
 
   for (const fname of [...expected].sort()) {
+    const { content, mode } = normalizeFileValue(files[fname]);
     const dest = target.join(fname);
     if (!(await dest.exists())) {
-      changes.push({ action: "add", name: fname, content: files[fname] });
+      changes.push({ action: "add", name: fname, content, mode });
     } else {
       const existing = await dest.readText();
-      if (existing !== files[fname]) {
-        changes.push({ action: "change", name: fname, content: files[fname], existing });
+      if (existing !== content) {
+        changes.push({ action: "change", name: fname, content, existing, mode });
       } else {
         changes.push({ action: "unchanged", name: fname });
       }
@@ -64,15 +75,15 @@ export function planSummary(changes: FileChange[]): { added: number; changed: nu
   return { added, changed, unchanged, removed, total: added + changed + unchanged };
 }
 
-// Export CUE files as JSON map of filename -> content
+// Export CUE files as JSON map of filename -> content or {content, mode}
 // Walks all top-level values and merges their output.files maps.
-export async function getFiles(): Promise<Record<string, string>> {
+export async function getFiles(): Promise<Record<string, FileValue>> {
   const root = await $`cue export ./... --out json`.json();
 
-  const files: Record<string, string> = {};
+  const files: Record<string, FileValue> = {};
   for (const val of Object.values(root)) {
     const outputFiles = (val as Record<string, unknown>)?.output
-      ?.files as Record<string, string> | undefined;
+      ?.files as Record<string, FileValue> | undefined;
     if (outputFiles) {
       Object.assign(files, outputFiles);
     }
@@ -95,7 +106,8 @@ export function getQuadletDir(): string {
   return dir;
 }
 
-// List existing quadlet files in a directory
+// List existing files in the quadlet directory.
+// Walks images/ subdirectory for Containerfiles and context files.
 export async function listExistingFiles(dir: string): Promise<Set<string>> {
   const existing = new Set<string>();
   const root = $.path(dir);
@@ -110,15 +122,20 @@ export async function listExistingFiles(dir: string): Promise<Set<string>> {
     }
   }
 
-  // images/ subdirectory
+  // images/ subdirectory (Containerfiles and context files)
   const imagesDir = root.join("images");
   if (await imagesDir.exists()) {
-    for await (const entry of imagesDir.readDir()) {
-      if (!entry.isFile) continue;
-      if (entry.name.endsWith(".Containerfile")) {
-        existing.add(`images/${entry.name}`);
+    async function walkDir(base: typeof imagesDir, prefix: string) {
+      for await (const entry of base.readDir()) {
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isFile) {
+          existing.add(`images/${relPath}`);
+        } else if (entry.isDirectory) {
+          await walkDir(base.join(entry.name), relPath);
+        }
       }
     }
+    await walkDir(imagesDir, "");
   }
 
   return existing;
@@ -145,7 +162,8 @@ export async function isWritable(dir: string): Promise<boolean> {
 }
 
 // Write a file, using sudo if needsElevation is true.
-export async function writeFile(path: string, content: string, elevated: boolean): Promise<void> {
+// Creates parent directories if needed. Sets file mode if specified.
+export async function writeFile(path: string, content: string, elevated: boolean, mode?: string): Promise<void> {
   const parent = $.path(path).parent()!;
   if (!(await parent.exists())) {
     if (elevated) {
@@ -158,12 +176,14 @@ export async function writeFile(path: string, content: string, elevated: boolean
     const tmp = await Deno.makeTempFile();
     try {
       await Deno.writeTextFile(tmp, content);
-      await $`sudo cp ${tmp} ${path}`;
+      if (mode) await $`chmod ${mode} ${tmp}`;
+      await $`sudo cp -p ${tmp} ${path}`;
     } finally {
       await Deno.remove(tmp);
     }
   } else {
     await $.path(path).writeText(content);
+    if (mode) await $`chmod ${mode} ${path}`;
   }
 }
 
@@ -208,4 +228,3 @@ export async function runDiff(
     await tmp.remove();
   }
 }
-

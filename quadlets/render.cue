@@ -68,6 +68,9 @@ Render: {
 				_b
 				if _b.ContainerFile != _|_ {
 					containerfilePath: "images/\(_b.stem).Containerfile"
+					if _b.Context != _|_ {
+						contextPath: "images/\(_b.stem).context"
+					}
 				}
 			})
 		}
@@ -76,6 +79,9 @@ Render: {
 				def
 				if def.ContainerFile != _|_ {
 					containerfilePath: "images/\(def.stem).Containerfile"
+					if def.Context != _|_ {
+						contextPath: "images/\(def.stem).context"
+					}
 				}
 			})
 		}
@@ -109,15 +115,44 @@ Render: {
 		for stem, content in images { "\(stem).image": content }
 		for stem, content in artifacts { "\(stem).artifact": content }
 
-		// Inline Containerfiles from builds
+		// Inline Containerfiles and context files from builds.
+		// Context values are normalized to {content, mode} structs.
 		try {
 			if #input.#build?.ContainerFile != _|_ {
 				"images/\(#input.#build?.stem).Containerfile": #input.#build?.ContainerFile
+			}
+			if #input.#build?.Context != _|_ {
+				for _path, _val in #input.#build?.Context {
+					let _norm = {
+						if (_val & string) != _|_ {
+							content: _val
+							mode:    "0644"
+						}
+						if (_val & string) == _|_ {
+							_val
+						}
+					}
+					"images/\(#input.#build?.stem).context/\(_path)": _norm
+				}
 			}
 		}
 		for _name, def in #input.builds {
 			if def.ContainerFile != _|_ {
 				"images/\(def.stem).Containerfile": def.ContainerFile
+			}
+			if def.Context != _|_ {
+				for _path, _val in def.Context {
+					let _norm = {
+						if (_val & string) != _|_ {
+							content: _val
+							mode:    "0644"
+						}
+						if (_val & string) == _|_ {
+							_val
+						}
+					}
+					"images/\(def.stem).context/\(_path)": _norm
+				}
 			}
 		}
 	}

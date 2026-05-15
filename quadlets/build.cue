@@ -11,11 +11,19 @@ package quadlets
 	Quadlet?: #QuadletSection
 
 	({
-		// Inline Containerfile content. The content is emitted to
-		// output.files as images/{stem}.Containerfile and deployed
-		// alongside quadlet files. File and SetWorkingDirectory are
+		// Inline Containerfile content. The Containerfile is emitted to
+		// images/{stem}.Containerfile. File and SetWorkingDirectory are
 		// injected by the renderer.
 		ContainerFile: string
+		// Optional build context directory. Entries are emitted under
+		// images/{stem}.context/ as relative paths. When set,
+		// SetWorkingDirectory points to the context directory.
+		// Values can be plain strings (default mode "0644") or
+		// structured with explicit mode (e.g. "0755" for scripts).
+		Context?: [string]: string | {
+			content: string
+			mode:    #FileMode | *"0644"
+		}
 	} | {
 		Build: {
 			// Provide context (a working directory) to podman build via path, URL, or special keys.

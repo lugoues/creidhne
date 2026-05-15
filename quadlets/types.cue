@@ -160,6 +160,9 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 // UID/GID mapping format
 #IDMap: string
 
+// Unix file mode in octal notation (e.g. "0755", "0644")
+#FileMode: =~"^0[0-7]{3}$"
+
 // Pull policy
 #PullPolicy: "always" | "missing" | "never" | "newer"
 
