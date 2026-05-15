@@ -130,8 +130,9 @@ export async function listExistingFiles(dir: string): Promise<Set<string>> {
   if (!(await root.exists())) return existing;
 
   // Flat quadlet files
+  // Note: dax's readDir() returns entries where isFile/isDirectory are methods.
   for await (const entry of root.readDir()) {
-    if (!entry.isFile) continue;
+    if (!entry.isFile()) continue;
     const ext = entry.name.substring(entry.name.lastIndexOf("."));
     if (QUADLET_EXTENSIONS.has(ext)) {
       existing.add(entry.name);
@@ -144,9 +145,9 @@ export async function listExistingFiles(dir: string): Promise<Set<string>> {
     async function walkDir(base: typeof imagesDir, prefix: string) {
       for await (const entry of base.readDir()) {
         const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
-        if (entry.isFile) {
+        if (entry.isFile()) {
           existing.add(`images/${relPath}`);
-        } else if (entry.isDirectory) {
+        } else if (entry.isDirectory()) {
           await walkDir(base.join(entry.name), relPath);
         }
       }
@@ -245,7 +246,7 @@ export async function pruneEmptyDirs(dir: string, elevated: boolean): Promise<vo
   async function walk(p: typeof root): Promise<void> {
     if (!(await p.stat())?.isDirectory) return;
     for await (const entry of p.readDir()) {
-      if (entry.isDirectory) {
+      if (entry.isDirectory()) {
         await walk(p.join(entry.name));
       }
     }

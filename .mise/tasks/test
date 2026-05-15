@@ -45,7 +45,7 @@ let passed = 0;
 let failed = 0;
 
 for await (const entry of testingDir.readDir()) {
-  if (!entry.isDirectory || entry.name === "cue.mod") continue;
+  if (!entry.isDirectory() || entry.name === "cue.mod") continue;
 
   const result = await $`cue vet ./${entry.name}`.cwd(testingDir).noThrow().stderr("piped");
 
