@@ -1,0 +1,11 @@
+[Unit]
+After=app.service
+Requires=app.service
+
+[Container]
+Image=docker.io/haproxy:latest
+ContainerName=proxy
+Network=backend.network
+
+[Install]
+WantedBy=multi-user.target

@@ -1,15 +1,17 @@
 #!/usr/bin/env -S deno run --allow-all
 //MISE description="Write generated quadlet files to the quadlet directory"
+//USAGE flag "--reload" help="Run daemon-reload after applying changes"
 
-import { $, red, green, yellow, dim, getFiles, getQuadletDir, computePlan, planSummary, isWritable, writeFile, removeFile, mkdirp } from "./lib.ts";
+import { parseArgs } from "jsr:@std/cli/parse-args";
+import { $, red, green, yellow, dim, getFiles, getQuadletDir, computePlan, planSummary, needsElevation, writeFile, removeFile, mkdirp } from "./lib.ts";
+
+const args = parseArgs(Deno.args, { boolean: ["reload"], default: { reload: false } });
 
 const dir = getQuadletDir();
 const files = await getFiles();
 const target = $.path(dir);
 
-// Check if we need elevated permissions
-const dirExists = await target.exists();
-const elevated = dirExists ? !(await isWritable(dir)) : false;
+const elevated = await needsElevation(dir);
 
 if (elevated) {
   $.logWarn(`${dir} requires elevated permissions`);
@@ -47,7 +49,7 @@ for (const c of changes) {
   switch (c.action) {
     case "add":
     case "change":
-      await writeFile(target.join(c.name).toString(), c.content, elevated);
+      await writeFile(target.join(c.name).toString(), c.content, elevated, c.mode);
       break;
     case "remove":
       await removeFile(target.join(c.name).toString(), elevated);
@@ -56,5 +58,12 @@ for (const c of changes) {
 }
 
 $.log(`\nApplied: ${added} added, ${changed} updated, ${removed} removed`);
-const reloadCmd = elevated ? "systemctl daemon-reload" : "systemctl --user daemon-reload";
-$.log(`Run '${reloadCmd}' to pick up changes.`);
+
+if (args.reload) {
+  const reloadArgs = elevated ? ["daemon-reload"] : ["--user", "daemon-reload"];
+  await $`systemctl ${reloadArgs}`;
+  $.log("Daemon reloaded.");
+} else {
+  const reloadCmd = elevated ? "systemctl daemon-reload" : "systemctl --user daemon-reload";
+  $.log(`Run '${reloadCmd}' to pick up changes.`);
+}

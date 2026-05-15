@@ -7,9 +7,6 @@ import (
 	"github.com/lugoues/quadlets-test:testing"
 )
 
-_mode:     *"test" | "update" @tag(mode)
-_expected: _ @embed(file=expected.quadlets,type=text)
-
 test: testing.#Test & {
 	subject: quadlets.#Quadlet & {
 		name: "myapp"
@@ -38,27 +35,10 @@ test: testing.#Test & {
 			}
 		}
 	}
-	if _mode == "test" {
-		expected: _expected
+	expected: {
+		"myapp.build": _ @embed(file=expected/myapp.build,type=text)
+		"images/myapp.Containerfile": _ @embed(file=expected/images/myapp.Containerfile,type=text)
+		"images/myapp.context/etc/app.conf": _ @embed(file=expected/images/myapp.context/etc/app.conf,type=text)
+		"images/myapp.context/scripts/entrypoint.sh": _ @embed(file=expected/images/myapp.context/scripts/entrypoint.sh,type=text)
 	}
-}
-
-// Verify the files map contains context files.
-_files: test.subject.output.files
-_filesCheck: {
-	hasContainerfile: _files["images/myapp.Containerfile"] != _|_
-	hasBuild:         _files["myapp.build"] != _|_
-	hasAppConf:       _files["images/myapp.context/etc/app.conf"] != _|_
-	hasEntrypoint:    _files["images/myapp.context/scripts/entrypoint.sh"] != _|_
-
-	appConfContent: _files["images/myapp.context/etc/app.conf"].content & """
-		[app]
-		debug = false
-		"""
-	appConfMode: _files["images/myapp.context/etc/app.conf"].mode & "0644"
-	entrypointContent: _files["images/myapp.context/scripts/entrypoint.sh"].content & """
-		#!/bin/bash
-		exec node /app/server.js
-		"""
-	entrypointMode: _files["images/myapp.context/scripts/entrypoint.sh"].mode & "0755"
 }

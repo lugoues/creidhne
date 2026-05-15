@@ -1,0 +1,9 @@
+
+[Container]
+Image=docker.io/myapp:latest
+ContainerName=app
+Network=proxy-backend.network
+Volume=app.volume:/data
+
+[Install]
+WantedBy=multi-user.target

@@ -7,9 +7,6 @@ import (
 	"github.com/lugoues/quadlets-test:testing"
 )
 
-_mode:     *"test" | "update" @tag(mode)
-_expected: _ @embed(file=expected.quadlets,type=text)
-
 _externals: quadlets.#ExternalUnits & {
 	services: tailscaled: _
 }
@@ -48,7 +45,9 @@ test: testing.#Test & {
 			}
 		}
 	}
-	if _mode == "test" {
-		expected: _expected
+	expected: {
+		"webapp-sidecar.container": _ @embed(file=expected/webapp-sidecar.container,type=text)
+		"webapp.container": _ @embed(file=expected/webapp.container,type=text)
+		"webapp.pod": _ @embed(file=expected/webapp.pod,type=text)
 	}
 }

@@ -7,9 +7,6 @@ import (
 	"github.com/lugoues/quadlets-test:testing"
 )
 
-_mode: *"test" | "update" @tag(mode)
-_expected: _ @embed(file=expected.quadlets,type=text)
-
 test: testing.#Test & {
 	subject: quadlets.#Quadlet & {
 		name: "nginx"
@@ -23,7 +20,7 @@ test: testing.#Test & {
 			}
 		}
 	}
-	if _mode == "test" {
-		expected: _expected
+	expected: {
+		"nginx.container": _ @embed(file=expected/nginx.container,type=text)
 	}
 }

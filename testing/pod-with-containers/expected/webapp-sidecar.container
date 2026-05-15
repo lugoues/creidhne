@@ -1,0 +1,8 @@
+
+[Container]
+Image=docker.io/envoy:latest
+ContainerName=webapp-sidecar
+Pod=webapp.pod
+
+[Install]
+WantedBy=multi-user.target

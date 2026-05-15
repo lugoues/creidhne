@@ -1,0 +1,5 @@
+
+[Build]
+ImageTag=localhost/myapp:latest
+SetWorkingDirectory=unit
+File=images/myapp.Containerfile

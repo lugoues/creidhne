@@ -1,0 +1,7 @@
+
+[Container]
+Image=localhost/myapp:latest
+ContainerName=myapp
+
+[Install]
+WantedBy=default.target

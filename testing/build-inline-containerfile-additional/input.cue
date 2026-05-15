@@ -7,9 +7,6 @@ import (
 	"github.com/lugoues/quadlets-test:testing"
 )
 
-_mode:     *"test" | "update" @tag(mode)
-_expected: _ @embed(file=expected.quadlets,type=text)
-
 test: testing.#Test & {
 	subject: quadlets.#Quadlet & {
 		name: "myapp"
@@ -42,23 +39,11 @@ test: testing.#Test & {
 			}
 		}
 	}
-	if _mode == "test" {
-		expected: _expected
+	expected: {
+		"myapp-main.build": _ @embed(file=expected/myapp-main.build,type=text)
+		"myapp-sidecar.build": _ @embed(file=expected/myapp-sidecar.build,type=text)
+		"myapp.container": _ @embed(file=expected/myapp.container,type=text)
+		"images/myapp-main.Containerfile": _ @embed(file=expected/images/myapp-main.Containerfile,type=text)
+		"images/myapp-sidecar.Containerfile": _ @embed(file=expected/images/myapp-sidecar.Containerfile,type=text)
 	}
-}
-
-// Verify the files map contains both Containerfiles.
-_files: test.subject.output.files
-_filesCheck: {
-	mainContent: _files["images/myapp-main.Containerfile"] & """
-		FROM node:20
-		WORKDIR /app
-		COPY . .
-		RUN npm ci && npm run build
-		"""
-	sidecarContent: _files["images/myapp-sidecar.Containerfile"] & """
-		FROM golang:1.22
-		COPY . .
-		RUN go build -o /sidecar
-		"""
 }

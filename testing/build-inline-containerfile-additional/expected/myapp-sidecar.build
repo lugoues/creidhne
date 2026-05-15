@@ -1,0 +1,5 @@
+
+[Build]
+ImageTag=localhost/myapp-sidecar:latest
+SetWorkingDirectory=unit
+File=images/myapp-sidecar.Containerfile

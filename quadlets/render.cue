@@ -3,15 +3,13 @@
 package quadlets
 
 import (
-	"list"
-	"strings"
 	"text/template"
 
 	"github.com/lugoues/quadlets/templates@v0"
 )
 
 // Render dispatches template execution over a #Units value.
-// Produces per-type maps of rendered unit files and a combined .quadlets output.
+// Produces per-type maps of rendered unit files and a combined files output.
 //
 // Primary units (#container, #pod, etc.) are merged into the plural maps
 // (containers, pods, etc.) keyed by their stem, so output.containers
@@ -157,34 +155,4 @@ Render: {
 		}
 	}
 
-	// --- Combined .quadlets output ---
-
-	_quadletEntries: list.FlattenN([
-		[for stem, rendered in containers {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in pods {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in volumes {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in networks {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in kubes {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in builds {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in images {
-			"# FileName=\(stem)\n" + rendered
-		}],
-		[for stem, rendered in artifacts {
-			"# FileName=\(stem)\n" + rendered
-		}],
-	], 1)
-
-	quadlets: strings.Join(_quadletEntries, "\n---\n")
 }

@@ -1,0 +1,9 @@
+
+[Container]
+Image=docker.io/standalone:latest
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

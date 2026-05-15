@@ -3,109 +3,19 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      publish_version:
-        description: "Version to publish (e.g. v0.0.16). Leave empty to only test."
-        required: false
-        type: string
 
 permissions:
   contents: read
-  packages: write
-
-env:
-  CUE_VERSION: "0.16.0"
 
 jobs:
   test:
-    name: Vet & Test
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install CUE
-        run: |
-          curl -sSL "https://github.com/cue-lang/cue/releases/download/v${CUE_VERSION}/cue_v${CUE_VERSION}_linux_amd64.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin cue
-          cue version
-
-      - name: Vet module
-        run: cd quadlets && cue vet ./...
-
-      - name: Run golden file tests
-        run: |
-          cd testing
-          failed=0
-          passed=0
-          for dir in */; do
-            [[ "$dir" == "cue.mod/" ]] && continue
-            name=$(basename "$dir")
-            if cue vet "./$dir" 2>&1; then
-              echo "PASS  $name"
-              passed=$((passed + 1))
-            else
-              echo "FAIL  $name"
-              failed=$((failed + 1))
-            fi
-          done
-          echo ""
-          echo "Results: $passed passed, $failed failed"
-          [[ $failed -eq 0 ]]
-
-      - name: Verify golden files are up to date
-        run: |
-          cd testing
-          for dir in */; do
-            [[ "$dir" == "cue.mod/" ]] && continue
-            name=$(basename "$dir")
-            actual=$(cue eval -t mode=update "./$dir" -e test.actual --out text | head -c -1)
-            expected=$(cat "$dir/expected.quadlets")
-            if [ "$actual" != "$expected" ]; then
-              echo "STALE  $name (run 'mise run test:update' locally)"
-              diff <(echo "$expected") <(echo "$actual") || true
-              exit 1
-            fi
-          done
-          echo "All golden files are current."
-
-  publish:
-    name: Publish
-    needs: test
-    runs-on: ubuntu-latest
-    if: >-
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_version != '')
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install CUE
-        run: |
-          curl -sSL "https://github.com/cue-lang/cue/releases/download/v${CUE_VERSION}/cue_v${CUE_VERSION}_linux_amd64.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin cue
-          cue version
-
-      - name: Determine version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.publish_version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Publish module
-        env:
-          CUE_REGISTRY: "inline:moduleRegistries: \"github.com/${{ github.repository_owner }}\": {registry: \"ghcr.io/${{ github.repository_owner }}/cue-modules\", stripPrefix: true}"
-        run: |
-          cd quadlets
-          module=$(cue eval -e 'module' ./cue.mod/module.cue --out text)
-          echo "Publishing ${module}@${{ steps.version.outputs.version }} ..."
-          cue mod publish "${{ steps.version.outputs.version }}"
-          echo "Published ${{ steps.version.outputs.version }}"
+      - uses: jdx/mise-action@v2
+      - run: mise run vet
+      - run: mise run test
+      - run: mise run test:publish

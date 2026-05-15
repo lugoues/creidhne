@@ -7,9 +7,6 @@ import (
 	"github.com/lugoues/quadlets-test:testing"
 )
 
-_mode:     *"test" | "update" @tag(mode)
-_expected: _ @embed(file=expected.quadlets,type=text)
-
 test: testing.#Test & {
 	subject: quadlets.#Quadlet & {
 		name: "app"
@@ -44,7 +41,8 @@ test: testing.#Test & {
 			}
 		}
 	}
-	if _mode == "test" {
-		expected: _expected
+	expected: {
+		"app-data.volume": _ @embed(file=expected/app-data.volume,type=text)
+		"app.container": _ @embed(file=expected/app.container,type=text)
 	}
 }
