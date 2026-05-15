@@ -77,44 +77,39 @@ export function planSummary(changes: FileChange[]): { added: number; changed: nu
 
 // Export CUE files as JSON map of filename -> content or {content, mode}
 // Walks all top-level values and merges their output.files maps.
-// Uses --outfile to avoid pipe buffer issues with large JSON output.
 export async function getFiles(): Promise<Record<string, FileValue>> {
-  const tmp = await Deno.makeTempFile({ suffix: ".json" });
-  try {
-    const result = await $`cue export ./... --out json --outfile ${tmp}`
-      .stderr("piped").noThrow();
+  const result = await $`cue export ./... --out json`
+    .stdout("piped").stderr("piped").noThrow();
 
-    if (result.code !== 0) {
-      $.logError("cue export failed:");
-      console.error(result.stderr);
-      Deno.exit(1);
-    }
-
-    let root: Record<string, unknown>;
-    try {
-      root = JSON.parse(await Deno.readTextFile(tmp));
-    } catch {
-      $.logError("cue export produced invalid JSON");
-      Deno.exit(1);
-    }
-
-    const files: Record<string, FileValue> = {};
-    for (const val of Object.values(root)) {
-      const outputFiles = (val as Record<string, unknown>)?.output
-        ?.files as Record<string, FileValue> | undefined;
-      if (outputFiles) {
-        Object.assign(files, outputFiles);
-      }
-    }
-
-    if (Object.keys(files).length === 0) {
-      $.logError("no quadlet files found (do your quadlets have output.files?)");
-      Deno.exit(1);
-    }
-    return files;
-  } finally {
-    await Deno.remove(tmp).catch(() => {});
+  if (result.code !== 0) {
+    $.logError("cue export failed:");
+    console.error(result.stderr);
+    Deno.exit(1);
   }
+
+  let root: Record<string, unknown>;
+  try {
+    root = JSON.parse(result.stdout);
+  } catch {
+    $.logError("cue export produced invalid JSON. Raw output:");
+    console.error(result.stdout.slice(0, 500));
+    Deno.exit(1);
+  }
+
+  const files: Record<string, FileValue> = {};
+  for (const val of Object.values(root)) {
+    const outputFiles = (val as Record<string, unknown>)?.output
+      ?.files as Record<string, FileValue> | undefined;
+    if (outputFiles) {
+      Object.assign(files, outputFiles);
+    }
+  }
+
+  if (Object.keys(files).length === 0) {
+    $.logError("no quadlet files found (do your quadlets have output.files?)");
+    Deno.exit(1);
+  }
+  return files;
 }
 
 // Get QUADLET_DIR from environment or exit
