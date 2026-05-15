@@ -3,7 +3,7 @@
 //USAGE flag "--reload" help="Run daemon-reload after applying changes"
 
 import { parseArgs } from "jsr:@std/cli/parse-args";
-import { $, red, green, yellow, dim, getFiles, getQuadletDir, computePlan, planSummary, needsElevation, writeFile, removeFile, mkdirp } from "./lib.ts";
+import { $, red, green, yellow, dim, getFiles, getQuadletDir, computePlan, planSummary, needsElevation, writeFile, removeFile, mkdirp, pruneEmptyDirs } from "./lib.ts";
 
 const args = parseArgs(Deno.args, { boolean: ["reload"], default: { reload: false } });
 
@@ -56,6 +56,10 @@ for (const c of changes) {
       break;
   }
 }
+
+// Clean up empty directories left behind by removals.
+const imagesDir = target.join("images").toString();
+await pruneEmptyDirs(imagesDir, elevated);
 
 $.log(`\nApplied: ${added} added, ${changed} updated, ${removed} removed`);
 

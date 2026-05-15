@@ -161,17 +161,32 @@ export async function isWritable(dir: string): Promise<boolean> {
   }
 }
 
+// Ensure a directory exists, removing any file that blocks the path.
+// Handles file-to-directory transitions (e.g. a stale flat file where a
+// subdirectory is now needed).
+async function ensureDir(dir: string, elevated: boolean): Promise<void> {
+  const p = $.path(dir);
+  if (await p.exists()) {
+    if ((await p.stat())?.isFile) {
+      // Stale file blocking a directory path. Remove it first.
+      await removeFile(dir, elevated);
+      await mkdirp(dir, elevated);
+    }
+    return;
+  }
+  // Walk upward to clear any file blocking an ancestor.
+  const parentStr = p.parent()?.toString();
+  if (parentStr) {
+    await ensureDir(parentStr, elevated);
+  }
+  await mkdirp(dir, elevated);
+}
+
 // Write a file, using sudo if needsElevation is true.
 // Creates parent directories if needed. Sets file mode if specified.
 export async function writeFile(path: string, content: string, elevated: boolean, mode?: string): Promise<void> {
-  const parent = $.path(path).parent()!;
-  if (!(await parent.exists())) {
-    if (elevated) {
-      await $`sudo mkdir -p ${parent.toString()}`;
-    } else {
-      await parent.mkdir({ recursive: true });
-    }
-  }
+  const parent = $.path(path).parent()!.toString();
+  await ensureDir(parent, elevated);
   if (elevated) {
     const tmp = await Deno.makeTempFile();
     try {
@@ -187,12 +202,12 @@ export async function writeFile(path: string, content: string, elevated: boolean
   }
 }
 
-// Remove a file, using sudo if needsElevation is true.
+// Remove a file or directory, using sudo if needsElevation is true.
 export async function removeFile(path: string, elevated: boolean): Promise<void> {
   if (elevated) {
-    await $`sudo rm ${path}`;
+    await $`sudo rm -rf ${path}`;
   } else {
-    await $.path(path).remove();
+    await $.path(path).remove({ recursive: true });
   }
 }
 
@@ -203,6 +218,38 @@ export async function mkdirp(dir: string, elevated: boolean): Promise<void> {
   } else {
     await $.path(dir).mkdir({ recursive: true });
   }
+}
+
+// Remove empty directories under a root path, walking bottom-up.
+// Useful after file removals to clean up stale directory structure.
+export async function pruneEmptyDirs(dir: string, elevated: boolean): Promise<void> {
+  const root = $.path(dir);
+  if (!(await root.exists())) return;
+
+  async function walk(p: typeof root): Promise<void> {
+    if (!(await p.stat())?.isDirectory) return;
+    for await (const entry of p.readDir()) {
+      if (entry.isDirectory) {
+        await walk(p.join(entry.name));
+      }
+    }
+    // After recursing into children, check if this dir is now empty.
+    // Never remove the root itself.
+    if (p.toString() === root.toString()) return;
+    let empty = true;
+    for await (const _ of p.readDir()) {
+      empty = false;
+      break;
+    }
+    if (empty) {
+      if (elevated) {
+        await $`sudo rmdir ${p.toString()}`;
+      } else {
+        await p.remove();
+      }
+    }
+  }
+  await walk(root);
 }
 
 // Run a diff tool (configurable via DIFF_TOOL env, defaults to "diff")
