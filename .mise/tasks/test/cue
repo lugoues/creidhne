@@ -1,8 +1,12 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write=/tmp --allow-run=cue,diff --allow-env
 //MISE description="Run golden file tests via cue vet"
 
-import $ from "jsr:@david/dax";
+import $ from "jsr:@david/dax@0.47.0";
 import { red, green } from "jsr:@std/fmt/colors";
+
+$.setInfoLogger(console.log);
+$.setWarnLogger(console.log);
+$.setErrorLogger(console.log);
 
 const pattern = /^(.*?): conflicting values (".*?") and (".*?"):/;
 
@@ -60,4 +64,6 @@ for await (const entry of testingDir.readDir()) {
 }
 
 $.log(`\nResults: ${passed} passed, ${failed} failed`);
-if (failed > 0) Deno.exit(1);
+if (failed > 0) {
+  Deno.exit(1);
+}

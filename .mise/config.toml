@@ -1,4 +1,5 @@
 [env]
+PROJECT_ROOT = "{{ config_root }}"
 QUADLET_DIR = "~/.config/containers/systemd"
 DIFF_TOOL = "delta"
 
@@ -6,9 +7,19 @@ DIFF_TOOL = "delta"
 cue = "0.16.0"
 deno = "latest"
 
+
+
+[settings]
+task.output="keep-order"
+
 [tasks.vet]
 description = "Validate CUE module"
 run = "cd quadlets && cue vet ./..."
+
+[tasks.test]
+description = "Run all tests"
+# outputs = "keep-order"
+depends = ["test:cue", "test:lib"]
 
 
 # --- Publishing ---

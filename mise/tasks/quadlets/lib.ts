@@ -1,6 +1,6 @@
 // Shared helpers for deploy tasks
 
-import $ from "jsr:@david/dax";
+import $ from "jsr:@david/dax@0.47.0";
 import { red, green, yellow, dim } from "jsr:@std/fmt/colors";
 
 export { $, red, green, yellow, dim };
@@ -82,24 +82,28 @@ export async function getFiles(): Promise<Record<string, FileValue>> {
     .stdout("piped").stderr("piped").noThrow();
 
   if (result.code !== 0) {
-    $.logError("cue export failed:");
-    console.error(result.stderr);
+    $.logError("cue export failed:", result.stderr);
     Deno.exit(1);
   }
 
-  let root: Record<string, unknown>;
+  type CueQuadlet = { output?: { files?: Record<string, FileValue> } };
+
+  let root: Record<string, CueQuadlet> | undefined;
   try {
     root = JSON.parse(result.stdout);
   } catch {
+    $.logError("cue export produced invalid JSON. Raw output:", result.stdout.slice(0, 500));
+    Deno.exit(1);
+  }
+
+  if(!root){
     $.logError("cue export produced invalid JSON. Raw output:");
-    console.error(result.stdout.slice(0, 500));
     Deno.exit(1);
   }
 
   const files: Record<string, FileValue> = {};
   for (const val of Object.values(root)) {
-    const outputFiles = (val as Record<string, unknown>)?.output
-      ?.files as Record<string, FileValue> | undefined;
+    const outputFiles = val?.output?.files;
     if (outputFiles) {
       Object.assign(files, outputFiles);
     }
@@ -184,7 +188,7 @@ export async function isWritable(dir: string): Promise<boolean> {
 async function ensureDir(dir: string, elevated: boolean): Promise<void> {
   const p = $.path(dir);
   if (await p.exists()) {
-    if ((await p.stat())?.isFile) {
+    if ((await p.stat())?.isFile()) {
       // Stale file blocking a directory path. Remove it first.
       await removeFile(dir, elevated);
       await mkdirp(dir, elevated);
@@ -244,7 +248,7 @@ export async function pruneEmptyDirs(dir: string, elevated: boolean): Promise<vo
   if (!(await root.exists())) return;
 
   async function walk(p: typeof root): Promise<void> {
-    if (!(await p.stat())?.isDirectory) return;
+    if (!(await p.stat())?.isDirectory()) return;
     for await (const entry of p.readDir()) {
       if (entry.isDirectory()) {
         await walk(p.join(entry.name));
@@ -280,7 +284,7 @@ export async function runDiff(
 
   if (tool === "diff") {
     return await $`diff --color=always -u --label ${liveLabel} --label ${newLabel} ${livePath} -`
-      .stdin(newContent).noThrow().text();
+      .stdinText(newContent).noThrow().text();
   }
 
   // For tools like delta that read files, write to a temp file
