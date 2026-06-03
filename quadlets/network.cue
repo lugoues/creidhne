@@ -28,7 +28,7 @@ package quadlets
 		// Define a gateway for the subnet. Requires a Subnet option.
 		Gateway?: [...#IPAddress]
 		// Allocate container IP from a range. Accepts CIDR or startIP-endIP syntax.
-		IPRange?: [...#CIDR]
+		IPRange?: [...#IPRange]
 		// Enable IPv6 (Dual Stack) networking.
 		IPv6?: bool
 		// Restrict external access of this network.

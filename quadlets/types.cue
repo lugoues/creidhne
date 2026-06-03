@@ -16,6 +16,9 @@ import (
 // CIDR notation
 #CIDR: =~"^[0-9a-fA-F:.]+/[0-9]+$"
 
+// IP range: CIDR notation or startIP-endIP
+#IPRange: #CIDR | =~"^[0-9a-fA-F:.]+-[0-9a-fA-F:.]+$"
+
 // Volume mount: [SOURCE:]DEST[:OPTIONS]
 #VolumeMount: string
 
