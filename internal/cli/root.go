@@ -69,16 +69,21 @@ type config struct {
 	ProjectDir string
 	QuadletDir string
 	DiffTool   string
+	// ReloadSystemd is the default for `apply`'s systemctl daemon-reload (off
+	// unless set in crei.toml); the --reload-systemd flag overrides it per-run.
+	ReloadSystemd bool
 
 	// Provenance for `crei config`, which layer supplied each value.
-	quadletDirSource string
-	diffToolSource   string
-	configFilePath   string // crei.toml path if present, else ""
+	quadletDirSource    string
+	diffToolSource      string
+	reloadSystemdSource string
+	configFilePath      string // crei.toml path if present, else ""
 }
 
 type fileConfig struct {
-	QuadletDir string `toml:"quadlet_dir"`
-	DiffTool   string `toml:"diff_tool"`
+	QuadletDir    string `toml:"quadlet_dir"`
+	DiffTool      string `toml:"diff_tool"`
+	ReloadSystemd *bool  `toml:"reload_systemd"` // pointer: distinguish unset from false
 }
 
 // sourcedValue is a candidate config value paired with a human label for where
@@ -120,13 +125,19 @@ func resolveConfig() (config, error) {
 		sourcedValue{fc.DiffTool, "crei.toml"},
 		sourcedValue{"", "built-in"},
 	)
+	reload, reloadSource := false, "default"
+	if fc.ReloadSystemd != nil {
+		reload, reloadSource = *fc.ReloadSystemd, "crei.toml"
+	}
 	return config{
-		ProjectDir:       flagProjectDir,
-		QuadletDir:       expanded,
-		DiffTool:         dt.value,
-		quadletDirSource: qd.source,
-		diffToolSource:   dt.source,
-		configFilePath:   fcPath,
+		ProjectDir:          flagProjectDir,
+		QuadletDir:          expanded,
+		DiffTool:            dt.value,
+		ReloadSystemd:       reload,
+		quadletDirSource:    qd.source,
+		diffToolSource:      dt.source,
+		reloadSystemdSource: reloadSource,
+		configFilePath:      fcPath,
 	}, nil
 }
 

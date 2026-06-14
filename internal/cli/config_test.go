@@ -50,6 +50,44 @@ func TestResolveConfigProvenance(t *testing.T) {
 	}
 }
 
+// TestResolveConfigReloadSystemd: reload defaults off, is taken from crei.toml
+// when set (true or false), with the source recorded.
+func TestResolveConfigReloadSystemd(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
+	flagQuadletDir, flagDiffTool = "", ""
+	t.Setenv("QUADLET_DIR", "")
+	t.Setenv("DIFF_TOOL", "")
+
+	cases := []struct {
+		name       string
+		toml       string // "" => no crei.toml
+		wantReload bool
+		wantSource string
+	}{
+		{"default", "", false, "default"},
+		{"toml true", "reload_systemd = true\n", true, "crei.toml"},
+		{"toml false", "reload_systemd = false\n", false, "crei.toml"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if c.toml != "" {
+				if err := os.WriteFile(filepath.Join(dir, "crei.toml"), []byte(c.toml), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			flagProjectDir = dir
+			cfg, err := resolveConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.ReloadSystemd != c.wantReload || cfg.reloadSystemdSource != c.wantSource {
+				t.Fatalf("reload=%v source=%q; want %v/%q", cfg.ReloadSystemd, cfg.reloadSystemdSource, c.wantReload, c.wantSource)
+			}
+		})
+	}
+}
+
 // TestResolveConfigDefaults: with nothing set, quadlet_dir comes from the
 // default (and ~ is expanded), and no config file is reported.
 func TestResolveConfigDefaults(t *testing.T) {
