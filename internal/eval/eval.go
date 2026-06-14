@@ -14,6 +14,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"cuelang.org/go/cue/errors"
 	"cuelang.org/go/cue/load"
 )
 
@@ -143,7 +144,14 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 		ur.Stem, _ = rec.LookupPath(cue.ParsePath("stem")).String()
 		ur.Filename, _ = rec.LookupPath(cue.ParsePath("filename")).String()
 		ur.Service, _ = rec.LookupPath(cue.ParsePath("service")).String()
-		b, err := rec.LookupPath(cue.ParsePath("data")).MarshalJSON()
+		dataV := rec.LookupPath(cue.ParsePath("data"))
+		// Validate concreteness first: MarshalJSON on an incomplete unit emits a
+		// multi-KB dump of the whole resolved struct; report a concise hint
+		// instead and point at `crei validate` for the full diagnostic.
+		if err := dataV.Validate(cue.Concrete(true)); err != nil {
+			return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s", ur.Filename, incompleteHint(err))
+		}
+		b, err := dataV.MarshalJSON()
 		if err != nil {
 			return Quadlet{}, false, fmt.Errorf("marshal data for %s: %w", ur.Filename, err)
 		}
@@ -155,6 +163,22 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 		q.Units = append(q.Units, ur)
 	}
 	return q, true, nil
+}
+
+// incompleteHint renders a concise message for an incomplete-value error. CUE
+// dumps the entire resolved struct (kilobytes, especially for an unsatisfied
+// disjunction like Container's Image|Rootfs), so trim it at the struct dump and
+// point the user at `crei validate` for the full detail.
+func incompleteHint(err error) string {
+	msg := strings.TrimSpace(errors.Details(err, nil))
+	if i := strings.IndexByte(msg, '{'); i > 0 {
+		return strings.TrimSpace(msg[:i]) + " (a required field is unset; run 'crei validate' for details)"
+	}
+	const max = 200
+	if len(msg) > max {
+		return strings.TrimSpace(msg[:max]) + " …"
+	}
+	return msg
 }
 
 // decodeJSONNumbers unmarshals JSON into map[string]any, converting integral
