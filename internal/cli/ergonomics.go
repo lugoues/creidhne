@@ -113,11 +113,21 @@ func runInit(projectDir string) error {
 	return nil
 }
 
-// vendorSchema writes the embedded schema module to
-// <moduleRoot>/cue.mod/usr/<ModulePath>/ so on-disk tooling (cue vet, LSP)
-// resolves the import. The binary itself uses the embedded copy directly.
+// vendoredSchemaDir is where the embedded schema is materialized on disk for
+// on-disk tooling (cue vet, the editor LSP) to resolve the import.
+func vendoredSchemaDir(moduleRoot string) string {
+	return filepath.Join(moduleRoot, "cue.mod", "usr", filepath.FromSlash(eval.ModulePath))
+}
+
+// vendorSchema writes the embedded schema module to <moduleRoot>/cue.mod/usr/
+// <ModulePath>/ so on-disk tooling resolves the import. The binary itself uses
+// the embedded copy directly.
 func vendorSchema(moduleRoot string) error {
-	base := filepath.Join(moduleRoot, "cue.mod", "usr", filepath.FromSlash(eval.ModulePath))
+	return writeSchemaTo(vendoredSchemaDir(moduleRoot))
+}
+
+// writeSchemaTo materializes the embedded schema tree under base.
+func writeSchemaTo(base string) error {
 	return fs.WalkDir(creidhne.SchemaFS, "creidhne", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -144,19 +154,33 @@ func vendorSchema(moduleRoot string) error {
 // It is best-effort and LSP-only. The binary resolves the schema from the
 // embedded overlay regardless, so errors (a read-only dir, etc.) are ignored.
 // It never *creates* a vendored copy, only refreshes one, leaving projects that
-// resolve the schema another way (a registry dependency) untouched.
+// resolve the schema another way (a registry dependency) untouched. A symlinked
+// vendored copy (the dev/example layout that points at live source) is left
+// alone, and the refresh is staged in a temp dir then swapped in, so a partial
+// write never corrupts the live copy.
 func syncVendoredSchema(moduleRoot string) {
-	vendorDir := filepath.Join(moduleRoot, "cue.mod", "usr", filepath.FromSlash(eval.ModulePath))
-	if _, err := os.Stat(vendorDir); err != nil {
+	vendorDir := vendoredSchemaDir(moduleRoot)
+	fi, err := os.Lstat(vendorDir)
+	if err != nil {
 		return // not vendored, so respect the project's setup
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return // symlinked to live source, so never clobber the dev layout
 	}
 	if vendoredMatchesEmbedded(vendorDir) {
 		return // already in sync
 	}
-	if err := os.RemoveAll(vendorDir); err != nil {
+	staging := vendorDir + ".crei-tmp"
+	_ = os.RemoveAll(staging)
+	if err := writeSchemaTo(staging); err != nil {
+		_ = os.RemoveAll(staging) // leave the live copy untouched on a failed write
 		return
 	}
-	if err := vendorSchema(moduleRoot); err != nil {
+	if err := os.RemoveAll(vendorDir); err != nil {
+		_ = os.RemoveAll(staging)
+		return
+	}
+	if err := os.Rename(staging, vendorDir); err != nil {
 		return
 	}
 	fmt.Fprintln(os.Stderr, dim("refreshed vendored schema in cue.mod/usr to match this crei build"))

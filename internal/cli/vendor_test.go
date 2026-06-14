@@ -44,3 +44,34 @@ func TestVendorSyncSkipsWhenAbsent(t *testing.T) {
 		t.Fatal("sync should not create a vendored copy when none exists")
 	}
 }
+
+// TestVendorSyncSkipsSymlink ensures a symlinked vendored schema (the dev/
+// example layout pointing at live source) is never clobbered by sync.
+func TestVendorSyncSkipsSymlink(t *testing.T) {
+	root := t.TempDir()
+	// A separate, intentionally-divergent source the symlink points at.
+	src := t.TempDir()
+	if err := writeSchemaTo(src); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "types.cue"), []byte("package creidhne // live edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vendorDir := filepath.Join(root, "cue.mod", "usr", filepath.FromSlash(eval.ModulePath))
+	if err := os.MkdirAll(filepath.Dir(vendorDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(src, vendorDir); err != nil {
+		t.Fatal(err)
+	}
+
+	syncVendoredSchema(root) // must be a no-op on a symlink
+
+	fi, err := os.Lstat(vendorDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("sync replaced the symlinked vendored schema with a real copy")
+	}
+}
