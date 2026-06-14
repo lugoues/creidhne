@@ -1,0 +1,10 @@
+
+[Image]
+Image=docker.io/library/redis:7
+Policy=newer
+Arch=arm64
+TLSVerify=true
+Retry=3
+
+[Install]
+WantedBy=default.target
