@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -63,6 +64,62 @@ func newValidateCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newConfigCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "config",
+		Short: "Show the resolved configuration and where each value came from",
+		Long: "config prints the effective settings after applying precedence\n" +
+			"(flags > env > crei.toml > defaults), annotated with the source of\n" +
+			"each value. It evaluates no CUE and writes nothing.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := resolveConfig()
+			if err != nil {
+				return err
+			}
+			printConfig(cfg)
+			return nil
+		},
+	}
+}
+
+// printConfig renders the resolved settings as an aligned table. Only the final
+// (source) column is colored, so the ANSI codes don't disturb tabwriter's
+// width accounting for the value column.
+func printConfig(cfg config) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	row := func(label, value, source string) {
+		fmt.Fprintf(w, "  %s\t%s\t%s\n", label, value, dim("("+source+")"))
+	}
+
+	projSource := "--dir flag"
+	if cfg.ProjectDir == "." {
+		projSource = "default"
+	}
+	row("project dir", cfg.ProjectDir, projSource)
+	row("quadlet dir", cfg.QuadletDir, cfg.quadletDirSource)
+
+	diff := cfg.DiffTool
+	if diff == "" {
+		diff = "built-in unified diff"
+	}
+	row("diff tool", diff, cfg.diffToolSource)
+
+	scope, reason := "system", "quadlet dir outside $HOME"
+	if underHome(cfg.QuadletDir) {
+		scope, reason = "--user", "quadlet dir under $HOME"
+	}
+	row("reload scope", scope, reason)
+
+	cfgFile, cfgSource := cfg.configFilePath, "loaded"
+	if cfgFile == "" {
+		cfgFile, cfgSource = filepath.Join(cfg.ProjectDir, "crei.toml"), "not found"
+	}
+	row("config file", cfgFile, cfgSource)
+
+	_ = w.Flush()
 }
 
 func newInitCmd() *cobra.Command {
