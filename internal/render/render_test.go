@@ -81,6 +81,35 @@ func TestRenderZeroAndFalseValues(t *testing.T) {
 	}
 }
 
+// TestBuildContextModes covers the build-context mode normalization: a plain
+// string entry defaults to 0644, a {content, mode} entry keeps its explicit
+// mode. This is the only coverage of the mode pipeline (the golden harness
+// compares content only).
+func TestBuildContextModes(t *testing.T) {
+	r := newTestRenderer(t)
+	bu := eval.UnitRecord{
+		Kind: "build", Stem: "x", Filename: "x.build",
+		Data: map[string]any{
+			"ContainerFile": "FROM scratch\n",
+			"Context": map[string]any{
+				"plain.txt": "hello",
+				"run.sh":    map[string]any{"content": "#!/bin/sh\n", "mode": "0755"},
+			},
+			"Build": map[string]any{"ImageTag": []any{"localhost/x:latest"}},
+		},
+	}
+	files, err := r.BuildFileSet([]eval.Quadlet{{Name: "x", Units: []eval.UnitRecord{bu}}})
+	if err != nil {
+		t.Fatalf("BuildFileSet: %v", err)
+	}
+	if got := files["images/x.context/plain.txt"].Mode; got != "0644" {
+		t.Errorf("plain string entry mode = %q, want 0644", got)
+	}
+	if got := files["images/x.context/run.sh"].Mode; got != "0755" {
+		t.Errorf("explicit-mode entry mode = %q, want 0755", got)
+	}
+}
+
 // TestBuildFileSetDistinctFilenames is the happy path: no collision.
 func TestBuildFileSetDistinctFilenames(t *testing.T) {
 	r := newTestRenderer(t)
