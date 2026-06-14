@@ -109,7 +109,10 @@ func pickSourced(cands ...sourcedValue) sourcedValue {
 }
 
 func resolveConfig() (config, error) {
-	fc, fcPath := loadConfigFile(flagProjectDir)
+	fc, fcPath, err := loadConfigFile(flagProjectDir)
+	if err != nil {
+		return config{}, err
+	}
 	qd := pickSourced(
 		sourcedValue{flagQuadletDir, "--quadlet-dir flag"},
 		sourcedValue{os.Getenv("QUADLET_DIR"), "$QUADLET_DIR"},
@@ -142,17 +145,21 @@ func resolveConfig() (config, error) {
 	}, nil
 }
 
-// loadConfigFile reads crei.toml from projectDir (best effort: missing or
-// malformed files yield a zero config). It also returns the file's path when it
-// exists (empty otherwise) so `crei config` can report which file was loaded.
-func loadConfigFile(projectDir string) (fileConfig, string) {
+// loadConfigFile reads crei.toml from projectDir. A missing file is fine (zero
+// config, empty path); a present-but-malformed file is a hard error rather than
+// being silently ignored. Otherwise a typo would route apply to the default
+// directory with no warning. The returned path (when the file exists) lets
+// `crei config` report which file was loaded.
+func loadConfigFile(projectDir string) (fileConfig, string, error) {
 	var fc fileConfig
 	path := filepath.Join(projectDir, "crei.toml")
 	if _, err := os.Stat(path); err != nil {
-		return fc, ""
+		return fc, "", nil
 	}
-	_, _ = toml.DecodeFile(path, &fc)
-	return fc, path
+	if _, err := toml.DecodeFile(path, &fc); err != nil {
+		return fc, path, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return fc, path, nil
 }
 
 func expandHome(p string) (string, error) {

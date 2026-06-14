@@ -88,6 +88,30 @@ func TestResolveConfigReloadSystemd(t *testing.T) {
 	}
 }
 
+// TestResolveConfigMalformedToml: a present-but-unparseable crei.toml is a hard
+// error (not silently ignored, which would route apply to the default dir),
+// while a missing crei.toml is fine.
+func TestResolveConfigMalformedToml(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
+	flagQuadletDir, flagDiffTool = "", ""
+	t.Setenv("QUADLET_DIR", "")
+	t.Setenv("DIFF_TOOL", "")
+
+	bad := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bad, "crei.toml"), []byte("quadlet_dir = /unquoted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flagProjectDir = bad
+	if _, err := resolveConfig(); err == nil {
+		t.Fatal("malformed crei.toml should error, not be silently ignored")
+	}
+
+	flagProjectDir = t.TempDir() // no crei.toml
+	if _, err := resolveConfig(); err != nil {
+		t.Fatalf("missing crei.toml should be fine, got %v", err)
+	}
+}
+
 // TestResolveConfigDefaults: with nothing set, quadlet_dir comes from the
 // default (and ~ is expanded), and no config file is reported.
 func TestResolveConfigDefaults(t *testing.T) {
