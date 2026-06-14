@@ -332,8 +332,24 @@ func RunDiff(livePath string, newContent []byte, liveLabel, newLabel, tool strin
 		return "", err
 	}
 	_ = tmp.Close()
-	out, _ := exec.Command(tool, livePath, tmp.Name()).Output()
-	return string(out), nil
+	cmd := exec.Command(tool, livePath, tmp.Name())
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			// The tool couldn't run (e.g. not installed); surface it rather
+			// than silently returning an empty diff that implies no changes.
+			if msg := bytes.TrimSpace(stderr.Bytes()); len(msg) > 0 {
+				return "", fmt.Errorf("diff tool %q: %w: %s", tool, err, msg)
+			}
+			return "", fmt.Errorf("diff tool %q: %w", tool, err)
+		}
+		// A non-zero exit is conventional for diff tools when files differ; the
+		// diff itself is on stdout, so fall through and return it.
+	}
+	return stdout.String(), nil
 }
 
 // DaemonReload runs `systemctl daemon-reload`, scoped to --user when userScope

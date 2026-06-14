@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -292,4 +293,33 @@ func actionFor(changes []Change, name string) ActionKind {
 		}
 	}
 	return ActionKind(-1)
+}
+
+// TestRunDiffMissingToolErrors: a diff tool that can't be run surfaces an error
+// instead of returning an empty (false "no changes") diff.
+func TestRunDiffMissingToolErrors(t *testing.T) {
+	dir := t.TempDir()
+	live := filepath.Join(dir, "f")
+	write(t, live, "a\n")
+	if _, err := RunDiff(live, []byte("b\n"), "live", "new", "crei-no-such-difftool-zzz"); err == nil {
+		t.Fatal("expected error for a missing diff tool")
+	}
+}
+
+// TestRunDiffExternalToolNonZeroExit: a tool that exits non-zero because files
+// differ (here cmp) is not treated as an error; its output is returned.
+func TestRunDiffExternalToolNonZeroExit(t *testing.T) {
+	if _, err := exec.LookPath("cmp"); err != nil {
+		t.Skip("cmp not available")
+	}
+	dir := t.TempDir()
+	live := filepath.Join(dir, "f")
+	write(t, live, "a\n")
+	out, err := RunDiff(live, []byte("b\n"), "live", "new", "cmp")
+	if err != nil {
+		t.Fatalf("non-zero exit (files differ) should not error: %v", err)
+	}
+	if out == "" {
+		t.Fatal("expected output from the diff tool")
+	}
 }
