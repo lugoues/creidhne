@@ -11,20 +11,8 @@ import (
 	"text/template"
 
 	"github.com/lugoues/creidhne/internal/eval"
+	"github.com/lugoues/creidhne/internal/kinds"
 )
-
-// extByKind maps a unit kind to its Quadlet file extension. It also serves as
-// the set of templates to load (one <kind>.tpl per key).
-var extByKind = map[string]string{
-	"container": ".container",
-	"pod":       ".pod",
-	"volume":    ".volume",
-	"network":   ".network",
-	"kube":      ".kube",
-	"build":     ".build",
-	"image":     ".image",
-	"artifact":  ".artifact",
-}
 
 // FileContent is a rendered file plus an optional octal mode (set for build
 // context files like executable scripts; empty means default permissions).
@@ -55,8 +43,8 @@ var funcMap = template.FuncMap{
 // New parses every <kind>.tpl from tplFS (expected to contain the templates at
 // its root, e.g. fs.Sub(embeddedFS, "templates") or os.DirFS("templates")).
 func New(tplFS fs.FS) (*Renderer, error) {
-	r := &Renderer{tpl: make(map[string]*template.Template, len(extByKind))}
-	for kind := range extByKind {
+	r := &Renderer{tpl: make(map[string]*template.Template, len(kinds.Ext))}
+	for kind := range kinds.Ext {
 		b, err := fs.ReadFile(tplFS, kind+".tpl")
 		if err != nil {
 			return nil, fmt.Errorf("read template %q: %w", kind, err)

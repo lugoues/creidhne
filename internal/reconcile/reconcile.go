@@ -21,6 +21,8 @@ import (
 	"syscall"
 
 	"github.com/pmezard/go-difflib/difflib"
+
+	"github.com/lugoues/creidhne/internal/kinds"
 )
 
 // notFound reports whether err means the path effectively does not exist as a
@@ -31,12 +33,10 @@ func notFound(err error) bool {
 	return os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR)
 }
 
-// quadletExts are the managed unit-file extensions. Flat files outside images/
-// must match one of these to be considered ours.
-var quadletExts = map[string]bool{
-	".container": true, ".pod": true, ".volume": true, ".network": true,
-	".kube": true, ".build": true, ".image": true, ".artifact": true,
-}
+// quadletExts are the managed unit-file extensions, derived from the shared
+// kinds table so the reconciler and renderer can never disagree about which
+// files are managed. Flat files outside images/ must match one to be ours.
+var quadletExts = kinds.Extensions()
 
 // DesiredFile is a generated file's content and optional octal mode (e.g.
 // "0755" for an executable build-context script; empty means default perms).

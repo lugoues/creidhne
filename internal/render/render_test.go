@@ -2,11 +2,23 @@ package render
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/lugoues/creidhne/internal/eval"
+	"github.com/lugoues/creidhne/internal/kinds"
 )
+
+// TestEveryKindHasTemplate guards the shared kinds table against drift: every
+// kind the renderer/reconciler manage must have a template to render it.
+func TestEveryKindHasTemplate(t *testing.T) {
+	for kind := range kinds.Ext {
+		if _, err := os.Stat(filepath.Join("../../templates", kind+".tpl")); err != nil {
+			t.Errorf("kind %q in kinds.Ext has no template: %v", kind, err)
+		}
+	}
+}
 
 // newTestRenderer loads the on-disk templates so the render tests don't depend
 // on the embedded FS.
