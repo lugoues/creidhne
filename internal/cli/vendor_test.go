@@ -75,3 +75,27 @@ func TestVendorSyncSkipsSymlink(t *testing.T) {
 		t.Fatal("sync replaced the symlinked vendored schema with a real copy")
 	}
 }
+
+// TestVendorSyncRemovesStaleExtraFile: a vendored file no longer present in the
+// embedded schema is treated as drift and cleaned up by sync.
+func TestVendorSyncRemovesStaleExtraFile(t *testing.T) {
+	root := t.TempDir()
+	if err := vendorSchema(root); err != nil {
+		t.Fatal(err)
+	}
+	vendorDir := filepath.Join(root, "cue.mod", "usr", filepath.FromSlash(eval.ModulePath))
+	stale := filepath.Join(vendorDir, "removed_in_newer_binary.cue")
+	if err := os.WriteFile(stale, []byte("package creidhne\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if vendoredMatchesEmbedded(vendorDir) {
+		t.Fatal("a stale extra file should count as drift")
+	}
+	syncVendoredSchema(root)
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatal("sync should have removed the stale extra file")
+	}
+	if !vendoredMatchesEmbedded(vendorDir) {
+		t.Fatal("after sync the vendored copy should match the embedded schema")
+	}
+}

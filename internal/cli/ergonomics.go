@@ -186,9 +186,12 @@ func syncVendoredSchema(moduleRoot string) {
 	fmt.Fprintln(os.Stderr, dim("refreshed vendored schema in cue.mod/usr to match this crei build"))
 }
 
-// vendoredMatchesEmbedded reports whether every embedded schema file is present
-// and byte-identical under vendorDir.
+// vendoredMatchesEmbedded reports whether the vendored copy is exactly the
+// embedded schema: every embedded file present and byte-identical, AND no extra
+// on-disk files (a schema file removed in a newer binary must not linger, or the
+// LSP keeps seeing a type the binary no longer ships).
 func vendoredMatchesEmbedded(vendorDir string) bool {
+	expected := map[string]bool{}
 	match := true
 	_ = fs.WalkDir(creidhne.SchemaFS, "creidhne", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -197,15 +200,36 @@ func vendoredMatchesEmbedded(vendorDir string) bool {
 		if d.IsDir() {
 			return nil
 		}
-		rel := strings.TrimPrefix(strings.TrimPrefix(p, "creidhne"), "/")
+		rel := filepath.FromSlash(strings.TrimPrefix(strings.TrimPrefix(p, "creidhne"), "/"))
+		expected[rel] = true
 		want, err := fs.ReadFile(creidhne.SchemaFS, p)
 		if err != nil {
 			return err
 		}
-		got, err := os.ReadFile(filepath.Join(vendorDir, filepath.FromSlash(rel)))
+		got, err := os.ReadFile(filepath.Join(vendorDir, rel))
 		if err != nil || !bytes.Equal(got, want) {
 			match = false
-			return fs.SkipAll
+		}
+		return nil
+	})
+	if !match {
+		return false
+	}
+	// Any vendored file not in the embedded set is stale drift.
+	_ = filepath.WalkDir(vendorDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(vendorDir, p)
+		if err != nil {
+			return err
+		}
+		if !expected[rel] {
+			match = false
+			return filepath.SkipAll
 		}
 		return nil
 	})
