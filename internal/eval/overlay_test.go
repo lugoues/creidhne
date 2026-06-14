@@ -96,6 +96,38 @@ stacks: web: q.#Quadlet & {
 	}
 }
 
+// TestDiscoverIgnoresFalseManifest: a value coincidentally named `manifest`
+// (a non-record list) must not be misclassified as a quadlet now that discovery
+// recurses the whole value tree.
+func TestDiscoverIgnoresFalseManifest(t *testing.T) {
+	tmp := t.TempDir()
+	overlay, err := eval.Overlay(tmp, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
+
+import q "github.com/lugoues/creidhne@v0"
+
+notaquadlet: manifest: [1, 2, 3]
+
+a: q.#Quadlet & {
+	name: "a"
+	units: #container: Container: {Image: "img", ContainerName: "a"}
+}
+`)
+
+	quads, err := eval.LoadAndValidate(tmp, overlay)
+	if err != nil {
+		t.Fatalf("false manifest should be ignored, got error: %v", err)
+	}
+	if len(quads) != 1 || quads[0].Name != "a" {
+		t.Fatalf("expected only the real quadlet 'a', got %+v", quads)
+	}
+}
+
 // TestValidateRejectsIncomplete proves Validate fails on a non-concrete value
 // that never reaches a rendered unit, while LoadAndValidate (render/apply path)
 // still succeeds because the value isn't part of any unit's data.
