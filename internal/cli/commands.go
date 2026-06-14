@@ -141,9 +141,18 @@ func newApplyCmd() *cobra.Command {
 				fmt.Println("Nothing to do.")
 				return nil
 			}
-			if !yes && !confirm("Apply changes?") {
-				fmt.Println("Aborted.")
-				return nil
+			if !yes {
+				ok, err := confirm("Apply changes?")
+				if err != nil {
+					// No answer available (cron, CI, piped/redirected stdin):
+					// fail loudly rather than silently aborting with a success
+					// exit code that looks like a completed apply.
+					return err
+				}
+				if !ok {
+					fmt.Println("Aborted.")
+					return nil
+				}
 			}
 			// Apply removals before writes so a path that changes file<->directory
 			// shape (e.g. a build context that became a directory) is cleared

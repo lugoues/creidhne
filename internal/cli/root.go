@@ -229,12 +229,18 @@ func yellow(s string) string { return colorize("33", s) }
 func red(s string) string    { return colorize("31", s) }
 func dim(s string) string    { return colorize("2", s) }
 
-func confirm(prompt string) bool {
+// confirm prompts for a y/N answer. It returns an error when no answer can be
+// read (stdin closed/EOF) so callers can fail loudly instead of treating a
+// non-interactive run as a silent "no".
+func confirm(prompt string) (bool, error) {
 	fmt.Printf("%s [y/N] ", prompt)
 	sc := bufio.NewScanner(os.Stdin)
 	if !sc.Scan() {
-		return false
+		if err := sc.Err(); err != nil {
+			return false, err
+		}
+		return false, fmt.Errorf("no confirmation read from stdin; re-run with -y to apply non-interactively")
 	}
 	ans := strings.ToLower(strings.TrimSpace(sc.Text()))
-	return ans == "y" || ans == "yes"
+	return ans == "y" || ans == "yes", nil
 }
