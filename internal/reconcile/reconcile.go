@@ -235,28 +235,47 @@ func ensureDir(dir string) error {
 }
 
 // WriteFile writes content to path (creating parents) and applies mode if set.
+// The write is atomic: content goes to a temp file in the same directory which
+// is then renamed over the target, so a crash mid-write never leaves a partial
+// unit file for systemd/podman to read.
 func WriteFile(path string, content []byte, mode string) error {
-	if err := ensureDir(filepath.Dir(path)); err != nil {
+	dir := filepath.Dir(path)
+	if err := ensureDir(dir); err != nil {
 		return err
 	}
 	// If a directory (or symlink) occupies the target path, remove it so a
-	// regular file can take its place (the directory->file transition).
+	// regular file can take its place (the directory->file transition). rename
+	// would otherwise fail (or replace a symlink's target).
 	if fi, err := os.Lstat(path); err == nil && !fi.Mode().IsRegular() {
 		if err := RemoveFile(path); err != nil {
 			return err
 		}
 	}
-	if err := os.WriteFile(path, content, 0o644); err != nil {
-		return err
-	}
+	perm := os.FileMode(0o644)
 	if mode != "" {
 		m, err := parseMode(mode)
 		if err != nil {
 			return err
 		}
-		return os.Chmod(path, m)
+		perm = m
 	}
-	return nil
+	tmp, err := os.CreateTemp(dir, ".crei-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed; cleans up on any error
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // PruneEmptyDirs removes empty directories under dir bottom-up, never removing
