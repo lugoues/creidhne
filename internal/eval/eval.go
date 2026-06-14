@@ -5,6 +5,7 @@
 package eval
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -185,7 +186,7 @@ func incompleteHint(err error) string {
 // numbers to int64 so templates' {{ printf "%d" }} render integers rather than
 // %!d(float64=N).
 func decodeJSONNumbers(b []byte) (map[string]any, error) {
-	dec := json.NewDecoder(strings.NewReader(string(b)))
+	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
 	var raw any
 	if err := dec.Decode(&raw); err != nil {
