@@ -1,0 +1,8 @@
+
+[Artifact]
+Artifact=ghcr.io/example/dataset:v1
+TLSVerify=true
+Retry=2
+
+[Install]
+WantedBy=default.target
