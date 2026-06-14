@@ -94,3 +94,34 @@ stacks: web: q.#Quadlet & {
 		t.Fatalf("expected both top-level (app) and nested (web) quadlets, got %v", names)
 	}
 }
+
+// TestValidateRejectsIncomplete proves Validate fails on a non-concrete value
+// that never reaches a rendered unit, while LoadAndValidate (render/apply path)
+// still succeeds because the value isn't part of any unit's data.
+func TestValidateRejectsIncomplete(t *testing.T) {
+	tmp := t.TempDir()
+	overlay, err := eval.Overlay(tmp, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
+
+import q "github.com/lugoues/creidhne@v0"
+
+mustBeSet: string // incomplete, never rendered
+
+app: q.#Quadlet & {
+	name: "app"
+	units: #container: Container: {Image: "img", ContainerName: "app"}
+}
+`)
+
+	if err := eval.Validate(tmp, overlay); err == nil {
+		t.Fatal("Validate: expected incomplete-value error, got nil")
+	}
+	if _, err := eval.LoadAndValidate(tmp, overlay); err != nil {
+		t.Fatalf("LoadAndValidate should ignore non-rendered incompleteness, got %v", err)
+	}
+}

@@ -13,6 +13,8 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 
+	"cuelang.org/go/cue/load"
+
 	"github.com/lugoues/creidhne"
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/reconcile"
@@ -143,9 +145,10 @@ func underHome(dir string) bool {
 
 // --- generation pipeline (eval + render) ---
 
-// loadQuadlets evaluates the project's CUE, resolving the schema import from the
-// embedded module via an overlay (offline, version-locked to this binary).
-func loadQuadlets(projectDir string) ([]eval.Quadlet, error) {
+// buildOverlay resolves the schema import for projectDir from the embedded
+// module via an overlay (offline, version-locked to this binary) and keeps the
+// on-disk vendored copy in lockstep. Shared by the load and validate paths.
+func buildOverlay(projectDir string) (map[string]load.Source, error) {
 	moduleRoot, err := eval.FindModuleRoot(projectDir)
 	if err != nil {
 		return nil, err
@@ -153,7 +156,12 @@ func loadQuadlets(projectDir string) ([]eval.Quadlet, error) {
 	// Keep the on-disk vendored schema (LSP/cue-CLI) in lockstep with this
 	// binary's embedded copy; no-op unless it has drifted. Best-effort.
 	syncVendoredSchema(moduleRoot)
-	overlay, err := eval.Overlay(moduleRoot, creidhne.SchemaFS)
+	return eval.Overlay(moduleRoot, creidhne.SchemaFS)
+}
+
+// loadQuadlets evaluates the project's CUE and extracts its quadlets.
+func loadQuadlets(projectDir string) ([]eval.Quadlet, error) {
+	overlay, err := buildOverlay(projectDir)
 	if err != nil {
 		return nil, err
 	}

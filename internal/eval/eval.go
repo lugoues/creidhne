@@ -41,23 +41,46 @@ type Quadlet struct {
 // vendor the embedded schema offline); pass nil to resolve dependencies from
 // disk (e.g. the testing module's cue.mod/usr symlink).
 func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, error) {
+	v, err := buildInstance(dir, overlay)
+	if err != nil {
+		return nil, err
+	}
+	return extractQuadlets(v)
+}
+
+// Validate performs the strict whole-package check that `crei validate` reports
+// on: every regular value must be concrete and constraint-valid, equivalent to
+// the prototype's `cue export ./...`. LoadAndValidate (used by render/apply)
+// only forces the rendered unit data to be concrete, so Validate additionally
+// catches incomplete values that never reach a rendered unit, e.g. an unset
+// required field in a helper struct or an externals/secrets registry entry.
+func Validate(dir string, overlay map[string]load.Source) error {
+	v, err := buildInstance(dir, overlay)
+	if err != nil {
+		return err
+	}
+	return v.Validate(cue.Concrete(true))
+}
+
+// buildInstance loads and builds the CUE package in dir into a single value,
+// surfacing load and structural (bottom) errors.
+func buildInstance(dir string, overlay map[string]load.Source) (cue.Value, error) {
 	cfg := &load.Config{Dir: dir}
 	if len(overlay) > 0 {
 		cfg.Overlay = overlay
 	}
 	insts := load.Instances([]string{"."}, cfg)
 	if len(insts) == 0 {
-		return nil, fmt.Errorf("no CUE instances found in %s", dir)
+		return cue.Value{}, fmt.Errorf("no CUE instances found in %s", dir)
 	}
 	if err := insts[0].Err; err != nil {
-		return nil, fmt.Errorf("load %s: %w", dir, err)
+		return cue.Value{}, fmt.Errorf("load %s: %w", dir, err)
 	}
-	ctx := cuecontext.New()
-	v := ctx.BuildInstance(insts[0])
+	v := cuecontext.New().BuildInstance(insts[0])
 	if err := v.Err(); err != nil {
-		return nil, fmt.Errorf("build %s: %w", dir, err)
+		return cue.Value{}, fmt.Errorf("build %s: %w", dir, err)
 	}
-	return extractQuadlets(v)
+	return v, nil
 }
 
 // extractQuadlets finds every #Quadlet value (one carrying a manifest list)
