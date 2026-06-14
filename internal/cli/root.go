@@ -57,6 +57,7 @@ func newRootCmd() *cobra.Command {
 		newApplyCmd(),
 		newInitCmd(),
 		newValidateCmd(),
+		newConfigCmd(),
 		newVersionCmd(),
 	)
 	return root
@@ -68,6 +69,11 @@ type config struct {
 	ProjectDir string
 	QuadletDir string
 	DiffTool   string
+
+	// Provenance for `crei config`, which layer supplied each value.
+	quadletDirSource string
+	diffToolSource   string
+	configFilePath   string // crei.toml path if present, else ""
 }
 
 type fileConfig struct {
@@ -75,39 +81,66 @@ type fileConfig struct {
 	DiffTool   string `toml:"diff_tool"`
 }
 
+// sourcedValue is a candidate config value paired with a human label for where
+// it came from, used to resolve precedence while remembering the winning source.
+type sourcedValue struct {
+	value, source string
+}
+
+// pickSourced returns the first candidate with a non-empty value; if none has a
+// value it returns the last candidate (the fallback/default sentinel), so its
+// source label is still reported.
+func pickSourced(cands ...sourcedValue) sourcedValue {
+	for _, c := range cands {
+		if c.value != "" {
+			return c
+		}
+	}
+	if n := len(cands); n > 0 {
+		return cands[n-1]
+	}
+	return sourcedValue{}
+}
+
 func resolveConfig() (config, error) {
-	fc := loadConfigFile(flagProjectDir)
-	quadletDir := firstNonEmpty(flagQuadletDir, os.Getenv("QUADLET_DIR"), fc.QuadletDir, "~/.config/containers/systemd")
-	expanded, err := expandHome(quadletDir)
+	fc, fcPath := loadConfigFile(flagProjectDir)
+	qd := pickSourced(
+		sourcedValue{flagQuadletDir, "--quadlet-dir flag"},
+		sourcedValue{os.Getenv("QUADLET_DIR"), "$QUADLET_DIR"},
+		sourcedValue{fc.QuadletDir, "crei.toml"},
+		sourcedValue{"~/.config/containers/systemd", "default"},
+	)
+	expanded, err := expandHome(qd.value)
 	if err != nil {
 		return config{}, err
 	}
+	dt := pickSourced(
+		sourcedValue{flagDiffTool, "--diff-tool flag"},
+		sourcedValue{os.Getenv("DIFF_TOOL"), "$DIFF_TOOL"},
+		sourcedValue{fc.DiffTool, "crei.toml"},
+		sourcedValue{"", "built-in"},
+	)
 	return config{
-		ProjectDir: flagProjectDir,
-		QuadletDir: expanded,
-		DiffTool:   firstNonEmpty(flagDiffTool, os.Getenv("DIFF_TOOL"), fc.DiffTool),
+		ProjectDir:       flagProjectDir,
+		QuadletDir:       expanded,
+		DiffTool:         dt.value,
+		quadletDirSource: qd.source,
+		diffToolSource:   dt.source,
+		configFilePath:   fcPath,
 	}, nil
 }
 
 // loadConfigFile reads crei.toml from projectDir (best effort: missing or
-// malformed files yield a zero config).
-func loadConfigFile(projectDir string) fileConfig {
+// malformed files yield a zero config). It also returns the file's path when it
+// exists (empty otherwise) so `crei config` can report which file was loaded.
+func loadConfigFile(projectDir string) (fileConfig, string) {
 	var fc fileConfig
 	path := filepath.Join(projectDir, "crei.toml")
 	if _, err := os.Stat(path); err != nil {
-		return fc
+		return fc, ""
 	}
 	_, _ = toml.DecodeFile(path, &fc)
-	return fc
-}
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	return fc, path
 }
 
 func expandHome(p string) (string, error) {
