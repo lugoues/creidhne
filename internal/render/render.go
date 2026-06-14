@@ -62,8 +62,17 @@ func New(tplFS fs.FS) (*Renderer, error) {
 // output.files.
 func (r *Renderer) BuildFileSet(quadlets []eval.Quadlet) (map[string]FileContent, error) {
 	files := make(map[string]FileContent)
+	// owners tracks which quadlet produced each filename so a collision (two
+	// units resolving to the same file) is a hard error rather than a silent
+	// last-writer-wins overwrite. The CUE `files:` struct used to enforce this
+	// via unification conflicts.
+	owners := make(map[string]string)
 	for _, q := range quadlets {
 		for _, u := range q.Units {
+			if prev, ok := owners[u.Filename]; ok {
+				return nil, fmt.Errorf("duplicate output file %q: emitted by both quadlet %q and quadlet %q", u.Filename, prev, q.Name)
+			}
+			owners[u.Filename] = q.Name
 			content, err := r.renderUnit(u)
 			if err != nil {
 				return nil, fmt.Errorf("render %s: %w", u.Filename, err)
