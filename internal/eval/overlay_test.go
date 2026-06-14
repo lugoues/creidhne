@@ -2,6 +2,7 @@ package eval_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cuelang.org/go/cue/load"
@@ -123,5 +124,38 @@ app: q.#Quadlet & {
 	}
 	if _, err := eval.LoadAndValidate(tmp, overlay); err != nil {
 		t.Fatalf("LoadAndValidate should ignore non-rendered incompleteness, got %v", err)
+	}
+}
+
+// TestIncompleteUnitConciseError ensures an incomplete unit (here: a Container
+// missing both Image and Rootfs) produces a short, named error rather than a
+// multi-KB dump of the whole resolved struct.
+func TestIncompleteUnitConciseError(t *testing.T) {
+	tmp := t.TempDir()
+	overlay, err := eval.Overlay(tmp, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
+
+import q "github.com/lugoues/creidhne@v0"
+
+a: q.#Quadlet & {
+	name: "z"
+	units: #container: Container: {ContainerName: "x"} // no Image/Rootfs
+}
+`)
+
+	_, err = eval.LoadAndValidate(tmp, overlay)
+	if err == nil {
+		t.Fatal("expected an incomplete-unit error, got nil")
+	}
+	if len(err.Error()) > 400 {
+		t.Fatalf("error should be concise, got %d bytes:\n%s", len(err.Error()), err.Error())
+	}
+	if !strings.Contains(err.Error(), "z.container") {
+		t.Errorf("error should name the unit, got: %v", err)
 	}
 }
