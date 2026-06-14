@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run deploy lib integration tests"
-set -euo pipefail
-
-deno test --allow-env --allow-read --allow-write --allow-run "${PROJECT_ROOT}/mise/tasks/quadlets/lib_test.ts"

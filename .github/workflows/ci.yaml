@@ -15,7 +15,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - run: mise run vet
-      - run: mise run test
-      - run: mise run test:publish
+      - uses: jdx/mise-action@v2 # provisions go + cue
+      - run: go build ./...
+      - run: go test ./...
+      - run: mise run vet # cue vet the schema module
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest

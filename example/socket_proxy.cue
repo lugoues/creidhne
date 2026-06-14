@@ -1,9 +1,9 @@
 package example
 
-// import "github.com/lugoues/quadlets@v0"
-import "github.com/lugoues/quadlets"
+// import "github.com/lugoues/creidhne@v0"
+import "github.com/lugoues/creidhne"
 
-socket_proxy: quadlets.#Quadlet & {
+socket_proxy: creidhne.#Quadlet & {
 	name: "socket-proxy"
 
 	units: {

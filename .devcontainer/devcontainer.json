@@ -21,6 +21,8 @@
 	"runArgs": [
 		"--add-host=host.docker.internal:host-gateway",
 		"--label=devcontainer.name=quadlets-queue",
+		"--tmpfs=/tmp:mode=0777",
+		// "--tmpfs=/tmp:rw",
 		//  To work with rootless podman you will need
 		// to set the sollowing in your environment.
 		// export DEVCONTAINER_USERNS_ARG=--userns=keep-id:uid=$(id -u)

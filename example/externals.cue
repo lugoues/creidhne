@@ -1,10 +1,10 @@
 package example
 
-// import "github.com/lugoues/quadlets@v0"
-import "github.com/lugoues/quadlets"
+// import "github.com/lugoues/creidhne@v0"
+import "github.com/lugoues/creidhne"
 
 // External systemd units not managed by this config.
-externals: quadlets.#ExternalUnits & {
+externals: creidhne.#ExternalUnits & {
 	targets: "network-online": _
 	sockets: podman: _
 	services: tailscaled: _
