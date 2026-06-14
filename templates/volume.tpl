@@ -44,7 +44,7 @@
 {{ end -}}
 {{ if .Unit.StartLimitIntervalSec -}}StartLimitIntervalSec={{ .Unit.StartLimitIntervalSec }}
 {{ end -}}
-{{ if .Unit.StartLimitBurst -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
+{{ if isset .Unit "StartLimitBurst" -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
 {{ end -}}
 {{ end }}
 {{ if .Volume -}}
@@ -68,9 +68,9 @@ Copy={{ .Volume.Copy }}
 {{ end -}}
 {{ if .Volume.Group -}}Group={{ .Volume.Group }}
 {{ end -}}
-{{ if .Volume.UID -}}UID={{ printf "%d" .Volume.UID }}
+{{ if isset .Volume "UID" -}}UID={{ printf "%d" .Volume.UID }}
 {{ end -}}
-{{ if .Volume.GID -}}GID={{ printf "%d" .Volume.GID }}
+{{ if isset .Volume "GID" -}}GID={{ printf "%d" .Volume.GID }}
 {{ end -}}
 {{ range .Volume.Label -}}Label={{ . }}
 {{ end -}}
@@ -143,7 +143,7 @@ DefaultDependencies={{ .Quadlet.DefaultDependencies }}
 {{ end -}}
 {{ if .Service.CPUWeight -}}CPUWeight={{ .Service.CPUWeight }}
 {{ end -}}
-{{ if .Service.IOWeight -}}IOWeight={{ printf "%d" .Service.IOWeight }}
+{{ if isset .Service "IOWeight" -}}IOWeight={{ printf "%d" .Service.IOWeight }}
 {{ end -}}
 {{ if .Service.TasksMax -}}TasksMax={{ .Service.TasksMax }}
 {{ end -}}
