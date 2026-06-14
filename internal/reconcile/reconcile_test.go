@@ -323,3 +323,23 @@ func TestRunDiffExternalToolNonZeroExit(t *testing.T) {
 		t.Fatal("expected output from the diff tool")
 	}
 }
+
+// TestWriteFileAtomicLeavesNoTemp: the atomic write renames its temp into place,
+// leaving only the target file (no .crei-*.tmp residue).
+func TestWriteFileAtomicLeavesNoTemp(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteFile(filepath.Join(dir, "a.container"), []byte("x"), "0644"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "a.container" {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("expected only a.container, got %v", names)
+	}
+}
