@@ -42,7 +42,16 @@ func newValidateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			quads, err := loadQuadlets(cfg.ProjectDir)
+			overlay, err := buildOverlay(cfg.ProjectDir)
+			if err != nil {
+				return err
+			}
+			// Strict whole-package check: everything must be concrete and
+			// constraint-valid, not just the rendered unit data.
+			if err := eval.Validate(cfg.ProjectDir, overlay); err != nil {
+				return err
+			}
+			quads, err := eval.LoadAndValidate(cfg.ProjectDir, overlay)
 			if err != nil {
 				return err
 			}
