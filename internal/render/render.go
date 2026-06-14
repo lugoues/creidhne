@@ -38,6 +38,20 @@ type Renderer struct {
 	tpl map[string]*template.Template
 }
 
+// funcMap exposes helpers to the templates. isset reports whether a key is
+// present in a section map, regardless of its value, so a field set to a falsy
+// value (e.g. an integer 0 or a boolean false) still renders, unlike the plain
+// `{{ if .Section.Field }}` truthiness check which silently drops it.
+var funcMap = template.FuncMap{
+	"isset": func(m map[string]any, key string) bool {
+		if m == nil {
+			return false
+		}
+		_, ok := m[key]
+		return ok
+	},
+}
+
 // New parses every <kind>.tpl from tplFS (expected to contain the templates at
 // its root, e.g. fs.Sub(embeddedFS, "templates") or os.DirFS("templates")).
 func New(tplFS fs.FS) (*Renderer, error) {
@@ -47,7 +61,7 @@ func New(tplFS fs.FS) (*Renderer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read template %q: %w", kind, err)
 		}
-		t, err := template.New(kind).Parse(string(b))
+		t, err := template.New(kind).Funcs(funcMap).Parse(string(b))
 		if err != nil {
 			return nil, fmt.Errorf("parse template %q: %w", kind, err)
 		}

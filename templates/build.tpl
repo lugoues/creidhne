@@ -44,7 +44,7 @@
 {{ end -}}
 {{ if .Unit.StartLimitIntervalSec -}}StartLimitIntervalSec={{ .Unit.StartLimitIntervalSec }}
 {{ end -}}
-{{ if .Unit.StartLimitBurst -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
+{{ if isset .Unit "StartLimitBurst" -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
 {{ end -}}
 {{ end }}
 [Build]
@@ -101,7 +101,7 @@ File={{ .containerfilePath }}
 {{ end -}}
 {{ range .Build.GroupAdd -}}GroupAdd={{ . }}
 {{ end -}}
-{{ if .Build.Retry -}}Retry={{ printf "%d" .Build.Retry }}
+{{ if isset .Build "Retry" -}}Retry={{ printf "%d" .Build.Retry }}
 {{ end -}}
 {{ if .Build.RetryDelay -}}RetryDelay={{ .Build.RetryDelay }}
 {{ end -}}
@@ -171,7 +171,7 @@ DefaultDependencies={{ .Quadlet.DefaultDependencies }}
 {{ end -}}
 {{ if .Service.CPUWeight -}}CPUWeight={{ .Service.CPUWeight }}
 {{ end -}}
-{{ if .Service.IOWeight -}}IOWeight={{ printf "%d" .Service.IOWeight }}
+{{ if isset .Service "IOWeight" -}}IOWeight={{ printf "%d" .Service.IOWeight }}
 {{ end -}}
 {{ if .Service.TasksMax -}}TasksMax={{ .Service.TasksMax }}
 {{ end -}}

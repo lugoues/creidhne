@@ -47,6 +47,40 @@ func TestBuildFileSetDuplicateFilename(t *testing.T) {
 	}
 }
 
+// TestRenderZeroAndFalseValues ensures schema-valid falsy values (integer 0,
+// boolean false) are rendered rather than silently dropped by `{{ if }}`.
+func TestRenderZeroAndFalseValues(t *testing.T) {
+	r := newTestRenderer(t)
+	cu := eval.UnitRecord{
+		Kind: "container", Stem: "z", Filename: "z.container",
+		Data: map[string]any{"Container": map[string]any{
+			"Image":             "img",
+			"ContainerName":     "z",
+			"StopTimeout":       int64(0),
+			"HealthMaxLogCount": int64(0),
+			"Notify":            false,
+		}},
+	}
+	vu := eval.UnitRecord{
+		Kind: "volume", Stem: "v", Filename: "v.volume",
+		Data: map[string]any{"Volume": map[string]any{"UID": int64(0), "GID": int64(0)}},
+	}
+	files, err := r.BuildFileSet([]eval.Quadlet{{Name: "z", Units: []eval.UnitRecord{cu, vu}}})
+	if err != nil {
+		t.Fatalf("BuildFileSet: %v", err)
+	}
+	for _, want := range []string{"StopTimeout=0", "HealthMaxLogCount=0", "Notify=false"} {
+		if !strings.Contains(string(files["z.container"].Content), want) {
+			t.Errorf("z.container missing %q:\n%s", want, files["z.container"].Content)
+		}
+	}
+	for _, want := range []string{"UID=0", "GID=0"} {
+		if !strings.Contains(string(files["v.volume"].Content), want) {
+			t.Errorf("v.volume missing %q:\n%s", want, files["v.volume"].Content)
+		}
+	}
+}
+
 // TestBuildFileSetDistinctFilenames is the happy path: no collision.
 func TestBuildFileSetDistinctFilenames(t *testing.T) {
 	r := newTestRenderer(t)

@@ -44,7 +44,7 @@
 {{ end -}}
 {{ if .Unit.StartLimitIntervalSec -}}StartLimitIntervalSec={{ .Unit.StartLimitIntervalSec }}
 {{ end -}}
-{{ if .Unit.StartLimitBurst -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
+{{ if isset .Unit "StartLimitBurst" -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
 {{ end -}}
 {{ end }}
 {{ if .Pod -}}
@@ -91,7 +91,7 @@
 {{ end -}}
 {{ if .Pod.ExitPolicy -}}ExitPolicy={{ .Pod.ExitPolicy }}
 {{ end -}}
-{{ if .Pod.StopTimeout -}}StopTimeout={{ .Pod.StopTimeout }}
+{{ if isset .Pod "StopTimeout" -}}StopTimeout={{ .Pod.StopTimeout }}
 {{ end -}}
 {{ range .Pod.GlobalArgs -}}GlobalArgs={{ . }}
 {{ end -}}
@@ -162,7 +162,7 @@ DefaultDependencies={{ .Quadlet.DefaultDependencies }}
 {{ end -}}
 {{ if .Service.CPUWeight -}}CPUWeight={{ .Service.CPUWeight }}
 {{ end -}}
-{{ if .Service.IOWeight -}}IOWeight={{ printf "%d" .Service.IOWeight }}
+{{ if isset .Service "IOWeight" -}}IOWeight={{ printf "%d" .Service.IOWeight }}
 {{ end -}}
 {{ if .Service.TasksMax -}}TasksMax={{ .Service.TasksMax }}
 {{ end -}}

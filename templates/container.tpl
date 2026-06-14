@@ -44,7 +44,7 @@
 {{ end -}}
 {{ if .Unit.StartLimitIntervalSec -}}StartLimitIntervalSec={{ .Unit.StartLimitIntervalSec }}
 {{ end -}}
-{{ if .Unit.StartLimitBurst -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
+{{ if isset .Unit "StartLimitBurst" -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
 {{ end -}}
 {{ end }}
 [Container]
@@ -150,7 +150,7 @@
 {{ end -}}
 {{ if .Container.HealthInterval -}}HealthInterval={{ .Container.HealthInterval }}
 {{ end -}}
-{{ if .Container.HealthRetries -}}HealthRetries={{ printf "%d" .Container.HealthRetries }}
+{{ if isset .Container "HealthRetries" -}}HealthRetries={{ printf "%d" .Container.HealthRetries }}
 {{ end -}}
 {{ if .Container.HealthStartPeriod -}}HealthStartPeriod={{ .Container.HealthStartPeriod }}
 {{ end -}}
@@ -160,7 +160,7 @@
 {{ end -}}
 {{ if .Container.HealthLogDestination -}}HealthLogDestination={{ .Container.HealthLogDestination }}
 {{ end -}}
-{{ if .Container.HealthMaxLogCount -}}HealthMaxLogCount={{ printf "%d" .Container.HealthMaxLogCount }}
+{{ if isset .Container "HealthMaxLogCount" -}}HealthMaxLogCount={{ printf "%d" .Container.HealthMaxLogCount }}
 {{ end -}}
 {{ if .Container.HealthMaxLogSize -}}HealthMaxLogSize={{ .Container.HealthMaxLogSize }}
 {{ end -}}
@@ -168,9 +168,9 @@
 {{ end -}}
 {{ if .Container.HealthStartupInterval -}}HealthStartupInterval={{ .Container.HealthStartupInterval }}
 {{ end -}}
-{{ if .Container.HealthStartupRetries -}}HealthStartupRetries={{ printf "%d" .Container.HealthStartupRetries }}
+{{ if isset .Container "HealthStartupRetries" -}}HealthStartupRetries={{ printf "%d" .Container.HealthStartupRetries }}
 {{ end -}}
-{{ if .Container.HealthStartupSuccess -}}HealthStartupSuccess={{ printf "%d" .Container.HealthStartupSuccess }}
+{{ if isset .Container "HealthStartupSuccess" -}}HealthStartupSuccess={{ printf "%d" .Container.HealthStartupSuccess }}
 {{ end -}}
 {{ if .Container.HealthStartupTimeout -}}HealthStartupTimeout={{ .Container.HealthStartupTimeout }}
 {{ end -}}
@@ -180,9 +180,9 @@
 {{ end -}}
 {{ if .Container.StopSignal -}}StopSignal={{ .Container.StopSignal }}
 {{ end -}}
-{{ if .Container.StopTimeout -}}StopTimeout={{ .Container.StopTimeout }}
+{{ if isset .Container "StopTimeout" -}}StopTimeout={{ .Container.StopTimeout }}
 {{ end -}}
-{{ if .Container.Notify -}}Notify={{ .Container.Notify }}
+{{ if isset .Container "Notify" -}}Notify={{ .Container.Notify }}
 {{ end -}}
 {{ if .Container.CgroupsMode -}}CgroupsMode={{ .Container.CgroupsMode }}
 {{ end -}}
@@ -206,7 +206,7 @@
 {{ end -}}
 {{ if .Container.Pull -}}Pull={{ .Container.Pull }}
 {{ end -}}
-{{ if .Container.Retry -}}Retry={{ printf "%d" .Container.Retry }}
+{{ if isset .Container "Retry" -}}Retry={{ printf "%d" .Container.Retry }}
 {{ end -}}
 {{ if .Container.RetryDelay -}}RetryDelay={{ .Container.RetryDelay }}
 {{ end -}}
@@ -286,7 +286,7 @@ DefaultDependencies={{ .Quadlet.DefaultDependencies }}
 {{ end -}}
 {{ if .Service.CPUWeight -}}CPUWeight={{ .Service.CPUWeight }}
 {{ end -}}
-{{ if .Service.IOWeight -}}IOWeight={{ printf "%d" .Service.IOWeight }}
+{{ if isset .Service "IOWeight" -}}IOWeight={{ printf "%d" .Service.IOWeight }}
 {{ end -}}
 {{ if .Service.TasksMax -}}TasksMax={{ .Service.TasksMax }}
 {{ end -}}

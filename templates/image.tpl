@@ -44,7 +44,7 @@
 {{ end -}}
 {{ if .Unit.StartLimitIntervalSec -}}StartLimitIntervalSec={{ .Unit.StartLimitIntervalSec }}
 {{ end -}}
-{{ if .Unit.StartLimitBurst -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
+{{ if isset .Unit "StartLimitBurst" -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
 {{ end -}}
 {{ end }}
 [Image]
@@ -73,7 +73,7 @@ Image={{ .Image.Image }}
 {{ end -}}
 {{ if .Image.ImageTag -}}ImageTag={{ .Image.ImageTag }}
 {{ end -}}
-{{ if .Image.Retry -}}Retry={{ printf "%d" .Image.Retry }}
+{{ if isset .Image "Retry" -}}Retry={{ printf "%d" .Image.Retry }}
 {{ end -}}
 {{ if .Image.RetryDelay -}}RetryDelay={{ .Image.RetryDelay }}
 {{ end -}}
@@ -143,7 +143,7 @@ DefaultDependencies={{ .Quadlet.DefaultDependencies }}
 {{ end -}}
 {{ if .Service.CPUWeight -}}CPUWeight={{ .Service.CPUWeight }}
 {{ end -}}
-{{ if .Service.IOWeight -}}IOWeight={{ printf "%d" .Service.IOWeight }}
+{{ if isset .Service "IOWeight" -}}IOWeight={{ printf "%d" .Service.IOWeight }}
 {{ end -}}
 {{ if .Service.TasksMax -}}TasksMax={{ .Service.TasksMax }}
 {{ end -}}
