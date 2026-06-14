@@ -56,8 +56,8 @@ func newPlanCmd() *cobra.Command {
 				return err
 			}
 			printChanges(changes, true)
-			printSummary(changes, "to add", "to update", "to remove")
 			s := reconcile.Summarize(changes)
+			printSummary(s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
 				fmt.Println("Nothing to do.")
 			}
@@ -108,7 +108,7 @@ func newDiffCmd() *cobra.Command {
 					fmt.Println(red("- " + c.Name + " (stale, will be removed)"))
 				}
 			}
-			printSummary(changes, "new", "changed", "stale")
+			printSummary(reconcile.Summarize(changes), "new", "changed", "stale")
 			return nil
 		},
 	}
@@ -136,7 +136,7 @@ func newApplyCmd() *cobra.Command {
 			}
 			s := reconcile.Summarize(changes)
 			printChanges(changes, false)
-			printSummary(changes, "to add", "to update", "to remove")
+			printSummary(s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
 				fmt.Println("Nothing to do.")
 				return nil
@@ -241,8 +241,7 @@ func printChanges(changes []reconcile.Change, withVerb bool) {
 	}
 }
 
-func printSummary(changes []reconcile.Change, addVerb, changeVerb, removeVerb string) {
-	s := reconcile.Summarize(changes)
+func printSummary(s reconcile.Summary, addVerb, changeVerb, removeVerb string) {
 	fmt.Printf("\n%d file(s): %d %s, %d %s, %d unchanged, %d %s\n",
 		s.Total, s.Added, addVerb, s.Changed, changeVerb, s.Unchanged, s.Removed, removeVerb)
 }
