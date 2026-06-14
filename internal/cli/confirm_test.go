@@ -19,9 +19,9 @@ func withStdin(t *testing.T, input string, fn func()) {
 	os.Stdin = r
 	go func() {
 		if input != "" {
-			io.WriteString(w, input)
+			_, _ = io.WriteString(w, input)
 		}
-		w.Close()
+		_ = w.Close()
 	}()
 	fn()
 }
