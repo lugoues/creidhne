@@ -145,21 +145,42 @@ func newApplyCmd() *cobra.Command {
 				fmt.Println("Aborted.")
 				return nil
 			}
-			for _, c := range changes {
-				p := filepath.Join(dir, filepath.FromSlash(c.Name))
-				var werr error
-				switch c.Action {
-				case reconcile.ActionAdd, reconcile.ActionChange:
-					werr = reconcile.WriteFile(p, c.Content, c.Mode)
-				case reconcile.ActionRemove:
-					werr = reconcile.RemoveFile(p)
-				}
-				if werr != nil {
-					if os.IsPermission(werr) {
-						return fmt.Errorf("permission denied writing to %s\n  re-run with elevated privileges, e.g.: sudo crei apply --quadlet-dir %q", dir, dir)
+			// Apply removals before writes so a path that changes file<->directory
+			// shape (e.g. a build context that became a directory) is cleared
+			// first, and a stale-file removal can never os.RemoveAll a freshly
+			// written file under a shared prefix.
+			applyPass := func(remove bool) error {
+				for _, c := range changes {
+					var werr error
+					p := filepath.Join(dir, filepath.FromSlash(c.Name))
+					switch c.Action {
+					case reconcile.ActionRemove:
+						if !remove {
+							continue
+						}
+						werr = reconcile.RemoveFile(p)
+					case reconcile.ActionAdd, reconcile.ActionChange:
+						if remove {
+							continue
+						}
+						werr = reconcile.WriteFile(p, c.Content, c.Mode)
+					default:
+						continue
 					}
-					return werr
+					if werr != nil {
+						if os.IsPermission(werr) {
+							return fmt.Errorf("permission denied writing to %s\n  re-run with elevated privileges, e.g.: sudo crei apply --quadlet-dir %q", dir, dir)
+						}
+						return werr
+					}
 				}
+				return nil
+			}
+			if err := applyPass(true); err != nil {
+				return err
+			}
+			if err := applyPass(false); err != nil {
+				return err
 			}
 			if err := reconcile.PruneEmptyDirs(filepath.Join(dir, "images")); err != nil {
 				return err

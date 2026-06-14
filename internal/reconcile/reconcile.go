@@ -11,15 +11,25 @@ package reconcile
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"syscall"
 
 	"github.com/pmezard/go-difflib/difflib"
 )
+
+// notFound reports whether err means the path effectively does not exist as a
+// writable target: either it is genuinely absent, or an ancestor path component
+// is a regular file (ENOTDIR). In both cases the write path (ensureDir) will
+// create what is needed.
+func notFound(err error) bool {
+	return os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR)
+}
 
 // quadletExts are the managed unit-file extensions. Flat files outside images/
 // must match one of these to be considered ours.
@@ -75,25 +85,37 @@ func ComputePlan(desired map[string]DesiredFile, dir string) ([]Change, error) {
 	for _, name := range names {
 		fc := desired[name]
 		dest := filepath.Join(dir, filepath.FromSlash(name))
-		existing, err := os.ReadFile(dest)
+		fi, err := os.Lstat(dest)
 		switch {
-		case os.IsNotExist(err):
-			changes = append(changes, Change{Action: ActionAdd, Name: name, Content: fc.Content, Mode: fc.Mode})
-		case err != nil:
+		case err != nil && !notFound(err):
 			return nil, err
-		case !bytes.Equal(existing, fc.Content):
-			changes = append(changes, Change{Action: ActionChange, Name: name, Content: fc.Content, Mode: fc.Mode, Existing: existing})
+		case err != nil:
+			// Absent, or an ancestor component is a file; the write will create it.
+			changes = append(changes, Change{Action: ActionAdd, Name: name, Content: fc.Content, Mode: fc.Mode})
+		case !fi.Mode().IsRegular():
+			// A directory (or symlink) occupies the path; it must be replaced
+			// (e.g. a build context that changed from a directory to a file).
+			changes = append(changes, Change{Action: ActionChange, Name: name, Content: fc.Content, Mode: fc.Mode})
 		default:
-			// Content matches; an explicit mode that drifted on disk still
-			// needs re-applying (e.g. a build-context script's 0755 bit).
-			modeDrift, err := modeDiffersIfSet(dest, fc.Mode)
+			existing, err := os.ReadFile(dest)
 			if err != nil {
 				return nil, err
 			}
-			if modeDrift {
+			switch {
+			case !bytes.Equal(existing, fc.Content):
 				changes = append(changes, Change{Action: ActionChange, Name: name, Content: fc.Content, Mode: fc.Mode, Existing: existing})
-			} else {
-				changes = append(changes, Change{Action: ActionUnchanged, Name: name})
+			default:
+				// Content matches; an explicit mode that drifted on disk still
+				// needs re-applying (e.g. a build-context script's 0755 bit).
+				modeDrift, err := modeDiffersIfSet(dest, fc.Mode)
+				if err != nil {
+					return nil, err
+				}
+				if modeDrift {
+					changes = append(changes, Change{Action: ActionChange, Name: name, Content: fc.Content, Mode: fc.Mode, Existing: existing})
+				} else {
+					changes = append(changes, Change{Action: ActionUnchanged, Name: name})
+				}
 			}
 		}
 	}
@@ -217,6 +239,13 @@ func WriteFile(path string, content []byte, mode string) error {
 	if err := ensureDir(filepath.Dir(path)); err != nil {
 		return err
 	}
+	// If a directory (or symlink) occupies the target path, remove it so a
+	// regular file can take its place (the directory->file transition).
+	if fi, err := os.Lstat(path); err == nil && !fi.Mode().IsRegular() {
+		if err := RemoveFile(path); err != nil {
+			return err
+		}
+	}
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return err
 	}
@@ -278,7 +307,12 @@ func RunDiff(livePath string, newContent []byte, liveLabel, newLabel, tool strin
 	if tool == "" || tool == "diff" {
 		existing, err := os.ReadFile(livePath)
 		if err != nil {
-			return "", err
+			// A directory being replaced by a file (or a vanished path) has no
+			// readable prior content; diff against empty rather than erroring.
+			if !notFound(err) && !errors.Is(err, syscall.EISDIR) {
+				return "", err
+			}
+			existing = nil
 		}
 		return difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
 			A:        difflib.SplitLines(string(existing)),
