@@ -64,7 +64,7 @@ func TestResolveConfigReloadSystemd(t *testing.T) {
 		wantReload bool
 		wantSource string
 	}{
-		{"default", "", false, "default"},
+		{"default", "", true, "default"}, // on, matching podman quadlet install
 		{"toml true", "reload_systemd = true\n", true, "crei.toml"},
 		{"toml false", "reload_systemd = false\n", false, "crei.toml"},
 	}
