@@ -213,7 +213,7 @@ func newApplyCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&reloadSystemd, "reload-systemd", false, "run systemctl daemon-reload after applying (default: reload_systemd in crei.toml, else off)")
+	cmd.Flags().BoolVar(&reloadSystemd, "reload-systemd", false, "run systemctl daemon-reload after applying (default: reload_systemd in crei.toml, else on)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	return cmd
 }

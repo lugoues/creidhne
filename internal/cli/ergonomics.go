@@ -362,7 +362,8 @@ quadlet_dir = "~/.config/containers/systemd"
 # Optional external diff tool (e.g. "delta"); empty uses the built-in differ.
 # diff_tool = ""
 
-# Run 'systemctl daemon-reload' after 'crei apply' by default. Off unless set
-# here; override per-run with --reload-systemd[=false].
-# reload_systemd = false
+# Run 'systemctl daemon-reload' after 'crei apply'. On by default (matching
+# podman quadlet install); set false to disable, or override per-run with
+# --reload-systemd[=false].
+# reload_systemd = true
 `

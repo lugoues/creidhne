@@ -69,8 +69,9 @@ type config struct {
 	ProjectDir string
 	QuadletDir string
 	DiffTool   string
-	// ReloadSystemd is the default for `apply`'s systemctl daemon-reload (off
-	// unless set in crei.toml); the --reload-systemd flag overrides it per-run.
+	// ReloadSystemd is the default for `apply`'s systemctl daemon-reload (on,
+	// matching `podman quadlet install --reload-systemd`, unless crei.toml sets
+	// it false); the --reload-systemd flag overrides it per-run.
 	ReloadSystemd bool
 
 	// Provenance for `crei config`, which layer supplied each value.
@@ -125,7 +126,7 @@ func resolveConfig() (config, error) {
 		sourcedValue{fc.DiffTool, "crei.toml"},
 		sourcedValue{"", "built-in"},
 	)
-	reload, reloadSource := false, "default"
+	reload, reloadSource := true, "default" // matches podman quadlet install
 	if fc.ReloadSystemd != nil {
 		reload, reloadSource = *fc.ReloadSystemd, "crei.toml"
 	}
