@@ -15,9 +15,15 @@ import (
 )
 
 // update regenerates each fixture's expected/ tree from the current renderer:
-// `go test . -run TestGolden -update`. It only writes files that are new or
-// changed, so unchanged (and possibly read-only) fixtures are left untouched.
-var update = flag.Bool("update", false, "rewrite golden expected/ files")
+// `go test . -run TestGolden -update`. It writes only new/changed files, so
+// unchanged (and possibly read-only) fixtures are left untouched.
+//
+// IMPORTANT: -update encodes whatever the renderer currently emits, so it will
+// happily bless a rendering bug as the new golden. ALWAYS review `git diff
+// testdata/` before committing a regen, and verify brand-new fixtures against
+// the podman quadlet spec (podman-systemd.unit(5)). The image/artifact/network
+// fixtures here were checked that way. CI never runs with -update.
+var update = flag.Bool("update", false, "rewrite golden expected/ files (review the diff before committing)")
 
 // TestGolden is the module's end-to-end test: it renders every testdata/<case>
 // fixture through the *embedded* templates and schema (the schema resolves via
