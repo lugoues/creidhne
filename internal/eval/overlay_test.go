@@ -57,3 +57,40 @@ app: q.#Quadlet & {
 		t.Fatalf("unexpected image: %v", container["Image"])
 	}
 }
+
+// TestDiscoverNestedQuadlets proves quadlets are found at the top level AND
+// nested inside a grouping struct (e.g. `stacks: web:`), not silently dropped.
+func TestDiscoverNestedQuadlets(t *testing.T) {
+	tmp := t.TempDir()
+	overlay, err := eval.Overlay(tmp, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
+
+import q "github.com/lugoues/creidhne@v0"
+
+app: q.#Quadlet & {
+	name: "app"
+	units: #container: Container: {Image: "img-app", ContainerName: "app"}
+}
+stacks: web: q.#Quadlet & {
+	name: "web"
+	units: #container: Container: {Image: "img-web", ContainerName: "web"}
+}
+`)
+
+	quads, err := eval.LoadAndValidate(tmp, overlay)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	names := map[string]bool{}
+	for _, q := range quads {
+		names[q.Name] = true
+	}
+	if !names["app"] || !names["web"] {
+		t.Fatalf("expected both top-level (app) and nested (web) quadlets, got %v", names)
+	}
+}

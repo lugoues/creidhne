@@ -60,30 +60,43 @@ func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, err
 	return extractQuadlets(v)
 }
 
-// extractQuadlets finds every top-level #Quadlet value (one with a manifest
-// list). Test fixtures wrap their quadlet in `test.subject`, so that one level
-// of nesting is also probed.
+// extractQuadlets finds every #Quadlet value (one carrying a manifest list)
+// reachable from v, descending through plain struct fields so quadlets nested
+// under a grouping struct (e.g. `stacks: web: #Quadlet`) or wrapped by the test
+// harness (`test: subject: #Quadlet`) are all discovered, not just top-level
+// ones. Descent stops at each quadlet (its internal units are not re-scanned).
+// Hidden (`_`-prefixed) fields are skipped, matching `cue export` semantics,
+// they are treated as private (and are often incomplete base templates that
+// would not render).
 func extractQuadlets(v cue.Value) ([]Quadlet, error) {
 	var out []Quadlet
-	iter, err := v.Fields()
-	if err != nil {
-		return nil, err
-	}
-	for iter.Next() {
-		fv := iter.Value()
-		if q, ok, err := tryQuadlet(fv); err != nil {
-			return nil, err
+	var visit func(cue.Value, int) error
+	visit = func(val cue.Value, depth int) error {
+		if depth > 100 {
+			return nil // guard against pathological nesting
+		}
+		if q, ok, err := tryQuadlet(val); err != nil {
+			return err
 		} else if ok {
 			out = append(out, q)
-			continue
+			return nil
 		}
-		if sub := fv.LookupPath(cue.ParsePath("subject")); sub.Exists() {
-			if q, ok, err := tryQuadlet(sub); err != nil {
-				return nil, err
-			} else if ok {
-				out = append(out, q)
+		if val.IncompleteKind() != cue.StructKind {
+			return nil
+		}
+		iter, err := val.Fields()
+		if err != nil {
+			return nil // not iterable as a struct; nothing to descend into
+		}
+		for iter.Next() {
+			if err := visit(iter.Value(), depth+1); err != nil {
+				return err
 			}
 		}
+		return nil
+	}
+	if err := visit(v, 0); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
