@@ -140,8 +140,16 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 	q := Quadlet{Name: name}
 	for list.Next() {
 		rec := list.Value()
-		ur := UnitRecord{}
-		ur.Kind, _ = rec.LookupPath(cue.ParsePath("kind")).String()
+		kind, _ := rec.LookupPath(cue.ParsePath("kind")).String()
+		if kind == "" {
+			// A list-typed field named `manifest` whose records lack the `kind`
+			// contract field is not a #Quadlet manifest (e.g. a user value that
+			// happens to be named `manifest`). Skip it rather than failing with a
+			// cryptic error. This matters now that discovery recurses the whole
+			// value tree, not just top-level values.
+			return Quadlet{}, false, nil
+		}
+		ur := UnitRecord{Kind: kind}
 		ur.Stem, _ = rec.LookupPath(cue.ParsePath("stem")).String()
 		ur.Filename, _ = rec.LookupPath(cue.ParsePath("filename")).String()
 		ur.Service, _ = rec.LookupPath(cue.ParsePath("service")).String()
