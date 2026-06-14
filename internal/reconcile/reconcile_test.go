@@ -237,3 +237,59 @@ func TestComputePlanModeDrift(t *testing.T) {
 		t.Fatalf("want ActionUnchanged when mode matches, got %+v", changes)
 	}
 }
+
+// TestComputePlanFileDirTransitions: a path whose on-disk type conflicts with
+// the desired type must be classified (not hard-error).
+func TestComputePlanFileDirTransitions(t *testing.T) {
+	// dir on disk, desired wants a regular file there -> Change
+	d1 := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(d1, "images", "foo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(d1, "images", "foo", "bar"), "x")
+	changes, err := ComputePlan(map[string]DesiredFile{"images/foo": {Content: []byte("now-a-file")}}, d1)
+	if err != nil {
+		t.Fatalf("dir->file: unexpected error %v", err)
+	}
+	if got := actionFor(changes, "images/foo"); got != ActionChange {
+		t.Fatalf("dir->file: want Change for images/foo, got %v", got)
+	}
+
+	// file on disk where desired nests under it -> Add (ancestor cleared on write)
+	d2 := t.TempDir()
+	write(t, filepath.Join(d2, "images", "foo"), "old")
+	changes, err = ComputePlan(map[string]DesiredFile{"images/foo/bar": {Content: []byte("nested")}}, d2)
+	if err != nil {
+		t.Fatalf("file->dir: unexpected error %v", err)
+	}
+	if got := actionFor(changes, "images/foo/bar"); got != ActionAdd {
+		t.Fatalf("file->dir: want Add for images/foo/bar, got %v", got)
+	}
+}
+
+// TestWriteFileReplacesDirectory: WriteFile clears a directory occupying the
+// target path and writes the regular file.
+func TestWriteFileReplacesDirectory(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "images", "ctx")
+	write(t, filepath.Join(target, "leftover"), "junk")
+	if err := WriteFile(target, []byte("file-content"), ""); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if string(b) != "file-content" {
+		t.Fatalf("want file-content, got %q", b)
+	}
+}
+
+func actionFor(changes []Change, name string) ActionKind {
+	for _, c := range changes {
+		if c.Name == name {
+			return c.Action
+		}
+	}
+	return ActionKind(-1)
+}
