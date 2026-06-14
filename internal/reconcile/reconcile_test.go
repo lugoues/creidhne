@@ -203,3 +203,37 @@ func TestRunDiffInternal(t *testing.T) {
 		t.Errorf("unexpected diff:\n%s", out)
 	}
 }
+
+// TestComputePlanModeDrift: a build-context file whose content is unchanged but
+// whose explicit mode drifted on disk must be re-applied, not reported as
+// unchanged.
+func TestComputePlanModeDrift(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "images", "script.sh")
+	write(t, p, "#!/bin/sh\n")
+	if err := os.Chmod(p, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	desired := map[string]DesiredFile{
+		"images/script.sh": {Content: []byte("#!/bin/sh\n"), Mode: "0755"},
+	}
+	changes, err := ComputePlan(desired, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Action != ActionChange || changes[0].Mode != "0755" {
+		t.Fatalf("want one ActionChange(mode 0755), got %+v", changes)
+	}
+
+	// Same content AND matching mode -> Unchanged.
+	if err := os.Chmod(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	changes, err = ComputePlan(desired, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Action != ActionUnchanged {
+		t.Fatalf("want ActionUnchanged when mode matches, got %+v", changes)
+	}
+}

@@ -84,7 +84,17 @@ func ComputePlan(desired map[string]DesiredFile, dir string) ([]Change, error) {
 		case !bytes.Equal(existing, fc.Content):
 			changes = append(changes, Change{Action: ActionChange, Name: name, Content: fc.Content, Mode: fc.Mode, Existing: existing})
 		default:
-			changes = append(changes, Change{Action: ActionUnchanged, Name: name})
+			// Content matches; an explicit mode that drifted on disk still
+			// needs re-applying (e.g. a build-context script's 0755 bit).
+			modeDrift, err := modeDiffersIfSet(dest, fc.Mode)
+			if err != nil {
+				return nil, err
+			}
+			if modeDrift {
+				changes = append(changes, Change{Action: ActionChange, Name: name, Content: fc.Content, Mode: fc.Mode, Existing: existing})
+			} else {
+				changes = append(changes, Change{Action: ActionUnchanged, Name: name})
+			}
 		}
 	}
 
@@ -308,6 +318,25 @@ func ReloadHint(userScope bool) string {
 		return "systemctl --user daemon-reload"
 	}
 	return "systemctl daemon-reload"
+}
+
+// modeDiffersIfSet reports whether the on-disk file at path has different
+// permission bits than the desired octal mode. An empty mode means "unmanaged"
+// (ordinary unit files keep whatever perms they were created with), for which
+// the mode is never compared.
+func modeDiffersIfSet(path, mode string) (bool, error) {
+	if mode == "" {
+		return false, nil
+	}
+	want, err := parseMode(mode)
+	if err != nil {
+		return false, err
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	return fi.Mode().Perm() != want.Perm(), nil
 }
 
 func parseMode(s string) (os.FileMode, error) {
