@@ -107,6 +107,12 @@ func printConfig(cfg config) {
 	}
 	row("diff tool", diff, cfg.diffToolSource)
 
+	reload := "no"
+	if cfg.ReloadSystemd {
+		reload = "yes"
+	}
+	row("reload systemd", reload, cfg.reloadSystemdSource)
+
 	scope, reason := "system", "quadlet dir outside $HOME"
 	if underHome(cfg.QuadletDir) {
 		scope, reason = "--user", "quadlet dir under $HOME"
@@ -355,4 +361,8 @@ quadlet_dir = "~/.config/containers/systemd"
 
 # Optional external diff tool (e.g. "delta"); empty uses the built-in differ.
 # diff_tool = ""
+
+# Run 'systemctl daemon-reload' after 'crei apply' by default. Off unless set
+# here; override per-run with --reload-systemd[=false].
+# reload_systemd = false
 `

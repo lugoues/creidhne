@@ -115,7 +115,7 @@ func newDiffCmd() *cobra.Command {
 }
 
 func newApplyCmd() *cobra.Command {
-	var reload, yes bool
+	var reloadSystemd, yes bool
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Write generated quadlet files to the quadlet directory",
@@ -196,6 +196,12 @@ func newApplyCmd() *cobra.Command {
 			}
 			fmt.Printf("\nApplied: %d added, %d updated, %d removed\n", s.Added, s.Changed, s.Removed)
 			userScope := underHome(dir)
+			// Reload default comes from crei.toml (reload_systemd, default off);
+			// an explicit --reload-systemd flag overrides it for this run.
+			reload := cfg.ReloadSystemd
+			if cmd.Flags().Changed("reload-systemd") {
+				reload = reloadSystemd
+			}
 			if reload {
 				if err := reconcile.DaemonReload(userScope); err != nil {
 					return fmt.Errorf("daemon-reload: %w", err)
@@ -207,7 +213,7 @@ func newApplyCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&reload, "reload", false, "run systemctl daemon-reload after applying")
+	cmd.Flags().BoolVar(&reloadSystemd, "reload-systemd", false, "run systemctl daemon-reload after applying (default: reload_systemd in crei.toml, else off)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	return cmd
 }
