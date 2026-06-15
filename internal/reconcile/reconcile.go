@@ -157,8 +157,9 @@ func Summarize(changes []Change) Summary {
 }
 
 // ListExisting returns the managed files under dir: flat files with a quadlet
-// extension, plus every file in the images/ subtree (recursively). It never
-// returns a directory — the property that prevents a stale directory from being
+// extension, plus every file in the images/ subtree (recursively). It returns
+// only regular files (never a directory or a symlink), the property that keeps
+// a stale directory, or a symlink a user dropped in the quadlet dir, from being
 // scheduled for removal.
 func ListExisting(dir string) ([]string, error) {
 	var out []string
@@ -170,7 +171,7 @@ func ListExisting(dir string) ([]string, error) {
 		return nil, err
 	}
 	for _, e := range entries {
-		if e.IsDir() {
+		if !e.Type().IsRegular() { // skip directories, symlinks, and special files
 			continue
 		}
 		if quadletExts[filepath.Ext(e.Name())] {
@@ -183,7 +184,7 @@ func ListExisting(dir string) ([]string, error) {
 			if err != nil {
 				return err
 			}
-			if d.IsDir() {
+			if !d.Type().IsRegular() { // descend into dirs; skip symlinks/special files
 				return nil
 			}
 			rel, err := filepath.Rel(dir, p)
@@ -235,9 +236,10 @@ func ensureDir(dir string) error {
 }
 
 // WriteFile writes content to path (creating parents) and applies mode if set.
-// The write is atomic: content goes to a temp file in the same directory which
-// is then renamed over the target, so a crash mid-write never leaves a partial
-// unit file for systemd/podman to read.
+// The write is atomic and durable: content goes to a temp file in the same
+// directory, which is fsync'd and then renamed over the target, and the
+// directory entry is fsync'd, so neither a crash mid-write nor a power loss
+// leaves a partial unit file for systemd/podman to read.
 func WriteFile(path string, content []byte, mode string) error {
 	dir := filepath.Dir(path)
 	if err := ensureDir(dir); err != nil {
@@ -269,13 +271,33 @@ func WriteFile(path string, content []byte, mode string) error {
 		_ = tmp.Close()
 		return err
 	}
+	// Flush the data to disk before the rename so a power loss can't leave the
+	// renamed-into-place file truncated or empty.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
 	if err := os.Chmod(tmpName, perm); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	syncDir(dir) // best-effort: make the rename itself durable across a crash
+	return nil
+}
+
+// syncDir fsyncs a directory so a rename within it is durable across a crash.
+// Best effort: a failure to open or sync the directory is not a write error
+// (the rename already succeeded), and it is a no-op where unsupported.
+func syncDir(dir string) {
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 }
 
 // PruneEmptyDirs removes empty directories under dir bottom-up, never removing
