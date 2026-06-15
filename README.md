@@ -1,0 +1,258 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/logo-light.svg">
+  <img alt="creidhne" src="docs/images/logo-dark.svg" width="380">
+</picture>
+
+<p></p>
+
+[![release](https://img.shields.io/github/v/release/lugoues/creidhne?color=7A5490&label=release)](https://github.com/lugoues/creidhne/releases)
+[![go report](https://goreportcard.com/badge/github.com/lugoues/creidhne)](https://goreportcard.com/report/github.com/lugoues/creidhne)
+[![license](https://img.shields.io/badge/license-MIT-7A5490)](LICENSE)
+[![podman](https://img.shields.io/badge/podman-4.4%2B-7A5490)](https://podman.io)
+
+**Generate Podman Quadlet systemd units from typed, validated CUE, and reconcile them against your quadlet directory.**
+
+</div>
+
+---
+
+**Creidhne** (`crei`) is a single-binary CLI that generates [Podman Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) systemd unit files from typed, validated [CUE](https://cuelang.org/) definitions and reconciles them against your quadlet directory (`plan` / `diff` / `apply`). It covers all 8 Quadlet unit types: Container, Pod, Volume, Network, Kube, Build, Image, and Artifact.
+
+The binary **embeds the CUE evaluator and schema**, so you don't need `cue` (or anything else) installed to use it. Write CUE, run `crei apply`.
+
+## Install
+
+```sh
+# From source (Go 1.25+):
+go install github.com/lugoues/creidhne/cmd/crei@latest
+
+# Or download a release binary from:
+# https://github.com/lugoues/creidhne/releases
+```
+
+## Quick start
+
+```sh
+mkdir myapp && cd myapp
+crei init                 # scaffolds cue.mod, main.cue, crei.toml
+$EDITOR main.cue              # define your quadlets
+crei plan                 # preview changes against the quadlet dir
+crei apply                # write the unit files
+```
+
+A quadlet with a container and a volume:
+
+```cue
+package config
+
+import "github.com/lugoues/creidhne@v0"
+
+app: creidhne.#Quadlet & {
+    name: "app"
+    units: {
+        #container: {
+            Container: {
+                Image:         "docker.io/myapp:latest"
+                ContainerName: "app"
+                Environment:   ["APP_ENV=production"]
+                Volume:        ["app-data.volume:/data"]
+                PublishPort:   ["8080:8080"]
+            }
+            Service: {
+                Restart:   "always"
+                MemoryMax: "1G"
+            }
+            Install: WantedBy: ["multi-user.target"]
+        }
+        volumes: data: {
+            Volume: {
+                VolumeName: "app-data"
+            }
+        }
+    }
+}
+```
+
+`crei apply` writes `app.container` and `app-data.volume` into your quadlet directory (default `~/.config/containers/systemd`), then tells you to run `systemctl --user daemon-reload` (or does it for you with `--reload-systemd`).
+
+## Writing quadlets
+
+`#Quadlet` is the top-level wrapper: a `name` and a `units` block. CUE validates every field against the Podman Quadlet spec.
+
+### Primary vs. additional units
+
+- **Primary** units are `#`-prefixed fields (`#container`, `#pod`, `#volume`, ...). One per type; the file is named after the quadlet, so `name: "app"` + `#container` gives `app.container`.
+- **Additional** units are plural maps (`containers`, `volumes`, ...) keyed by a name. The file is `<quadlet>-<key>`, so `volumes: data: {...}` gives `app-data.volume`.
+
+Mix both freely; a primary `#container` plus additional `volumes: data: {...}` is a common pattern.
+
+```
+#Quadlet
+├── name: string                 # e.g. "traefik"
+└── units: #Units
+    ├── #container?: #Container   # primary  → traefik.container
+    ├── #volume?:    #Volume      # primary  → traefik.volume
+    ├── ...                       # all 8 types
+    ├── containers: {...}         # additional → traefik-<key>.container
+    └── volumes: {...}            # additional → traefik-<key>.volume
+```
+
+### Cross-references
+
+Every unit has computed `#ref` and `#service` fields for type-safe references. `#ref` is the Quadlet filename (e.g. `proxy.volume`) used in fields like `Volume`; `#service` is the systemd service Quadlet generates (e.g. `proxy-volume.service`) used in `Unit` fields like `After`/`Requires`.
+
+Container, pod, volume, and network units also expose `#containerName` / `#podName` / `#volumeName` / `#networkName`, the **runtime resource name** podman assigns: the explicit `ContainerName`/etc. if you set one, otherwise podman's `systemd-<stem>` default. Use it where a real object name is required, e.g. `Network: ["container:\(db.units.#container.#containerName)"]`.
+
+```cue
+proxy: creidhne.#Quadlet & {
+    name: "proxy"
+    units: {
+        #container: {
+            Container: {
+                Image:  "docker.io/nginx:latest"
+                Volume: ["\(units.#volume.#ref):/etc/nginx/certs:ro"]
+            }
+            Unit: Requires: [units.#volume.#service]
+        }
+        #volume: {Volume: {}}
+    }
+}
+// units.#volume.#ref     → "proxy.volume"
+// units.#volume.#service → "proxy-volume.service"
+```
+
+For cross-quadlet references, reference the other quadlet's units directly:
+
+```cue
+app: creidhne.#Quadlet & {
+    name: "app"
+    units: #container: {
+        Container: Image: "docker.io/myapp:latest"
+        Unit: {
+            After:    [db.units.#container.#service]
+            Requires: [db.units.#container.#service]
+        }
+    }
+}
+```
+
+### External dependencies
+
+For systemd units not managed by this config, use `#ExternalUnits`:
+
+```cue
+externals: creidhne.#ExternalUnits & {
+    targets: "network-online": _
+    services: tailscaled: _
+    sockets: podman: _
+}
+
+app: creidhne.#Quadlet & {
+    name: "app"
+    units: #container: {
+        Container: Image: "docker.io/myapp:latest"
+        Unit: After: [
+            externals.targets["network-online"].#ref,
+            externals.services.tailscaled.#ref,
+        ]
+    }
+}
+```
+
+Well-known systemd targets (default, multi-user, network-online, graphical, ...) are pre-populated. Or skip the helper and use raw strings: `Unit: After: ["network-online.target"]`.
+
+### Supported sections
+
+Every unit type supports the standard systemd sections plus its own:
+
+| Section | Description |
+|---|---|
+| `Unit` | Dependencies, ordering, conditions (After, Requires, Wants, ...) |
+| `Service` | Restart policy, resource limits, exec hooks, environment |
+| `Install` | WantedBy, RequiredBy, Alias, ... |
+| `Quadlet` | `DefaultDependencies` toggle |
+
+Plus the unit section (`[Container]`, `[Pod]`, ...). Every field from [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) is supported and documented with inline comments in the CUE source.
+
+### Type safety
+
+Fields are validated when you `crei validate` (or `crei plan`/`apply`):
+
+```cue
+#container: Container: {
+    PublishPort: ["8080:80"]        // validated port mapping format
+    Memory:      "512m"             // validated podman byte size
+    Pull:        "always"           // enum: always | missing | never | newer
+    UserNS:      "keep-id:uid=1000" // validated user namespace mode
+}
+```
+
+Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` cannot both be set.
+
+## CLI
+
+| Command | Description |
+|---|---|
+| `crei init` | Scaffold a project (`cue.mod`, `main.cue`, `crei.toml`) and vendor the schema for editor/LSP support. |
+| `crei render` | Render all unit files to stdout. |
+| `crei plan` | Show what `apply` would add/update/remove. |
+| `crei diff` | Show detailed diffs against the live files. |
+| `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
+| `crei validate` | Type-check the CUE without rendering. |
+| `crei config` | Show the resolved configuration and where each value came from. |
+| `crei version` | Print version info. |
+
+Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
+
+| Setting | Flag | Env | `crei.toml` | Default |
+|---|---|---|---|---|
+| Project dir | `-C`, `--dir` | n/a | n/a | `.` |
+| Quadlet dir | `--quadlet-dir` | `QUADLET_DIR` | `quadlet_dir` | `~/.config/containers/systemd` |
+| Diff tool | `--diff-tool` | `DIFF_TOOL` | `diff_tool` | built-in unified diff |
+| Reload systemd after apply | `--reload-systemd` | n/a | `reload_systemd` | `true` (on, like `podman quadlet install`) |
+
+Run `crei config` to print the resolved values and where each came from.
+
+Writing to a system path like `/etc/containers/systemd` requires elevated privileges, so run `sudo crei apply`. The CLI never escalates on its own; if a write is denied it tells you to re-run with `sudo`.
+
+## How it works
+
+CUE validates and exports your unit definitions as plain data; **Go does the rendering**. Each `#Quadlet` exposes a `manifest` (the typed data plus computed filenames/service names); the CLI evaluates it via the embedded `cuelang.org/go` library (resolving your `import "github.com/lugoues/creidhne@v0"` from the **schema baked into the binary**, with no network or registry), then renders each unit through a Go `text/template` and reconciles the result against your quadlet directory.
+
+Your editor's CUE tooling resolves the import from a vendored copy that `crei init` writes into `cue.mod/usr/` (and that the binary keeps in sync), so the LSP works offline, with nothing to fetch from a registry.
+
+## Project structure
+
+```
+cmd/crei/        # CLI entrypoint
+internal/eval/       # CUE evaluation (cue/load + overlay) → manifest
+internal/render/     # text/template execution → unit files
+internal/reconcile/  # plan / diff / apply against the quadlet dir
+internal/cli/        # cobra commands
+creidhne/            # CUE schema module (github.com/lugoues/creidhne@v0)
+templates/           # Go text/templates, one per unit type
+testdata/            # golden fixtures (input.cue + expected/)
+example/             # a realistic multi-quadlet project
+```
+
+## Development
+
+Toolchain (`go`, `cue`) and dev tasks are managed by [mise](https://mise.jdx.dev/).
+
+```sh
+mise run build      # build ./bin/crei
+mise run test       # go test ./...  +  cue vet (schema)
+mise run lint       # golangci-lint
+mise run snapshot   # local goreleaser dry-run
+```
+
+Golden tests render every `testdata/<case>` fixture and assert byte-equality against its `expected/` tree. After an intentional output change, run `mise exec -- go test . -run TestGolden/<case>` to see the diff, then update the files under `expected/`.
+
+The `crei` binary is the only release artifact (the schema and templates are embedded in it), and GoReleaser builds it on `v*` tags.
+
+## Name
+
+Creidhne the artificer of the Tuatha Dé Danann pronounced **KRAY-nyuh**; the binary is `crei`, the sounded first syllable, "cray".
