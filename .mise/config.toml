@@ -27,7 +27,7 @@ description = "Run golangci-lint"
 run = "golangci-lint run"
 
 [tasks.gen]
-description = "Regenerate systemd [Unit]/[Install] schema from the vendored gperf"
+description = "Regenerate systemd [Unit]/[Service]/[Install] schema from the vendored gperf"
 run = "go run ./tools/gen-systemd-sections"
 
 [tasks.tidy]

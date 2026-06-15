@@ -107,6 +107,12 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 // systemd unit garbage-collection mode for CollectMode. See systemd.unit(5).
 #CollectMode: "inactive" | "inactive-or-failed"
 
+// [Service] enums (values from systemd v257 string tables). See systemd.service(5).
+#ServiceType: "simple" | "exec" | "forking" | "oneshot" | "dbus" | "notify" | "notify-reload" | "idle"
+#ServiceRestart: "no" | "on-success" | "on-failure" | "on-abnormal" | "on-watchdog" | "on-abort" | "always"
+#KillMode: "control-group" | "mixed" | "process" | "none"
+#NotifyAccess: "none" | "main" | "exec" | "all"
+
 // --- Podman value types ---
 
 // Podman byte size: bare integer (bytes), or integer with b/k/m/g suffix (case-insensitive).
@@ -207,51 +213,9 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 // Pod exit policy
 #PodExitPolicy: "stop" | "continue"
 
-// Systemd common sections that can appear in any unit file.
-//
-// #UnitSection and #InstallSection are generated from systemd's own parser table
-// into systemd_sections.gen.cue (see tools/gen-systemd-sections). #ServiceSection
-// is still hand-written below (its ~270 directives are a future generator target).
-
-#ServiceSection: {
-	Type?:             "simple" | "exec" | "forking" | "oneshot" | "dbus" | "notify" | "idle"
-	Restart?:          "no" | "on-success" | "on-failure" | "on-abnormal" | "on-watchdog" | "on-abort" | "always"
-	RestartSec?:       #TimeSpan
-	TimeoutStartSec?:  #TimeSpan
-	TimeoutStopSec?:   #TimeSpan
-	TimeoutSec?:       #TimeSpan
-	WatchdogSec?:      #TimeSpan
-	ExecStartPre?: [...string]
-	ExecStartPost?: [...string]
-	ExecStop?: [...string]
-	ExecStopPost?: [...string]
-	ExecReload?: [...string]
-	RemainAfterExit?:  bool
-	KillMode?:         "control-group" | "mixed" | "process" | "none"
-	KillSignal?:       #Signal
-	NotifyAccess?:     "none" | "main" | "exec" | "all"
-	RestartPreventExitStatus?: string
-	SuccessExitStatus?: string
-	Environment?: [...string]
-	EnvironmentFile?: [...string]
-	WorkingDirectory?: string
-
-	// Resource controls (systemd.resource-control(5))
-	MemoryMax?:    #Bytes
-	MemoryHigh?:   #Bytes
-	MemoryLow?:    #Bytes
-	MemoryMin?:    #Bytes
-	CPUQuota?:     #Percent
-	CPUWeight?:    #CPUWeight
-	IOWeight?:     #IOWeight
-	TasksMax?:     #TasksLimit
-
-	// Process resource limits (systemd.exec(5))
-	LimitNOFILE?:  #ResourceLimit
-	LimitNPROC?:   #ResourceLimit
-	LimitCORE?:    #ByteLimit
-	LimitMEMLOCK?: #ByteLimit
-}
+// Systemd common sections that can appear in any unit file (#UnitSection,
+// #ServiceSection, #InstallSection) are generated from systemd's own parser
+// table into systemd_sections.gen.cue (see tools/gen-systemd-sections).
 
 // Quadlet-specific section
 #QuadletSection: {

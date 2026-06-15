@@ -1,19 +1,21 @@
 // Command gen-systemd-sections generates CUE schema and Go-template partials for
-// systemd's pass-through unit-file sections ([Unit]/[Install]) from systemd's own
-// parser table (load-fragment-gperf.gperf.in, vendored & pinned), so the schema
-// tracks systemd rather than being hand-maintained.
+// systemd's pass-through unit-file sections ([Unit]/[Service]/[Install]) from
+// systemd's own parser table (load-fragment-gperf.gperf.in, vendored & pinned),
+// so the schema tracks systemd rather than being hand-maintained.
 //
 // The gperf table is ground truth for which directives are valid on disk and in
 // which section; each directive's config_parse_* function gives its base type.
+// [Service] additionally pulls in the EXEC/CGROUP/KILL context directives, which
+// the gperf defines once as Jinja macros and invokes per section; collectDirective-
+// Lines expands those invocations (substituting the {{type}} placeholder).
+//
 // Enum *values* aren't in this table (they live in DEFINE_STRING_TABLE_LOOKUP
 // macros), so enum-typed directives map to a curated CUE type (e.g. #JobMode,
-// #EmergencyAction) defined by hand in types.cue.
+// #EmergencyAction, #ServiceType) defined by hand in types.cue. Parsers with no
+// mapping fall back to string (a safe pass-through) and are reported to stderr.
 //
 // Run from the repo root: `go run ./tools/gen-systemd-sections`.
 // It writes creidhne/systemd_sections.gen.cue and templates/systemd_sections.gen.tpl.
-//
-// [Service] is not yet handled — it additionally needs the EXEC/CGROUP/KILL
-// context-macro expansion.
 package main
 
 import (
@@ -37,6 +39,7 @@ var sections = []struct {
 	leadingBlank           bool // blank line before the header (section separator)
 }{
 	{"Unit", "#UnitSection", "unit", false}, // first section: no leading blank
+	{"Service", "#ServiceSection", "service", true},
 	{"Install", "#InstallSection", "install", true},
 }
 
@@ -73,6 +76,80 @@ var cueType = map[string]string{
 	"config_parse_emergency_action": "#EmergencyAction",
 	"config_parse_collect_mode":     "#CollectMode",
 
+	// --- [Service]: systemd.service/exec/resource-control/kill ---
+	// durations
+	"config_parse_sec_fix_0":             "#TimeSpan",
+	"config_parse_sec_def_infinity":      "#TimeSpan",
+	"config_parse_service_timeout":       "#TimeSpan",
+	"config_parse_service_timeout_abort": "#TimeSpan",
+	// numeric / resource controls
+	"config_parse_rlimit":        "#ResourceLimit", // byte-valued ones overridden to #ByteLimit
+	"config_parse_memory_limit":  "#Bytes",
+	"config_parse_cpu_quota":     "#Percent",
+	"config_parse_cg_cpu_weight": "#CPUWeight",
+	"config_parse_cg_weight":     "#IOWeight",
+	"config_parse_tasks_max":     "#TasksLimit",
+	"config_parse_mode":          "#FileMode",
+	"config_parse_signal":        "#Signal",
+	// service enums (values curated in types.cue)
+	"config_parse_service_type":    "#ServiceType",
+	"config_parse_service_restart": "#ServiceRestart",
+	"config_parse_kill_mode":       "#KillMode",
+	"config_parse_notify_access":   "#NotifyAccess",
+	// string lists (repeatable / space-separated)
+	"config_parse_exec":                        "[...string]",
+	"config_parse_namespace_path_strv":         "[...string]",
+	"config_parse_exec_directories":            "[...string]",
+	"config_parse_bind_paths":                  "[...string]",
+	"config_parse_temporary_filesystems":       "[...string]",
+	"config_parse_set_credential":              "[...string]",
+	"config_parse_load_credential":             "[...string]",
+	"config_parse_set_status":                  "[...string]",
+	"config_parse_syscall_filter":              "[...string]",
+	"config_parse_syscall_log":                 "[...string]",
+	"config_parse_syscall_archs":               "[...string]",
+	"config_parse_capability_set":              "[...string]",
+	"config_parse_in_addr_prefixes":            "[...string]",
+	"config_parse_unset_environ":               "[...string]",
+	"config_parse_environ":                     "[...string]",
+	"config_parse_unit_env_file":               "[...string]",
+	"config_parse_user_group_strv_compat":      "[...string]",
+	"config_parse_restrict_network_interfaces": "[...string]",
+	"config_parse_restrict_filesystems":        "[...string]",
+	"config_parse_ip_filter_bpf_progs":         "[...string]",
+	"config_parse_io_limit":                    "[...string]",
+	"config_parse_blockio_bandwidth":           "[...string]",
+	"config_parse_blockio_weight":              "[...string]",
+	"config_parse_cgroup_socket_bind":          "[...string]",
+	"config_parse_log_extra_fields":            "[...string]",
+	"config_parse_open_file":                   "[...string]",
+	"config_parse_nft_set":                     "[...string]",
+	"config_parse_address_families":            "[...string]",
+	"config_parse_blockio_device_weight":       "[...string]",
+	"config_parse_bpf_foreign_program":         "[...string]",
+	"config_parse_cgroup_nft_set":              "[...string]",
+	"config_parse_device_allow":                "[...string]",
+	"config_parse_disable_controllers":         "[...string]",
+	"config_parse_exec_secure_bits":            "[...string]",
+	"config_parse_extension_images":            "[...string]",
+	"config_parse_import_credential":           "[...string]",
+	"config_parse_io_device_latency":           "[...string]",
+	"config_parse_io_device_weight":            "[...string]",
+	"config_parse_log_filter_patterns":         "[...string]",
+	"config_parse_mount_images":                "[...string]",
+	"config_parse_pass_environ":                "[...string]",
+	"config_parse_restrict_namespaces":         "[...string]",
+	"config_parse_service_sockets":             "[...string]",
+	"config_parse_nsec":                        "#TimeSpan",
+	// plain strings
+	"config_parse_exec_output":        "string", // Standard{Output,Error}: journal|file:PATH|fd:NAME|...
+	"config_parse_working_directory":  "string",
+	"config_parse_unit_slice":         "string",
+	"config_parse_image_policy":       "string",
+	"config_parse_root_image_options": "string",
+	"config_parse_user_group_compat":  "string",
+	"config_parse_pid_file":           "string",
+
 	// skipped
 	"config_parse_warn_compat":        "",
 	"config_parse_obsolete_unit_deps": "",
@@ -88,6 +165,51 @@ var overrides = map[string]string{
 	"Install.UpheldBy":        "[...string]",
 	"Install.Also":            "[...string]",
 	"Install.DefaultInstance": "string",
+
+	// Byte-valued rlimits (config_parse_rlimit maps to #ResourceLimit by default,
+	// which rejects byte suffixes); these accept sizes like "512M".
+	"Service.LimitFSIZE":    "#ByteLimit",
+	"Service.LimitDATA":     "#ByteLimit",
+	"Service.LimitSTACK":    "#ByteLimit",
+	"Service.LimitCORE":     "#ByteLimit",
+	"Service.LimitRSS":      "#ByteLimit",
+	"Service.LimitAS":       "#ByteLimit",
+	"Service.LimitMEMLOCK":  "#ByteLimit",
+	"Service.LimitMSGQUEUE": "#ByteLimit",
+}
+
+// legacyAliases are directives the generator drops because a canonical form is
+// already emitted. Two kinds, both keyed "Section.Directive":
+//  1. Legacy *spellings* whose canonical name lives in the same section
+//     (e.g. Unit.BindTo -> BindsTo; Service.ReadWriteDirectories -> ReadWritePaths).
+//  2. Legacy *locations*: [Unit] directives systemd still accepts under [Service]
+//     for backwards compat. The canonical [Unit] entry is generated into
+//     #UnitSection, so the redundant [Service] copy is omitted.
+//
+// This set is deliberately explicit rather than inferred from the parser/target
+// columns: many *distinct* directives legitimately share a generic context-struct
+// offset (e.g. every Memory*/IO* cgroup directive targets offsetof(_, cgroup_context)
+// and is dispatched by name), so deduping on shared targets silently drops real
+// directives. Worst case here is a missed alias surviving as an extra valid field;
+// it can never drop a real directive.
+var legacyAliases = map[string]bool{
+	// [Unit] legacy spellings (canonical in [Unit])
+	"Unit.BindTo":              true, // -> BindsTo
+	"Unit.PropagateReloadTo":   true, // -> PropagatesReloadTo
+	"Unit.PropagateReloadFrom": true, // -> ReloadPropagatedFrom
+	"Unit.StartLimitInterval":  true, // -> StartLimitIntervalSec
+
+	// [Service] legacy spellings (canonical in [Service])
+	"Service.ReadWriteDirectories":    true, // -> ReadWritePaths
+	"Service.ReadOnlyDirectories":     true, // -> ReadOnlyPaths
+	"Service.InaccessibleDirectories": true, // -> InaccessiblePaths
+
+	// [Service] legacy locations (canonical in [Unit], emitted into #UnitSection)
+	"Service.FailureAction":      true,
+	"Service.RebootArgument":     true,
+	"Service.StartLimitAction":   true,
+	"Service.StartLimitBurst":    true,
+	"Service.StartLimitInterval": true,
 }
 
 type directive struct {
@@ -139,26 +261,74 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wrote %s and %s\n", cueOut, tplOut)
 }
 
-// parseSection extracts a section's directives, skipping deprecated parsers and
-// deduplicating aliases (directives sharing a parser + target spec — e.g.
-// BindTo/BindsTo — keep the first/canonical spelling).
+// parseMacros collects the body directive lines of each
+// {%- macro NAME(type) -%} ... {%- endmacro -%} block, keyed by NAME. Bodies use
+// the literal "{{type}}." prefix, substituted per invocation later.
+func parseMacros(lines []string) map[string][]string {
+	macros := map[string][]string{}
+	cur := ""
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		switch {
+		case strings.Contains(t, "{%- macro "):
+			s := t[strings.Index(t, "macro ")+len("macro "):]
+			cur = strings.TrimSpace(s[:strings.Index(s, "(")])
+		case strings.Contains(t, "{%- endmacro"):
+			cur = ""
+		case cur != "" && strings.HasPrefix(t, "{{type}}."):
+			macros[cur] = append(macros[cur], t)
+		}
+	}
+	return macros
+}
+
+// collectDirectiveLines returns the directive lines for a section: its literal
+// "Section.*" lines plus, for each "{{ MACRO('Section') }}" invocation, that
+// macro's body with {{type}} substituted. Lines inside macro definitions are
+// skipped (they're picked up via invocations).
+func collectDirectiveLines(lines []string, section string) []string {
+	macros := parseMacros(lines)
+	var out []string
+	inDef := false
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		switch {
+		case strings.Contains(t, "{%- macro "):
+			inDef = true
+		case strings.Contains(t, "{%- endmacro"):
+			inDef = false
+		case inDef:
+			// skip macro-definition bodies
+		case strings.HasPrefix(t, section+"."):
+			out = append(out, t)
+		case strings.HasPrefix(t, "{{") && strings.Contains(t, "('"+section+"')"):
+			name := strings.TrimSpace(strings.TrimPrefix(t, "{{"))
+			name = strings.TrimSpace(name[:strings.Index(name, "(")])
+			for _, bl := range macros[name] {
+				out = append(out, strings.ReplaceAll(bl, "{{type}}", section))
+			}
+		}
+	}
+	return out
+}
+
+// parseSection extracts a section's directives (expanding context macros),
+// skipping deprecated parsers and the explicit legacyAliases set. It does NOT
+// dedup on shared parser/target columns: many distinct directives legitimately
+// share a generic context-struct offset (see legacyAliases), so target dedup
+// would silently drop real directives.
 func parseSection(lines []string, section string, unmapped map[string]bool) []directive {
 	prefix := section + "."
 	var out []directive
 	seenName := map[string]bool{}
-	seenTarget := map[string]bool{}
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, prefix) {
-			continue
-		}
+	for _, line := range collectDirectiveLines(lines, section) {
 		fields := strings.Split(line, ",")
 		if len(fields) < 2 {
 			continue
 		}
 		name := strings.TrimSpace(strings.TrimPrefix(fields[0], prefix))
 		parser := strings.TrimSpace(fields[1])
-		if name == "" || seenName[name] {
+		if name == "" || seenName[name] || legacyAliases[section+"."+name] {
 			continue
 		}
 		var t string
@@ -174,18 +344,6 @@ func parseSection(lines []string, section string, unmapped map[string]bool) []di
 				t = "string"
 				unmapped[parser] = true
 			}
-		}
-		// Alias dedup: directives sharing a parser + a *non-trivial* target spec
-		// (e.g. BindTo/BindsTo -> UNIT_BINDS_TO) are the same setting under a
-		// legacy name; keep the first (canonical) one. A trivial target ("0, 0",
-		// as in [Install]) means the parser dispatches by name, so don't dedup.
-		rest := strings.Join(fields[2:], ",")
-		if !trivialTarget(rest) {
-			target := parser + "|" + rest
-			if seenTarget[target] {
-				continue
-			}
-			seenTarget[target] = true
 		}
 		seenName[name] = true
 		out = append(out, directive{name, t})
@@ -266,13 +424,6 @@ func group(ds []directive) (core, cond, asrt []directive) {
 	sort.Slice(cond, func(i, j int) bool { return cond[i].name < cond[j].name })
 	sort.Slice(asrt, func(i, j int) bool { return asrt[i].name < asrt[j].name })
 	return
-}
-
-// trivialTarget reports whether a gperf target spec is just zeros (no real
-// struct offset or enum tag), meaning the parser dispatches by directive name.
-func trivialTarget(rest string) bool {
-	r := strings.NewReplacer("0", "", ",", "", " ", "", "\t", "")
-	return r.Replace(rest) == ""
 }
 
 func die(err error) {

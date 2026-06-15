@@ -25,8 +25,8 @@ test: testing.#Test & {
 					KillMode:                "mixed"
 					KillSignal:              "SIGTERM"
 					NotifyAccess:            "main"
-					RestartPreventExitStatus: "1 6 SIGABRT"
-					SuccessExitStatus:       "0 2"
+					RestartPreventExitStatus: ["1", "6", "SIGABRT"]
+					SuccessExitStatus: ["0", "2"]
 					ExecStartPre: ["/usr/bin/check-prereqs"]
 					ExecStartPost: ["/usr/bin/notify-ready"]
 					ExecStop: ["/usr/bin/graceful-stop"]
