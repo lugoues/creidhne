@@ -1,6 +1,6 @@
 [Unit]
-After=tailscaled.service
 Requires=tailscaled.service
+After=tailscaled.service
 
 [Pod]
 PodName=webapp

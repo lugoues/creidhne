@@ -1,6 +1,6 @@
 [Unit]
-After=app.service
 Requires=app.service
+After=app.service
 
 [Container]
 Image=docker.io/haproxy:latest

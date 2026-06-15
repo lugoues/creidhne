@@ -1,52 +1,4 @@
-{{ if .Unit -}}
-[Unit]
-{{ if .Unit.Description -}}Description={{ .Unit.Description }}
-{{ end -}}
-{{ if .Unit.Documentation -}}Documentation={{ .Unit.Documentation }}
-{{ end -}}
-{{ range .Unit.After -}}After={{ . }}
-{{ end -}}
-{{ range .Unit.Before -}}Before={{ . }}
-{{ end -}}
-{{ range .Unit.Requires -}}Requires={{ . }}
-{{ end -}}
-{{ range .Unit.Wants -}}Wants={{ . }}
-{{ end -}}
-{{ range .Unit.BindsTo -}}BindsTo={{ . }}
-{{ end -}}
-{{ range .Unit.PartOf -}}PartOf={{ . }}
-{{ end -}}
-{{ range .Unit.Conflicts -}}Conflicts={{ . }}
-{{ end -}}
-{{ range .Unit.Condition -}}Condition={{ . }}
-{{ end -}}
-{{ range .Unit.Assert -}}Assert={{ . }}
-{{ end -}}
-{{ if .Unit.SourcePath -}}SourcePath={{ .Unit.SourcePath }}
-{{ end -}}
-{{ if .Unit.StopWhenUnneeded -}}StopWhenUnneeded=true
-{{ end -}}
-{{ if .Unit.RefuseManualStart -}}RefuseManualStart=true
-{{ end -}}
-{{ if .Unit.RefuseManualStop -}}RefuseManualStop=true
-{{ end -}}
-{{ if .Unit.AllowIsolate -}}AllowIsolate=true
-{{ end -}}
-{{ if .Unit.IgnoreOnIsolate -}}IgnoreOnIsolate=true
-{{ end -}}
-{{ if .Unit.OnSuccess -}}OnSuccess={{ .Unit.OnSuccess }}
-{{ end -}}
-{{ if .Unit.OnFailure -}}OnFailure={{ .Unit.OnFailure }}
-{{ end -}}
-{{ if .Unit.OnSuccessJobMode -}}OnSuccessJobMode={{ .Unit.OnSuccessJobMode }}
-{{ end -}}
-{{ if .Unit.OnFailureJobMode -}}OnFailureJobMode={{ .Unit.OnFailureJobMode }}
-{{ end -}}
-{{ if .Unit.StartLimitIntervalSec -}}StartLimitIntervalSec={{ .Unit.StartLimitIntervalSec }}
-{{ end -}}
-{{ if isset .Unit "StartLimitBurst" -}}StartLimitBurst={{ printf "%d" .Unit.StartLimitBurst }}
-{{ end -}}
-{{ end }}
+{{ template "unit" .Unit }}
 [Container]
 {{ if .Container.Image -}}Image={{ .Container.Image }}
 {{ end -}}
@@ -299,16 +251,4 @@ DefaultDependencies={{ .Quadlet.DefaultDependencies }}
 {{ if .Service.LimitMEMLOCK -}}LimitMEMLOCK={{ .Service.LimitMEMLOCK }}
 {{ end -}}
 {{ end -}}
-{{ if .Install }}
-[Install]
-{{ range .Install.WantedBy -}}WantedBy={{ . }}
-{{ end -}}
-{{ range .Install.RequiredBy -}}RequiredBy={{ . }}
-{{ end -}}
-{{ range .Install.UpheldBy -}}UpheldBy={{ . }}
-{{ end -}}
-{{ range .Install.Alias -}}Alias={{ . }}
-{{ end -}}
-{{ if .Install.DefaultInstance -}}DefaultInstance={{ .Install.DefaultInstance }}
-{{ end -}}
-{{ end -}}
+{{ template "install" .Install }}

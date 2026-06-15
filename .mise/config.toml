@@ -26,6 +26,10 @@ run = "cd creidhne && cue vet ./..."
 description = "Run golangci-lint"
 run = "golangci-lint run"
 
+[tasks.gen]
+description = "Regenerate systemd [Unit]/[Install] schema from the vendored gperf"
+run = "go run ./tools/gen-systemd-sections"
+
 [tasks.tidy]
 description = "Tidy Go module dependencies"
 run = "go mod tidy"

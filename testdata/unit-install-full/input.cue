@@ -13,8 +13,8 @@ test: testing.#Test & {
 		units: {
 			#container: {
 				Unit: {
-					Description:          "Full unit test container"
-					Documentation:        "https://example.com/docs"
+					Description:   "Full unit test container"
+					Documentation: ["https://example.com/docs"]
 					After: ["network-online.target", "redis.service"]
 					Before: ["app-ready.target"]
 					Requires: ["redis.service"]
@@ -22,16 +22,16 @@ test: testing.#Test & {
 					BindsTo: ["redis.service"]
 					PartOf: ["app.target"]
 					Conflicts: ["legacy-app.service"]
-					Condition: ["ConditionPathExists=/etc/app.conf"]
-					Assert: ["AssertPathExists=/opt/app/bin"]
+					ConditionPathExists: ["/etc/app.conf"]
+					AssertPathExists: ["/opt/app/bin"]
 					SourcePath:            "/etc/systemd/system/fullunit.container"
 					StopWhenUnneeded:      true
 					RefuseManualStart:     true
 					RefuseManualStop:      true
 					AllowIsolate:          true
 					IgnoreOnIsolate:       true
-					OnSuccess:             "notify-success.service"
-					OnFailure:             "notify-failure.service"
+					OnSuccess: ["notify-success.service"]
+					OnFailure: ["notify-failure.service"]
 					OnSuccessJobMode:      "fail"
 					OnFailureJobMode:      "replace"
 					StartLimitIntervalSec: "60s"
