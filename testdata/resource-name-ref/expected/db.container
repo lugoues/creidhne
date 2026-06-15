@@ -1,0 +1,7 @@
+
+[Container]
+Image=docker.io/postgres:16
+ContainerName=postgres
+
+[Install]
+WantedBy=default.target
