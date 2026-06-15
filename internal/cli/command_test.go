@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"io"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,31 +45,20 @@ func setupProject(t *testing.T, mainCue string) string {
 	return dir
 }
 
-// runCmd executes the root command with args, capturing os.Stdout (the commands
-// print there directly, not via cmd.OutOrStdout).
+// runCmd executes the root command with args, capturing its output via cobra's
+// SetOut/SetErr (no global os.Stdout mutation, so these tests are isolated and
+// could run in parallel). Stdin is an empty reader, so a command that prompts
+// for confirmation sees EOF unless given -y.
 func runCmd(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-	outCh := make(chan string, 1)
-	go func() {
-		b, _ := io.ReadAll(r)
-		outCh <- string(b)
-	}()
-
+	var buf bytes.Buffer
 	root := newRootCmd()
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetIn(strings.NewReader(""))
 	root.SetArgs(args)
-	runErr := root.Execute()
-
-	_ = w.Close()
-	os.Stdout = old
-	out := <-outCh
-	_ = r.Close()
-	return out, runErr
+	err := root.Execute()
+	return buf.String(), err
 }
 
 func TestCmdInit(t *testing.T) {
@@ -219,10 +208,8 @@ b: q.#Quadlet & {name: "app", units: containers: web: Container: {Image: "B", Co
 func TestCmdApplyRequiresConfirmation(t *testing.T) {
 	dir := setupProject(t, testMain)
 	qd := t.TempDir()
-	var err error
-	withStdin(t, "", func() { // empty stdin => EOF, no answer
-		_, err = runCmd(t, "--dir", dir, "--quadlet-dir", qd, "apply") // no -y
-	})
+	// runCmd feeds an empty stdin, so apply without -y sees EOF (no answer).
+	_, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "apply") // no -y
 	if err == nil {
 		t.Fatal("apply without -y and no confirmation should error, not silently abort")
 	}

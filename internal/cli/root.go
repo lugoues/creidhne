@@ -4,6 +4,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -284,9 +285,9 @@ func dim(s string) string    { return colorize("2", s) }
 // confirm prompts for a y/N answer. It returns an error when no answer can be
 // read (stdin closed/EOF) so callers can fail loudly instead of treating a
 // non-interactive run as a silent "no".
-func confirm(prompt string) (bool, error) {
-	fmt.Printf("%s [y/N] ", prompt)
-	sc := bufio.NewScanner(os.Stdin)
+func confirm(in io.Reader, out io.Writer, prompt string) (bool, error) {
+	fmt.Fprintf(out, "%s [y/N] ", prompt)
+	sc := bufio.NewScanner(in)
 	if !sc.Scan() {
 		if err := sc.Err(); err != nil {
 			return false, err
