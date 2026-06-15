@@ -199,7 +199,11 @@ func decodeJSONNumbers(b []byte) (map[string]any, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return nil, err
 	}
-	m, _ := coerceNumbers(raw).(map[string]any)
+	coerced := coerceNumbers(raw)
+	m, ok := coerced.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("decoded unit data is %T, want a JSON object", coerced)
+	}
 	return m, nil
 }
 
