@@ -5,6 +5,10 @@ package creidhne
 	#unitType:      "network"
 	#serviceSuffix: "-network"
 
+	// #networkName (from #Reference) resolves to the explicit NetworkName, else
+	// the systemd-%N default.
+	if Network != _|_ if Network.NetworkName != _|_ {#explicitName: Network.NetworkName}
+
 	Unit?:    #UnitSection
 	Service?: #ServiceSection
 	Install?: #InstallSection

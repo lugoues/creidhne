@@ -143,3 +143,60 @@ app: q.#Quadlet & {
 		t.Fatalf("external #refs = %v, want %v", got, want)
 	}
 }
+
+// TestResolvedResourceNames covers the #<type>Name meta fields: the resolved
+// podman resource name (explicit XxxName, else systemd-<stem>), for each of the
+// four named kinds, including the absent-section default and a keyed unit.
+func TestResolvedResourceNames(t *testing.T) {
+	quads := loadSource(t, `package naming
+import q "github.com/lugoues/creidhne@v0"
+
+db: q.#Quadlet & {name: "db", units: #container: Container: {Image: "img"}}
+web: q.#Quadlet & {name: "web", units: #container: Container: {Image: "img", ContainerName: "custom-web"}}
+store: q.#Quadlet & {name: "store", units: #volume: {}}
+storenamed: q.#Quadlet & {name: "sn", units: #volume: Volume: {VolumeName: "myvol"}}
+net: q.#Quadlet & {name: "net", units: #network: {}}
+group: q.#Quadlet & {name: "group", units: #pod: {}}
+app: q.#Quadlet & {name: "app", units: containers: side: Container: {Image: "img"}}
+
+consumer: q.#Quadlet & {
+	name: "consumer"
+	units: #container: {
+		Container: {Image: "img"}
+		Unit: After: [
+			db.units.#container.#containerName,
+			web.units.#container.#containerName,
+			store.units.#volume.#volumeName,
+			storenamed.units.#volume.#volumeName,
+			net.units.#network.#networkName,
+			group.units.#pod.#podName,
+			app.units.containers.side.#containerName,
+		]
+	}
+}
+`)
+	var after []any
+	for _, q := range quads {
+		if q.Name != "consumer" {
+			continue
+		}
+		unit, _ := q.Units[0].Data["Unit"].(map[string]any)
+		after, _ = unit["After"].([]any)
+	}
+	got := make([]string, len(after))
+	for i, a := range after {
+		got[i], _ = a.(string)
+	}
+	want := []string{
+		"systemd-db",       // container, default
+		"custom-web",       // container, explicit
+		"systemd-store",    // volume, default (absent Volume section)
+		"myvol",            // volume, explicit
+		"systemd-net",      // network, default (absent Network section)
+		"systemd-group",    // pod, default (absent Pod section)
+		"systemd-app-side", // keyed container, default (stem app-side)
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("resolved names:\n got: %v\nwant: %v", got, want)
+	}
+}

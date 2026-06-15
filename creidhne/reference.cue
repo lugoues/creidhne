@@ -30,4 +30,20 @@ package creidhne
 	}
 	#ref:     "\(stem).\(#unitType)"
 	#service: "\(stem)\(#serviceSuffix).service"
+
+	// --- resolved runtime resource name ---
+	// Kinds that create a named podman resource (container/pod/volume/network)
+	// feed #explicitName from their section's <Type>Name field; the resolved
+	// value (that explicit name, else podman's "systemd-%N" default) is then
+	// surfaced as the per-type #<type>Name. (Computed here, not in the unit
+	// types, because CUE embedding doesn't expose `stem` to them lexically.)
+	#explicitName?: string
+	_resolvedName: {
+		if #explicitName != _|_ {#explicitName}
+		if #explicitName == _|_ {"systemd-\(stem)"}
+	}
+	if #unitType == "container" {#containerName: _resolvedName}
+	if #unitType == "pod" {#podName: _resolvedName}
+	if #unitType == "volume" {#volumeName: _resolvedName}
+	if #unitType == "network" {#networkName: _resolvedName}
 }

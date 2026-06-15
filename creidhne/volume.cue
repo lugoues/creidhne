@@ -5,6 +5,10 @@ package creidhne
 	#unitType:      "volume"
 	#serviceSuffix: "-volume"
 
+	// #volumeName (from #Reference) resolves to the explicit VolumeName, else the
+	// systemd-%N default.
+	if Volume != _|_ if Volume.VolumeName != _|_ {#explicitName: Volume.VolumeName}
+
 	Unit?:    #UnitSection
 	Service?: #ServiceSection
 	Install?: #InstallSection
