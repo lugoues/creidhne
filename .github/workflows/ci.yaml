@@ -19,6 +19,10 @@ jobs:
       - run: go build ./...
       - run: go test ./...
       - run: mise run vet # cue vet the schema module
+      - name: Generated schema is up to date
+        run: |
+          mise run gen
+          git diff --exit-code -- creidhne/systemd_sections.gen.cue templates/systemd_sections.gen.tpl
 
   lint:
     name: Lint
