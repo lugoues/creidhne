@@ -1,0 +1,27 @@
+{
+  "[toml]": {
+    "editor.defaultFormatter": "tombi-toml.tombi",
+    "editor.suggest.showKeywords": true,
+    "editor.wordBasedSuggestions": "off",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+  },
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.insertSpaces": false,
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+  },
+  "[jsonc]": {
+    "editor.quickSuggestions": {
+      "strings": true
+    },
+    "editor.suggest.insertMode": "replace",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "mise.autoDetectMiseBinPath": true,
+  "mise.checkForNewMiseVersion": false,
+  "mise.automaticallyTrustMiseConfigFiles": true,
+}

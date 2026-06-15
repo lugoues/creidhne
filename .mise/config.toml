@@ -4,23 +4,45 @@
 [tools]
 cue = "0.16.0"
 go = "latest"
+aube = "latest"
+"npm:@withgraphite/graphite-cli" = "stable"
+"aqua:tombi-toml/tombi" = "0.9.20"
+"aqua:biomejs/biome" = "latest"
 
 [settings]
+activate_aggressive = true
+aqua.minisign = true
+aqua.slsa = true
+auto_install = true
+disable_backends = ["asdf", "gen", "dotnet", "spm", "ubi", "bun"]
+exec_auto_install = true
+experimental = true
+idiomatic_version_file_enable_tools = []
+jobs = 8
+lockfile = true
+not_found_auto_install = true
+npm = { package_manager = "aube", bun = false }
+plugin_autoupdate_last_check_duration = "2d"
 task.output = "keep-order"
+use_versions_host = true
 
 # --- Dev tasks ---
-
 [tasks.build]
 description = "Build the crei binary into ./bin"
 run = "go build -o bin/crei ./cmd/crei"
 
+[tasks."cue:vet"]
+description = "Validate the CUE schema module"
+dir = "{{config_root}}/creidhne"
+run = "cue vet"
+
+[tasks."go:test"]
+description = ""
+run = "go test -v ./..."
+
 [tasks.test]
 description = "Run Go tests and validate the CUE schema"
-run = ["go test -v ./...", "cd creidhne && cue vet ./..."]
-
-[tasks.vet]
-description = "Validate the CUE schema module"
-run = "cd creidhne && cue vet ./..."
+depends = ["go:test", "cue:vet"]
 
 [tasks.lint]
 description = "Run golangci-lint"

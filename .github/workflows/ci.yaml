@@ -16,9 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2 # provisions go + cue
-      - run: go build ./...
-      - run: go test ./...
-      - run: mise run vet # cue vet the schema module
+      - run: mise exec -- go build ./...
+      - run: mise run go:test
+      - run: mise run cue:vet # cue vet the schema module
       - name: Generated schema is up to date
         run: |
           mise run gen
