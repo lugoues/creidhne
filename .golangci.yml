@@ -1,0 +1,14 @@
+# golangci-lint v2 configuration (pinned to v2.4.0 in CI).
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # The CLI prints to cmd.OutOrStdout() via the fmt.Fprint* family; a failed
+      # write to stdout / a test buffer has no actionable error to handle. File
+      # and directory writes go through os.WriteFile/os.Create, whose errors are
+      # still checked.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln

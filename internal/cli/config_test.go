@@ -50,7 +50,7 @@ func TestResolveConfigProvenance(t *testing.T) {
 	}
 }
 
-// TestResolveConfigReloadSystemd: reload defaults off, is taken from crei.toml
+// TestResolveConfigReloadSystemd: reload defaults on, is taken from crei.toml
 // when set (true or false), with the source recorded.
 func TestResolveConfigReloadSystemd(t *testing.T) {
 	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()

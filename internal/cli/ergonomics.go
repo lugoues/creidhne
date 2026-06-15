@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -28,7 +29,7 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("crei %s (commit %s, built %s)\n", version, commit, date)
+			fmt.Fprintf(cmd.OutOrStdout(), "crei %s (commit %s, built %s)\n", version, commit, date)
 		},
 	}
 }
@@ -60,7 +61,7 @@ func newValidateCmd() *cobra.Command {
 			for _, q := range quads {
 				units += len(q.Units)
 			}
-			fmt.Printf("OK: %d quadlet(s), %d unit(s) valid\n", len(quads), units)
+			fmt.Fprintf(cmd.OutOrStdout(), "OK: %d quadlet(s), %d unit(s) valid\n", len(quads), units)
 			return nil
 		},
 	}
@@ -79,7 +80,7 @@ func newConfigCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printConfig(cfg)
+			printConfig(cmd.OutOrStdout(), cfg)
 			return nil
 		},
 	}
@@ -88,8 +89,8 @@ func newConfigCmd() *cobra.Command {
 // printConfig renders the resolved settings as an aligned table. Only the final
 // (source) column is colored, so the ANSI codes don't disturb tabwriter's
 // width accounting for the value column.
-func printConfig(cfg config) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+func printConfig(out io.Writer, cfg config) {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	row := func(label, value, source string) {
 		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\n", label, value, dim("("+source+")"))
 	}
@@ -137,12 +138,12 @@ func newInitCmd() *cobra.Command {
 			"CLI resolve the import without a registry. Existing files are kept.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInit(flagProjectDir)
+			return runInit(cmd.OutOrStdout(), flagProjectDir)
 		},
 	}
 }
 
-func runInit(projectDir string) error {
+func runInit(out io.Writer, projectDir string) error {
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		return err
 	}
@@ -153,26 +154,26 @@ func runInit(projectDir string) error {
 	if err != nil {
 		return err
 	}
-	report(created, "cue.mod/module.cue")
+	report(out, created, "cue.mod/module.cue")
 
 	created, err = writeIfAbsent(filepath.Join(projectDir, "main.cue"), sampleMain)
 	if err != nil {
 		return err
 	}
-	report(created, "main.cue")
+	report(out, created, "main.cue")
 
 	created, err = writeIfAbsent(filepath.Join(projectDir, "crei.toml"), sampleConfig)
 	if err != nil {
 		return err
 	}
-	report(created, "crei.toml")
+	report(out, created, "crei.toml")
 
 	if err := vendorSchema(projectDir); err != nil {
 		return fmt.Errorf("vendor schema: %w", err)
 	}
-	fmt.Printf("  %s cue.mod/usr/%s (vendored schema for editor/LSP)\n", green("✓"), eval.ModulePath)
+	fmt.Fprintf(out, "  %s cue.mod/usr/%s (vendored schema for editor/LSP)\n", green("✓"), eval.ModulePath)
 
-	fmt.Println("\nNext: edit main.cue, then run 'crei plan'.")
+	fmt.Fprintln(out, "\nNext: edit main.cue, then run 'crei plan'.")
 	return nil
 }
 
@@ -219,8 +220,9 @@ func writeSchemaTo(base string) error {
 // It never *creates* a vendored copy, only refreshes one, leaving projects that
 // resolve the schema another way (a registry dependency) untouched. A symlinked
 // vendored copy (the dev/example layout that points at live source) is left
-// alone, and the refresh is staged in a temp dir then swapped in, so a partial
-// write never corrupts the live copy.
+// alone, and the refresh is staged in a temp dir then swapped in via renames, so
+// a partial write never corrupts the live copy and a failed swap never leaves it
+// absent.
 func syncVendoredSchema(moduleRoot string) {
 	vendorDir := vendoredSchemaDir(moduleRoot)
 	fi, err := os.Lstat(vendorDir)
@@ -239,13 +241,20 @@ func syncVendoredSchema(moduleRoot string) {
 		_ = os.RemoveAll(staging) // leave the live copy untouched on a failed write
 		return
 	}
-	if err := os.RemoveAll(vendorDir); err != nil {
+	// Swap via renames so a failure never leaves the live copy absent: move the
+	// old aside, move the new into place, then drop the old. If the second
+	// rename fails, restore the old copy.
+	backup := vendorDir + ".crei-old"
+	_ = os.RemoveAll(backup)
+	if err := os.Rename(vendorDir, backup); err != nil {
 		_ = os.RemoveAll(staging)
 		return
 	}
 	if err := os.Rename(staging, vendorDir); err != nil {
+		_ = os.Rename(backup, vendorDir) // restore the old copy
 		return
 	}
+	_ = os.RemoveAll(backup)
 	fmt.Fprintln(os.Stderr, dim("refreshed vendored schema in cue.mod/usr to match this crei build"))
 }
 
@@ -309,11 +318,11 @@ func writeIfAbsent(path, content string) (bool, error) {
 	return true, os.WriteFile(path, []byte(content), 0o644)
 }
 
-func report(created bool, name string) {
+func report(out io.Writer, created bool, name string) {
 	if created {
-		fmt.Printf("  %s %s\n", green("✓"), name)
+		fmt.Fprintf(out, "  %s %s\n", green("✓"), name)
 	} else {
-		fmt.Printf("  %s %s (exists, kept)\n", dim("-"), name)
+		fmt.Fprintf(out, "  %s %s (exists, kept)\n", dim("-"), name)
 	}
 }
 

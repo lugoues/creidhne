@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,12 +26,13 @@ func newRenderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := cmd.OutOrStdout()
 			names := sortedKeys(desired)
-			fmt.Printf("# %d quadlet file(s)\n\n", len(names))
+			fmt.Fprintf(out, "# %d quadlet file(s)\n\n", len(names))
 			for _, n := range names {
-				fmt.Printf("--- %s ---\n", n)
-				_, _ = os.Stdout.Write(desired[n].Content)
-				fmt.Println()
+				fmt.Fprintf(out, "--- %s ---\n", n)
+				_, _ = out.Write(desired[n].Content)
+				fmt.Fprintln(out)
 			}
 			return nil
 		},
@@ -55,11 +57,12 @@ func newPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printChanges(changes, true)
+			out := cmd.OutOrStdout()
+			printChanges(out, changes, true)
 			s := reconcile.Summarize(changes)
-			printSummary(s, "to add", "to update", "to remove")
+			printSummary(out, s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
-				fmt.Println("Nothing to do.")
+				fmt.Fprintln(out, "Nothing to do.")
 			}
 			return nil
 		},
@@ -84,31 +87,32 @@ func newDiffCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := cmd.OutOrStdout()
 			for _, c := range changes {
 				switch c.Action {
 				case reconcile.ActionAdd:
-					fmt.Println(green("+ " + c.Name + " (new)"))
+					fmt.Fprintln(out, green("+ "+c.Name+" (new)"))
 					for _, line := range strings.Split(strings.TrimRight(string(c.Content), "\n"), "\n") {
-						fmt.Println("  " + line)
+						fmt.Fprintln(out, "  "+line)
 					}
-					fmt.Println()
+					fmt.Fprintln(out)
 				case reconcile.ActionChange:
-					fmt.Println(yellow("~ " + c.Name + " (changed)"))
+					fmt.Fprintln(out, yellow("~ "+c.Name+" (changed)"))
 					live := filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name))
-					out, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, cfg.DiffTool)
+					diffOut, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, cfg.DiffTool)
 					if err != nil {
 						return err
 					}
 					if cfg.DiffTool == "" || cfg.DiffTool == "diff" {
-						out = colorizeDiff(out)
+						diffOut = colorizeDiff(diffOut)
 					}
-					fmt.Print(out)
-					fmt.Println()
+					fmt.Fprint(out, diffOut)
+					fmt.Fprintln(out)
 				case reconcile.ActionRemove:
-					fmt.Println(red("- " + c.Name + " (stale, will be removed)"))
+					fmt.Fprintln(out, red("- "+c.Name+" (stale, will be removed)"))
 				}
 			}
-			printSummary(reconcile.Summarize(changes), "new", "changed", "stale")
+			printSummary(out, reconcile.Summarize(changes), "new", "changed", "stale")
 			return nil
 		},
 	}
@@ -129,20 +133,21 @@ func newApplyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := cmd.OutOrStdout()
 			dir := cfg.QuadletDir
 			changes, err := reconcile.ComputePlan(desired, dir)
 			if err != nil {
 				return err
 			}
 			s := reconcile.Summarize(changes)
-			printChanges(changes, false)
-			printSummary(s, "to add", "to update", "to remove")
+			printChanges(out, changes, false)
+			printSummary(out, s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
-				fmt.Println("Nothing to do.")
+				fmt.Fprintln(out, "Nothing to do.")
 				return nil
 			}
 			if !yes {
-				ok, err := confirm("Apply changes?")
+				ok, err := confirm(cmd.InOrStdin(), out, "Apply changes?")
 				if err != nil {
 					// No answer available (cron, CI, piped/redirected stdin):
 					// fail loudly rather than silently aborting with a success
@@ -150,7 +155,7 @@ func newApplyCmd() *cobra.Command {
 					return err
 				}
 				if !ok {
-					fmt.Println("Aborted.")
+					fmt.Fprintln(out, "Aborted.")
 					return nil
 				}
 			}
@@ -194,10 +199,11 @@ func newApplyCmd() *cobra.Command {
 			if err := reconcile.PruneEmptyDirs(filepath.Join(dir, "images")); err != nil {
 				return err
 			}
-			fmt.Printf("\nApplied: %d added, %d updated, %d removed\n", s.Added, s.Changed, s.Removed)
+			fmt.Fprintf(out, "\nApplied: %d added, %d updated, %d removed\n", s.Added, s.Changed, s.Removed)
 			userScope := underHome(dir)
-			// Reload default comes from crei.toml (reload_systemd, default off);
-			// an explicit --reload-systemd flag overrides it for this run.
+			// Reload default comes from crei.toml (reload_systemd, default on to
+			// match podman quadlet install); an explicit --reload-systemd flag
+			// overrides it for this run.
 			reload := cfg.ReloadSystemd
 			if cmd.Flags().Changed("reload-systemd") {
 				reload = reloadSystemd
@@ -206,9 +212,9 @@ func newApplyCmd() *cobra.Command {
 				if err := reconcile.DaemonReload(userScope); err != nil {
 					return fmt.Errorf("daemon-reload: %w", err)
 				}
-				fmt.Println("Daemon reloaded.")
+				fmt.Fprintln(out, "Daemon reloaded.")
 			} else {
-				fmt.Printf("Run '%s' to pick up changes.\n", reconcile.ReloadHint(userScope))
+				fmt.Fprintf(out, "Run '%s' to pick up changes.\n", reconcile.ReloadHint(userScope))
 			}
 			return nil
 		},
@@ -220,7 +226,7 @@ func newApplyCmd() *cobra.Command {
 
 // printChanges prints the +/~/- change lines. withVerb adds the
 // (add)/(update)/(remove) suffixes used by `plan`; `apply` passes false.
-func printChanges(changes []reconcile.Change, withVerb bool) {
+func printChanges(w io.Writer, changes []reconcile.Change, withVerb bool) {
 	for _, c := range changes {
 		switch c.Action {
 		case reconcile.ActionAdd:
@@ -228,27 +234,27 @@ func printChanges(changes []reconcile.Change, withVerb bool) {
 			if withVerb {
 				line += " (add)"
 			}
-			fmt.Println(green(line))
+			fmt.Fprintln(w, green(line))
 		case reconcile.ActionChange:
 			line := "  ~ " + c.Name
 			if withVerb {
 				line += " (update)"
 			}
-			fmt.Println(yellow(line))
+			fmt.Fprintln(w, yellow(line))
 		case reconcile.ActionUnchanged:
-			fmt.Println(dim("    " + c.Name + " (unchanged)"))
+			fmt.Fprintln(w, dim("    "+c.Name+" (unchanged)"))
 		case reconcile.ActionRemove:
 			line := "  - " + c.Name
 			if withVerb {
 				line += " (remove)"
 			}
-			fmt.Println(red(line))
+			fmt.Fprintln(w, red(line))
 		}
 	}
 }
 
-func printSummary(s reconcile.Summary, addVerb, changeVerb, removeVerb string) {
-	fmt.Printf("\n%d file(s): %d %s, %d %s, %d unchanged, %d %s\n",
+func printSummary(w io.Writer, s reconcile.Summary, addVerb, changeVerb, removeVerb string) {
+	fmt.Fprintf(w, "\n%d file(s): %d %s, %d %s, %d unchanged, %d %s\n",
 		s.Total, s.Added, addVerb, s.Changed, changeVerb, s.Unchanged, s.Removed, removeVerb)
 }
 
