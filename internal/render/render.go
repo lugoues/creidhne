@@ -59,8 +59,7 @@ func New(tplFS fs.FS) (*Renderer, error) {
 
 // BuildFileSet renders every unit across all quadlets into a filename->content
 // map, including build artifacts (images/<stem>.Containerfile and
-// images/<stem>.context/<path>). This is the Go equivalent of the prototype's
-// output.files.
+// images/<stem>.context/<path>).
 func (r *Renderer) BuildFileSet(quadlets []eval.Quadlet) (map[string]FileContent, error) {
 	files := make(map[string]FileContent)
 	// owners tracks which quadlet produced each filename so a collision (two

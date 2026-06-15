@@ -91,7 +91,7 @@ func newConfigCmd() *cobra.Command {
 func printConfig(cfg config) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	row := func(label, value, source string) {
-		fmt.Fprintf(w, "  %s\t%s\t%s\n", label, value, dim("("+source+")"))
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\n", label, value, dim("("+source+")"))
 	}
 
 	projSource := "--dir flag"

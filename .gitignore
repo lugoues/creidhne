@@ -3,6 +3,7 @@
 # Go / release build artifacts
 /bin/
 /dist/
+/gen-systemd-sections
 
 # Pre-migration scratch (not part of the project)
 /testing-old/
