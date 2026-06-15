@@ -217,10 +217,10 @@ type directive struct {
 }
 
 func renderKind(t string) string {
-	switch {
-	case t == "[...string]":
+	switch t {
+	case "[...string]":
 		return "list"
-	case t == "uint" || t == "int":
+	case "uint", "int":
 		return "int"
 	default:
 		return "scalar"

@@ -1,7 +1,6 @@
-// Package eval loads CUE quadlet definitions and extracts the rendered-data
-// manifest that the Go renderer consumes. It replaces the prototype's
-// `cue export ./... --out json` + output.files merge with an in-process
-// cuelang.org/go evaluation.
+// Package eval loads CUE quadlet definitions and extracts, via an in-process
+// cuelang.org/go evaluation, the rendered-data manifest that the Go renderer
+// consumes.
 package eval
 
 import (
