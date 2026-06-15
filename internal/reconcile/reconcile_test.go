@@ -53,6 +53,31 @@ func TestListExisting(t *testing.T) {
 	}
 }
 
+func TestListExistingSkipsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "app.container"), "x")
+	write(t, filepath.Join(dir, "images", "real.Containerfile"), "FROM x")
+
+	// Symlinks named like managed files must NOT be scheduled for removal: crei
+	// does not own them, and removing one (RemoveAll) would delete the link.
+	if err := os.Symlink(filepath.Join(dir, "app.container"), filepath.Join(dir, "link.container")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "images", "real.Containerfile"), filepath.Join(dir, "images", "link.Containerfile")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	got, err := ListExisting(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(got)
+	want := []string{"app.container", "images/real.Containerfile"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("ListExisting must skip symlinks:\n got:  %v\n want: %v", got, want)
+	}
+}
+
 func TestListExistingMissingDir(t *testing.T) {
 	got, err := ListExisting(filepath.Join(t.TempDir(), "nope"))
 	if err != nil || len(got) != 0 {
