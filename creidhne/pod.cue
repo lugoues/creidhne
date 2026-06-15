@@ -5,6 +5,10 @@ package creidhne
 	#unitType:      "pod"
 	#serviceSuffix: "-pod"
 
+	// #podName (from #Reference) resolves to the explicit PodName, else the
+	// systemd-%N default.
+	if Pod != _|_ if Pod.PodName != _|_ {#explicitName: Pod.PodName}
+
 	Unit?:    #UnitSection
 	Service?: #ServiceSection
 	Install?: #InstallSection

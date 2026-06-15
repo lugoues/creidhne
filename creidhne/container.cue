@@ -5,6 +5,11 @@ package creidhne
 	#unitType:      "container"
 	#serviceSuffix: ""
 
+	// #containerName (from #Reference) is the resolved ContainerName: the
+	// explicit value if set, else podman's systemd-%N default. Reference it from
+	// other units, e.g. Network: ["container:\(db.units.#container.#containerName)"].
+	if Container.ContainerName != _|_ {#explicitName: Container.ContainerName}
+
 	Unit?:    #UnitSection
 	Service?: #ServiceSection
 	Install?: #InstallSection
