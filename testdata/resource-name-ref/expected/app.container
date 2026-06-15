@@ -1,0 +1,9 @@
+
+[Container]
+Image=docker.io/app:latest
+Environment=DB_HOST=postgres
+Network=container:systemd-cache
+Volume=systemd-data:/var/lib/app
+
+[Install]
+WantedBy=default.target

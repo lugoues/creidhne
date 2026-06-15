@@ -1,0 +1,6 @@
+
+[Container]
+Image=docker.io/redis:7
+
+[Install]
+WantedBy=default.target
