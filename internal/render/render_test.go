@@ -13,9 +13,9 @@ import (
 // TestEveryKindHasTemplate guards the shared kinds table against drift: every
 // kind the renderer/reconciler manage must have a template to render it.
 func TestEveryKindHasTemplate(t *testing.T) {
-	for kind := range kinds.Ext {
+	for _, kind := range kinds.Kinds() {
 		if _, err := os.Stat(filepath.Join("../../templates", kind+".tpl")); err != nil {
-			t.Errorf("kind %q in kinds.Ext has no template: %v", kind, err)
+			t.Errorf("kind %q in kinds.Kinds() has no template: %v", kind, err)
 		}
 	}
 }
@@ -119,6 +119,55 @@ func TestBuildContextModes(t *testing.T) {
 	}
 	if got := files["images/x.context/run.sh"].Mode; got != "0755" {
 		t.Errorf("explicit-mode entry mode = %q, want 0755", got)
+	}
+}
+
+// TestBuildContextRejectsBadTypes ensures render fails loud on malformed build
+// data instead of silently producing an empty file or a default (wrong) mode.
+// render validates its inputs rather than trusting the schema to have done so.
+func TestBuildContextRejectsBadTypes(t *testing.T) {
+	r := newTestRenderer(t)
+	withContext := func(ctx map[string]any) []eval.Quadlet {
+		return []eval.Quadlet{{Name: "x", Units: []eval.UnitRecord{{
+			Kind: "build", Stem: "x", Filename: "x.build",
+			Data: map[string]any{
+				"Build":   map[string]any{"ImageTag": []any{"localhost/x"}},
+				"Context": ctx,
+			},
+		}}}}
+	}
+	cases := map[string]struct {
+		ctx  map[string]any
+		want string
+	}{
+		"non-string mode":    {map[string]any{"run.sh": map[string]any{"content": "x", "mode": int64(493)}}, "mode"},
+		"non-string content": {map[string]any{"f": map[string]any{"content": int64(1)}}, "content"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := r.BuildFileSet(withContext(c.ctx)); err == nil {
+				t.Fatal("expected error, got nil")
+			} else if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("error %q should mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+// TestBuildArtifactPathCollision: two builds with the same stem but different
+// filenames don't collide on their unit file, but DO on images/<stem>.*. render
+// must catch that itself rather than relying on the CUE-side filename=stem rule.
+func TestBuildArtifactPathCollision(t *testing.T) {
+	r := newTestRenderer(t)
+	mk := func(fn string) eval.UnitRecord {
+		return eval.UnitRecord{Kind: "build", Stem: "shared", Filename: fn,
+			Data: map[string]any{"ContainerFile": "FROM scratch\n"}}
+	}
+	quads := []eval.Quadlet{{Name: "q", Units: []eval.UnitRecord{mk("a.build"), mk("b.build")}}}
+	if _, err := r.BuildFileSet(quads); err == nil {
+		t.Fatal("expected build-artifact collision error, got nil")
+	} else if !strings.Contains(err.Error(), "shared.Containerfile") {
+		t.Errorf("error should name the colliding path, got: %v", err)
 	}
 }
 
