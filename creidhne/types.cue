@@ -19,11 +19,21 @@ import (
 // IP range: CIDR notation or startIP-endIP
 #IPRange: #CIDR | =~"^[0-9a-fA-F:.]+-[0-9a-fA-F:.]+$"
 
-// Volume mount: [SOURCE:]DEST[:OPTIONS]
-#VolumeMount: string
+// Volume mount for Volume= ([Container]/[Pod]/[Build]).
+// Form: [[SOURCE-VOLUME|HOST-DIR:]CONTAINER-DIR[:OPTIONS]] (podman-systemd.unit.5
+// Volume=, equivalent to podman-run --volume). The container dir is absolute;
+// the source and the option list never contain a colon, so a value is one to
+// three colon-separated segments:
+//   /dest                anonymous volume
+//   source:/dest         named volume or host bind
+//   source:/dest:opts    with mount options (ro, z, U, ...)
+#VolumeMount: =~"^(/[^:]+|[^:]+:/[^:]+(:[^:]+)?)$"
 
-// Device mapping: HOST[:CONTAINER[:PERMS]]
-#DeviceMapping: string
+// Device mapping for AddDevice= ([Container]).
+// Form: [-]HOST-DEVICE[:CONTAINER-DEVICE][:PERMISSIONS] (podman-systemd.unit.5
+// AddDevice=). A leading "-" adds the device only if it exists on the host;
+// device paths are absolute; PERMISSIONS combines r (read), w (write), m (mknod).
+#DeviceMapping: =~"^-?/[^:]+(:/[^:]+)?(:[rwm]{1,3})?$"
 
 // Host mapping: hostname:ip
 #HostMapping: =~"^[^:]+:.+$"
@@ -177,8 +187,12 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 // Container image reference
 #ImageRef: string & !=""
 
-// UID/GID mapping format
-#IDMap: string
+// UID/GID mapping for UIDMap=/GIDMap= ([Container]/[Pod]).
+// Form: [flags]container_id:from_id[:amount] (podman-run --uidmap/--gidmap).
+// flags is any combination of "+" (extend previous mapping) and "u"/"g" (apply
+// to UIDs/GIDs only); from_id may be "@"-prefixed to reference a host id through
+// the intermediate namespace; amount is optional and defaults to 1.
+#IDMap: =~"^[+ug]*[0-9]+:@?[0-9]+(:[0-9]+)?$"
 
 // Unix file mode in octal notation (e.g. "0755", "0644")
 #FileMode: =~"^0[0-7]{3}$"
