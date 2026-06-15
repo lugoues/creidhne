@@ -222,6 +222,541 @@
 {{ end -}}
 {{ end -}}
 {{- end -}}
+{{- define "service" -}}
+{{ if . }}
+[Service]
+{{ if isset . "PIDFile" -}}PIDFile={{ .PIDFile }}
+{{ end -}}
+{{ range .ExecCondition -}}ExecCondition={{ . }}
+{{ end -}}
+{{ range .ExecStartPre -}}ExecStartPre={{ . }}
+{{ end -}}
+{{ range .ExecStart -}}ExecStart={{ . }}
+{{ end -}}
+{{ range .ExecReload -}}ExecReload={{ . }}
+{{ end -}}
+{{ range .ExecStartPost -}}ExecStartPost={{ . }}
+{{ end -}}
+{{ range .ExecStop -}}ExecStop={{ . }}
+{{ end -}}
+{{ range .ExecStopPost -}}ExecStopPost={{ . }}
+{{ end -}}
+{{ if isset . "RestartSec" -}}RestartSec={{ .RestartSec }}
+{{ end -}}
+{{ if isset . "RestartSteps" -}}RestartSteps={{ printf "%d" .RestartSteps }}
+{{ end -}}
+{{ if isset . "RestartMaxDelaySec" -}}RestartMaxDelaySec={{ .RestartMaxDelaySec }}
+{{ end -}}
+{{ if isset . "TimeoutSec" -}}TimeoutSec={{ .TimeoutSec }}
+{{ end -}}
+{{ if isset . "TimeoutStartSec" -}}TimeoutStartSec={{ .TimeoutStartSec }}
+{{ end -}}
+{{ if isset . "TimeoutStopSec" -}}TimeoutStopSec={{ .TimeoutStopSec }}
+{{ end -}}
+{{ if isset . "TimeoutAbortSec" -}}TimeoutAbortSec={{ .TimeoutAbortSec }}
+{{ end -}}
+{{ if isset . "TimeoutStartFailureMode" -}}TimeoutStartFailureMode={{ .TimeoutStartFailureMode }}
+{{ end -}}
+{{ if isset . "TimeoutStopFailureMode" -}}TimeoutStopFailureMode={{ .TimeoutStopFailureMode }}
+{{ end -}}
+{{ if isset . "RuntimeMaxSec" -}}RuntimeMaxSec={{ .RuntimeMaxSec }}
+{{ end -}}
+{{ if isset . "RuntimeRandomizedExtraSec" -}}RuntimeRandomizedExtraSec={{ .RuntimeRandomizedExtraSec }}
+{{ end -}}
+{{ if isset . "WatchdogSec" -}}WatchdogSec={{ .WatchdogSec }}
+{{ end -}}
+{{ if isset . "Type" -}}Type={{ .Type }}
+{{ end -}}
+{{ if isset . "ExitType" -}}ExitType={{ .ExitType }}
+{{ end -}}
+{{ if isset . "Restart" -}}Restart={{ .Restart }}
+{{ end -}}
+{{ if isset . "RestartMode" -}}RestartMode={{ .RestartMode }}
+{{ end -}}
+{{ if isset . "PermissionsStartOnly" -}}PermissionsStartOnly={{ .PermissionsStartOnly }}
+{{ end -}}
+{{ if isset . "RootDirectoryStartOnly" -}}RootDirectoryStartOnly={{ .RootDirectoryStartOnly }}
+{{ end -}}
+{{ if isset . "RemainAfterExit" -}}RemainAfterExit={{ .RemainAfterExit }}
+{{ end -}}
+{{ if isset . "GuessMainPID" -}}GuessMainPID={{ .GuessMainPID }}
+{{ end -}}
+{{ range .RestartPreventExitStatus -}}RestartPreventExitStatus={{ . }}
+{{ end -}}
+{{ range .RestartForceExitStatus -}}RestartForceExitStatus={{ . }}
+{{ end -}}
+{{ range .SuccessExitStatus -}}SuccessExitStatus={{ . }}
+{{ end -}}
+{{ if isset . "NonBlocking" -}}NonBlocking={{ .NonBlocking }}
+{{ end -}}
+{{ if isset . "BusName" -}}BusName={{ .BusName }}
+{{ end -}}
+{{ if isset . "FileDescriptorStoreMax" -}}FileDescriptorStoreMax={{ printf "%d" .FileDescriptorStoreMax }}
+{{ end -}}
+{{ if isset . "FileDescriptorStorePreserve" -}}FileDescriptorStorePreserve={{ .FileDescriptorStorePreserve }}
+{{ end -}}
+{{ if isset . "NotifyAccess" -}}NotifyAccess={{ .NotifyAccess }}
+{{ end -}}
+{{ range .Sockets -}}Sockets={{ . }}
+{{ end -}}
+{{ if isset . "USBFunctionDescriptors" -}}USBFunctionDescriptors={{ .USBFunctionDescriptors }}
+{{ end -}}
+{{ if isset . "USBFunctionStrings" -}}USBFunctionStrings={{ .USBFunctionStrings }}
+{{ end -}}
+{{ if isset . "OOMPolicy" -}}OOMPolicy={{ .OOMPolicy }}
+{{ end -}}
+{{ range .OpenFile -}}OpenFile={{ . }}
+{{ end -}}
+{{ if isset . "ReloadSignal" -}}ReloadSignal={{ .ReloadSignal }}
+{{ end -}}
+{{ if isset . "WorkingDirectory" -}}WorkingDirectory={{ .WorkingDirectory }}
+{{ end -}}
+{{ if isset . "RootDirectory" -}}RootDirectory={{ .RootDirectory }}
+{{ end -}}
+{{ if isset . "RootImage" -}}RootImage={{ .RootImage }}
+{{ end -}}
+{{ if isset . "RootImageOptions" -}}RootImageOptions={{ .RootImageOptions }}
+{{ end -}}
+{{ if isset . "RootImagePolicy" -}}RootImagePolicy={{ .RootImagePolicy }}
+{{ end -}}
+{{ if isset . "RootHash" -}}RootHash={{ .RootHash }}
+{{ end -}}
+{{ if isset . "RootHashSignature" -}}RootHashSignature={{ .RootHashSignature }}
+{{ end -}}
+{{ if isset . "RootVerity" -}}RootVerity={{ .RootVerity }}
+{{ end -}}
+{{ if isset . "RootEphemeral" -}}RootEphemeral={{ .RootEphemeral }}
+{{ end -}}
+{{ range .ExtensionDirectories -}}ExtensionDirectories={{ . }}
+{{ end -}}
+{{ range .ExtensionImages -}}ExtensionImages={{ . }}
+{{ end -}}
+{{ if isset . "ExtensionImagePolicy" -}}ExtensionImagePolicy={{ .ExtensionImagePolicy }}
+{{ end -}}
+{{ range .MountImages -}}MountImages={{ . }}
+{{ end -}}
+{{ if isset . "MountImagePolicy" -}}MountImagePolicy={{ .MountImagePolicy }}
+{{ end -}}
+{{ if isset . "User" -}}User={{ .User }}
+{{ end -}}
+{{ if isset . "Group" -}}Group={{ .Group }}
+{{ end -}}
+{{ range .SupplementaryGroups -}}SupplementaryGroups={{ . }}
+{{ end -}}
+{{ if isset . "SetLoginEnvironment" -}}SetLoginEnvironment={{ .SetLoginEnvironment }}
+{{ end -}}
+{{ if isset . "Nice" -}}Nice={{ .Nice }}
+{{ end -}}
+{{ if isset . "OOMScoreAdjust" -}}OOMScoreAdjust={{ .OOMScoreAdjust }}
+{{ end -}}
+{{ if isset . "CoredumpFilter" -}}CoredumpFilter={{ .CoredumpFilter }}
+{{ end -}}
+{{ if isset . "IOSchedulingClass" -}}IOSchedulingClass={{ .IOSchedulingClass }}
+{{ end -}}
+{{ if isset . "IOSchedulingPriority" -}}IOSchedulingPriority={{ .IOSchedulingPriority }}
+{{ end -}}
+{{ if isset . "CPUSchedulingPolicy" -}}CPUSchedulingPolicy={{ .CPUSchedulingPolicy }}
+{{ end -}}
+{{ if isset . "CPUSchedulingPriority" -}}CPUSchedulingPriority={{ .CPUSchedulingPriority }}
+{{ end -}}
+{{ if isset . "CPUSchedulingResetOnFork" -}}CPUSchedulingResetOnFork={{ .CPUSchedulingResetOnFork }}
+{{ end -}}
+{{ if isset . "CPUAffinity" -}}CPUAffinity={{ .CPUAffinity }}
+{{ end -}}
+{{ if isset . "NUMAPolicy" -}}NUMAPolicy={{ .NUMAPolicy }}
+{{ end -}}
+{{ if isset . "NUMAMask" -}}NUMAMask={{ .NUMAMask }}
+{{ end -}}
+{{ if isset . "UMask" -}}UMask={{ .UMask }}
+{{ end -}}
+{{ range .Environment -}}Environment={{ . }}
+{{ end -}}
+{{ range .EnvironmentFile -}}EnvironmentFile={{ . }}
+{{ end -}}
+{{ range .PassEnvironment -}}PassEnvironment={{ . }}
+{{ end -}}
+{{ range .UnsetEnvironment -}}UnsetEnvironment={{ . }}
+{{ end -}}
+{{ if isset . "DynamicUser" -}}DynamicUser={{ .DynamicUser }}
+{{ end -}}
+{{ if isset . "RemoveIPC" -}}RemoveIPC={{ .RemoveIPC }}
+{{ end -}}
+{{ if isset . "StandardInput" -}}StandardInput={{ .StandardInput }}
+{{ end -}}
+{{ if isset . "StandardOutput" -}}StandardOutput={{ .StandardOutput }}
+{{ end -}}
+{{ if isset . "StandardError" -}}StandardError={{ .StandardError }}
+{{ end -}}
+{{ if isset . "StandardInputText" -}}StandardInputText={{ .StandardInputText }}
+{{ end -}}
+{{ if isset . "StandardInputData" -}}StandardInputData={{ .StandardInputData }}
+{{ end -}}
+{{ if isset . "TTYPath" -}}TTYPath={{ .TTYPath }}
+{{ end -}}
+{{ if isset . "TTYReset" -}}TTYReset={{ .TTYReset }}
+{{ end -}}
+{{ if isset . "TTYVHangup" -}}TTYVHangup={{ .TTYVHangup }}
+{{ end -}}
+{{ if isset . "TTYVTDisallocate" -}}TTYVTDisallocate={{ .TTYVTDisallocate }}
+{{ end -}}
+{{ if isset . "TTYRows" -}}TTYRows={{ .TTYRows }}
+{{ end -}}
+{{ if isset . "TTYColumns" -}}TTYColumns={{ .TTYColumns }}
+{{ end -}}
+{{ if isset . "SyslogIdentifier" -}}SyslogIdentifier={{ .SyslogIdentifier }}
+{{ end -}}
+{{ if isset . "SyslogFacility" -}}SyslogFacility={{ .SyslogFacility }}
+{{ end -}}
+{{ if isset . "SyslogLevel" -}}SyslogLevel={{ .SyslogLevel }}
+{{ end -}}
+{{ if isset . "SyslogLevelPrefix" -}}SyslogLevelPrefix={{ .SyslogLevelPrefix }}
+{{ end -}}
+{{ if isset . "LogLevelMax" -}}LogLevelMax={{ .LogLevelMax }}
+{{ end -}}
+{{ if isset . "LogRateLimitIntervalSec" -}}LogRateLimitIntervalSec={{ .LogRateLimitIntervalSec }}
+{{ end -}}
+{{ if isset . "LogRateLimitBurst" -}}LogRateLimitBurst={{ printf "%d" .LogRateLimitBurst }}
+{{ end -}}
+{{ range .LogExtraFields -}}LogExtraFields={{ . }}
+{{ end -}}
+{{ range .LogFilterPatterns -}}LogFilterPatterns={{ . }}
+{{ end -}}
+{{ range .SecureBits -}}SecureBits={{ . }}
+{{ end -}}
+{{ range .CapabilityBoundingSet -}}CapabilityBoundingSet={{ . }}
+{{ end -}}
+{{ range .AmbientCapabilities -}}AmbientCapabilities={{ . }}
+{{ end -}}
+{{ if isset . "TimerSlackNSec" -}}TimerSlackNSec={{ .TimerSlackNSec }}
+{{ end -}}
+{{ if isset . "NoNewPrivileges" -}}NoNewPrivileges={{ .NoNewPrivileges }}
+{{ end -}}
+{{ if isset . "KeyringMode" -}}KeyringMode={{ .KeyringMode }}
+{{ end -}}
+{{ if isset . "ProtectProc" -}}ProtectProc={{ .ProtectProc }}
+{{ end -}}
+{{ if isset . "ProcSubset" -}}ProcSubset={{ .ProcSubset }}
+{{ end -}}
+{{ range .SystemCallFilter -}}SystemCallFilter={{ . }}
+{{ end -}}
+{{ range .SystemCallArchitectures -}}SystemCallArchitectures={{ . }}
+{{ end -}}
+{{ if isset . "SystemCallErrorNumber" -}}SystemCallErrorNumber={{ .SystemCallErrorNumber }}
+{{ end -}}
+{{ range .SystemCallLog -}}SystemCallLog={{ . }}
+{{ end -}}
+{{ if isset . "MemoryDenyWriteExecute" -}}MemoryDenyWriteExecute={{ .MemoryDenyWriteExecute }}
+{{ end -}}
+{{ range .RestrictNamespaces -}}RestrictNamespaces={{ . }}
+{{ end -}}
+{{ if isset . "RestrictRealtime" -}}RestrictRealtime={{ .RestrictRealtime }}
+{{ end -}}
+{{ if isset . "RestrictSUIDSGID" -}}RestrictSUIDSGID={{ .RestrictSUIDSGID }}
+{{ end -}}
+{{ range .RestrictAddressFamilies -}}RestrictAddressFamilies={{ . }}
+{{ end -}}
+{{ if isset . "LockPersonality" -}}LockPersonality={{ .LockPersonality }}
+{{ end -}}
+{{ range .RestrictFileSystems -}}RestrictFileSystems={{ . }}
+{{ end -}}
+{{ if isset . "LimitCPU" -}}LimitCPU={{ .LimitCPU }}
+{{ end -}}
+{{ if isset . "LimitFSIZE" -}}LimitFSIZE={{ .LimitFSIZE }}
+{{ end -}}
+{{ if isset . "LimitDATA" -}}LimitDATA={{ .LimitDATA }}
+{{ end -}}
+{{ if isset . "LimitSTACK" -}}LimitSTACK={{ .LimitSTACK }}
+{{ end -}}
+{{ if isset . "LimitCORE" -}}LimitCORE={{ .LimitCORE }}
+{{ end -}}
+{{ if isset . "LimitRSS" -}}LimitRSS={{ .LimitRSS }}
+{{ end -}}
+{{ if isset . "LimitNOFILE" -}}LimitNOFILE={{ .LimitNOFILE }}
+{{ end -}}
+{{ if isset . "LimitAS" -}}LimitAS={{ .LimitAS }}
+{{ end -}}
+{{ if isset . "LimitNPROC" -}}LimitNPROC={{ .LimitNPROC }}
+{{ end -}}
+{{ if isset . "LimitMEMLOCK" -}}LimitMEMLOCK={{ .LimitMEMLOCK }}
+{{ end -}}
+{{ if isset . "LimitLOCKS" -}}LimitLOCKS={{ .LimitLOCKS }}
+{{ end -}}
+{{ if isset . "LimitSIGPENDING" -}}LimitSIGPENDING={{ .LimitSIGPENDING }}
+{{ end -}}
+{{ if isset . "LimitMSGQUEUE" -}}LimitMSGQUEUE={{ .LimitMSGQUEUE }}
+{{ end -}}
+{{ if isset . "LimitNICE" -}}LimitNICE={{ .LimitNICE }}
+{{ end -}}
+{{ if isset . "LimitRTPRIO" -}}LimitRTPRIO={{ .LimitRTPRIO }}
+{{ end -}}
+{{ if isset . "LimitRTTIME" -}}LimitRTTIME={{ .LimitRTTIME }}
+{{ end -}}
+{{ range .ReadWritePaths -}}ReadWritePaths={{ . }}
+{{ end -}}
+{{ range .ReadOnlyPaths -}}ReadOnlyPaths={{ . }}
+{{ end -}}
+{{ range .InaccessiblePaths -}}InaccessiblePaths={{ . }}
+{{ end -}}
+{{ range .ExecPaths -}}ExecPaths={{ . }}
+{{ end -}}
+{{ range .NoExecPaths -}}NoExecPaths={{ . }}
+{{ end -}}
+{{ if isset . "ExecSearchPath" -}}ExecSearchPath={{ .ExecSearchPath }}
+{{ end -}}
+{{ range .BindPaths -}}BindPaths={{ . }}
+{{ end -}}
+{{ range .BindReadOnlyPaths -}}BindReadOnlyPaths={{ . }}
+{{ end -}}
+{{ range .TemporaryFileSystem -}}TemporaryFileSystem={{ . }}
+{{ end -}}
+{{ if isset . "PrivateTmp" -}}PrivateTmp={{ .PrivateTmp }}
+{{ end -}}
+{{ if isset . "PrivateDevices" -}}PrivateDevices={{ .PrivateDevices }}
+{{ end -}}
+{{ if isset . "ProtectKernelTunables" -}}ProtectKernelTunables={{ .ProtectKernelTunables }}
+{{ end -}}
+{{ if isset . "ProtectKernelModules" -}}ProtectKernelModules={{ .ProtectKernelModules }}
+{{ end -}}
+{{ if isset . "ProtectKernelLogs" -}}ProtectKernelLogs={{ .ProtectKernelLogs }}
+{{ end -}}
+{{ if isset . "ProtectClock" -}}ProtectClock={{ .ProtectClock }}
+{{ end -}}
+{{ if isset . "ProtectControlGroups" -}}ProtectControlGroups={{ .ProtectControlGroups }}
+{{ end -}}
+{{ if isset . "NetworkNamespacePath" -}}NetworkNamespacePath={{ .NetworkNamespacePath }}
+{{ end -}}
+{{ if isset . "IPCNamespacePath" -}}IPCNamespacePath={{ .IPCNamespacePath }}
+{{ end -}}
+{{ if isset . "LogNamespace" -}}LogNamespace={{ .LogNamespace }}
+{{ end -}}
+{{ if isset . "PrivateNetwork" -}}PrivateNetwork={{ .PrivateNetwork }}
+{{ end -}}
+{{ if isset . "PrivateUsers" -}}PrivateUsers={{ .PrivateUsers }}
+{{ end -}}
+{{ if isset . "PrivateMounts" -}}PrivateMounts={{ .PrivateMounts }}
+{{ end -}}
+{{ if isset . "PrivateIPC" -}}PrivateIPC={{ .PrivateIPC }}
+{{ end -}}
+{{ if isset . "PrivatePIDs" -}}PrivatePIDs={{ .PrivatePIDs }}
+{{ end -}}
+{{ if isset . "ProtectSystem" -}}ProtectSystem={{ .ProtectSystem }}
+{{ end -}}
+{{ if isset . "ProtectHome" -}}ProtectHome={{ .ProtectHome }}
+{{ end -}}
+{{ if isset . "MountFlags" -}}MountFlags={{ .MountFlags }}
+{{ end -}}
+{{ if isset . "MountAPIVFS" -}}MountAPIVFS={{ .MountAPIVFS }}
+{{ end -}}
+{{ if isset . "BindLogSockets" -}}BindLogSockets={{ .BindLogSockets }}
+{{ end -}}
+{{ if isset . "Personality" -}}Personality={{ .Personality }}
+{{ end -}}
+{{ if isset . "RuntimeDirectoryPreserve" -}}RuntimeDirectoryPreserve={{ .RuntimeDirectoryPreserve }}
+{{ end -}}
+{{ if isset . "RuntimeDirectoryMode" -}}RuntimeDirectoryMode={{ .RuntimeDirectoryMode }}
+{{ end -}}
+{{ range .RuntimeDirectory -}}RuntimeDirectory={{ . }}
+{{ end -}}
+{{ if isset . "StateDirectoryMode" -}}StateDirectoryMode={{ .StateDirectoryMode }}
+{{ end -}}
+{{ range .StateDirectory -}}StateDirectory={{ . }}
+{{ end -}}
+{{ if isset . "CacheDirectoryMode" -}}CacheDirectoryMode={{ .CacheDirectoryMode }}
+{{ end -}}
+{{ range .CacheDirectory -}}CacheDirectory={{ . }}
+{{ end -}}
+{{ if isset . "LogsDirectoryMode" -}}LogsDirectoryMode={{ .LogsDirectoryMode }}
+{{ end -}}
+{{ range .LogsDirectory -}}LogsDirectory={{ . }}
+{{ end -}}
+{{ if isset . "ConfigurationDirectoryMode" -}}ConfigurationDirectoryMode={{ .ConfigurationDirectoryMode }}
+{{ end -}}
+{{ range .ConfigurationDirectory -}}ConfigurationDirectory={{ . }}
+{{ end -}}
+{{ range .SetCredential -}}SetCredential={{ . }}
+{{ end -}}
+{{ range .SetCredentialEncrypted -}}SetCredentialEncrypted={{ . }}
+{{ end -}}
+{{ range .LoadCredential -}}LoadCredential={{ . }}
+{{ end -}}
+{{ range .LoadCredentialEncrypted -}}LoadCredentialEncrypted={{ . }}
+{{ end -}}
+{{ range .ImportCredential -}}ImportCredential={{ . }}
+{{ end -}}
+{{ if isset . "TimeoutCleanSec" -}}TimeoutCleanSec={{ .TimeoutCleanSec }}
+{{ end -}}
+{{ if isset . "PAMName" -}}PAMName={{ .PAMName }}
+{{ end -}}
+{{ if isset . "IgnoreSIGPIPE" -}}IgnoreSIGPIPE={{ .IgnoreSIGPIPE }}
+{{ end -}}
+{{ if isset . "UtmpIdentifier" -}}UtmpIdentifier={{ .UtmpIdentifier }}
+{{ end -}}
+{{ if isset . "UtmpMode" -}}UtmpMode={{ .UtmpMode }}
+{{ end -}}
+{{ if isset . "SELinuxContext" -}}SELinuxContext={{ .SELinuxContext }}
+{{ end -}}
+{{ if isset . "AppArmorProfile" -}}AppArmorProfile={{ .AppArmorProfile }}
+{{ end -}}
+{{ if isset . "SmackProcessLabel" -}}SmackProcessLabel={{ .SmackProcessLabel }}
+{{ end -}}
+{{ if isset . "ProtectHostname" -}}ProtectHostname={{ .ProtectHostname }}
+{{ end -}}
+{{ if isset . "MemoryKSM" -}}MemoryKSM={{ .MemoryKSM }}
+{{ end -}}
+{{ if isset . "Slice" -}}Slice={{ .Slice }}
+{{ end -}}
+{{ if isset . "AllowedCPUs" -}}AllowedCPUs={{ .AllowedCPUs }}
+{{ end -}}
+{{ if isset . "StartupAllowedCPUs" -}}StartupAllowedCPUs={{ .StartupAllowedCPUs }}
+{{ end -}}
+{{ if isset . "AllowedMemoryNodes" -}}AllowedMemoryNodes={{ .AllowedMemoryNodes }}
+{{ end -}}
+{{ if isset . "StartupAllowedMemoryNodes" -}}StartupAllowedMemoryNodes={{ .StartupAllowedMemoryNodes }}
+{{ end -}}
+{{ if isset . "CPUAccounting" -}}CPUAccounting={{ .CPUAccounting }}
+{{ end -}}
+{{ if isset . "CPUWeight" -}}CPUWeight={{ .CPUWeight }}
+{{ end -}}
+{{ if isset . "StartupCPUWeight" -}}StartupCPUWeight={{ .StartupCPUWeight }}
+{{ end -}}
+{{ if isset . "CPUShares" -}}CPUShares={{ .CPUShares }}
+{{ end -}}
+{{ if isset . "StartupCPUShares" -}}StartupCPUShares={{ .StartupCPUShares }}
+{{ end -}}
+{{ if isset . "CPUQuota" -}}CPUQuota={{ .CPUQuota }}
+{{ end -}}
+{{ if isset . "CPUQuotaPeriodSec" -}}CPUQuotaPeriodSec={{ .CPUQuotaPeriodSec }}
+{{ end -}}
+{{ if isset . "MemoryAccounting" -}}MemoryAccounting={{ .MemoryAccounting }}
+{{ end -}}
+{{ if isset . "MemoryMin" -}}MemoryMin={{ .MemoryMin }}
+{{ end -}}
+{{ if isset . "DefaultMemoryMin" -}}DefaultMemoryMin={{ .DefaultMemoryMin }}
+{{ end -}}
+{{ if isset . "DefaultMemoryLow" -}}DefaultMemoryLow={{ .DefaultMemoryLow }}
+{{ end -}}
+{{ if isset . "DefaultStartupMemoryLow" -}}DefaultStartupMemoryLow={{ .DefaultStartupMemoryLow }}
+{{ end -}}
+{{ if isset . "MemoryLow" -}}MemoryLow={{ .MemoryLow }}
+{{ end -}}
+{{ if isset . "StartupMemoryLow" -}}StartupMemoryLow={{ .StartupMemoryLow }}
+{{ end -}}
+{{ if isset . "MemoryHigh" -}}MemoryHigh={{ .MemoryHigh }}
+{{ end -}}
+{{ if isset . "StartupMemoryHigh" -}}StartupMemoryHigh={{ .StartupMemoryHigh }}
+{{ end -}}
+{{ if isset . "MemoryMax" -}}MemoryMax={{ .MemoryMax }}
+{{ end -}}
+{{ if isset . "StartupMemoryMax" -}}StartupMemoryMax={{ .StartupMemoryMax }}
+{{ end -}}
+{{ if isset . "MemorySwapMax" -}}MemorySwapMax={{ .MemorySwapMax }}
+{{ end -}}
+{{ if isset . "StartupMemorySwapMax" -}}StartupMemorySwapMax={{ .StartupMemorySwapMax }}
+{{ end -}}
+{{ if isset . "MemoryZSwapMax" -}}MemoryZSwapMax={{ .MemoryZSwapMax }}
+{{ end -}}
+{{ if isset . "StartupMemoryZSwapMax" -}}StartupMemoryZSwapMax={{ .StartupMemoryZSwapMax }}
+{{ end -}}
+{{ if isset . "MemoryZSwapWriteback" -}}MemoryZSwapWriteback={{ .MemoryZSwapWriteback }}
+{{ end -}}
+{{ if isset . "MemoryLimit" -}}MemoryLimit={{ .MemoryLimit }}
+{{ end -}}
+{{ range .DeviceAllow -}}DeviceAllow={{ . }}
+{{ end -}}
+{{ if isset . "DevicePolicy" -}}DevicePolicy={{ .DevicePolicy }}
+{{ end -}}
+{{ if isset . "IOAccounting" -}}IOAccounting={{ .IOAccounting }}
+{{ end -}}
+{{ if isset . "IOWeight" -}}IOWeight={{ .IOWeight }}
+{{ end -}}
+{{ if isset . "StartupIOWeight" -}}StartupIOWeight={{ .StartupIOWeight }}
+{{ end -}}
+{{ range .IODeviceWeight -}}IODeviceWeight={{ . }}
+{{ end -}}
+{{ range .IOReadBandwidthMax -}}IOReadBandwidthMax={{ . }}
+{{ end -}}
+{{ range .IOWriteBandwidthMax -}}IOWriteBandwidthMax={{ . }}
+{{ end -}}
+{{ range .IOReadIOPSMax -}}IOReadIOPSMax={{ . }}
+{{ end -}}
+{{ range .IOWriteIOPSMax -}}IOWriteIOPSMax={{ . }}
+{{ end -}}
+{{ range .IODeviceLatencyTargetSec -}}IODeviceLatencyTargetSec={{ . }}
+{{ end -}}
+{{ if isset . "BlockIOAccounting" -}}BlockIOAccounting={{ .BlockIOAccounting }}
+{{ end -}}
+{{ range .BlockIOWeight -}}BlockIOWeight={{ . }}
+{{ end -}}
+{{ range .StartupBlockIOWeight -}}StartupBlockIOWeight={{ . }}
+{{ end -}}
+{{ range .BlockIODeviceWeight -}}BlockIODeviceWeight={{ . }}
+{{ end -}}
+{{ range .BlockIOReadBandwidth -}}BlockIOReadBandwidth={{ . }}
+{{ end -}}
+{{ range .BlockIOWriteBandwidth -}}BlockIOWriteBandwidth={{ . }}
+{{ end -}}
+{{ if isset . "TasksAccounting" -}}TasksAccounting={{ .TasksAccounting }}
+{{ end -}}
+{{ if isset . "TasksMax" -}}TasksMax={{ .TasksMax }}
+{{ end -}}
+{{ if isset . "Delegate" -}}Delegate={{ .Delegate }}
+{{ end -}}
+{{ if isset . "DelegateSubgroup" -}}DelegateSubgroup={{ .DelegateSubgroup }}
+{{ end -}}
+{{ range .DisableControllers -}}DisableControllers={{ . }}
+{{ end -}}
+{{ if isset . "IPAccounting" -}}IPAccounting={{ .IPAccounting }}
+{{ end -}}
+{{ range .IPAddressAllow -}}IPAddressAllow={{ . }}
+{{ end -}}
+{{ range .IPAddressDeny -}}IPAddressDeny={{ . }}
+{{ end -}}
+{{ range .IPIngressFilterPath -}}IPIngressFilterPath={{ . }}
+{{ end -}}
+{{ range .IPEgressFilterPath -}}IPEgressFilterPath={{ . }}
+{{ end -}}
+{{ if isset . "ManagedOOMSwap" -}}ManagedOOMSwap={{ .ManagedOOMSwap }}
+{{ end -}}
+{{ if isset . "ManagedOOMMemoryPressure" -}}ManagedOOMMemoryPressure={{ .ManagedOOMMemoryPressure }}
+{{ end -}}
+{{ if isset . "ManagedOOMMemoryPressureLimit" -}}ManagedOOMMemoryPressureLimit={{ .ManagedOOMMemoryPressureLimit }}
+{{ end -}}
+{{ if isset . "ManagedOOMMemoryPressureDurationSec" -}}ManagedOOMMemoryPressureDurationSec={{ .ManagedOOMMemoryPressureDurationSec }}
+{{ end -}}
+{{ if isset . "ManagedOOMPreference" -}}ManagedOOMPreference={{ .ManagedOOMPreference }}
+{{ end -}}
+{{ range .BPFProgram -}}BPFProgram={{ . }}
+{{ end -}}
+{{ range .SocketBindAllow -}}SocketBindAllow={{ . }}
+{{ end -}}
+{{ range .SocketBindDeny -}}SocketBindDeny={{ . }}
+{{ end -}}
+{{ range .RestrictNetworkInterfaces -}}RestrictNetworkInterfaces={{ . }}
+{{ end -}}
+{{ if isset . "MemoryPressureThresholdSec" -}}MemoryPressureThresholdSec={{ .MemoryPressureThresholdSec }}
+{{ end -}}
+{{ if isset . "MemoryPressureWatch" -}}MemoryPressureWatch={{ .MemoryPressureWatch }}
+{{ end -}}
+{{ range .NFTSet -}}NFTSet={{ . }}
+{{ end -}}
+{{ if isset . "CoredumpReceive" -}}CoredumpReceive={{ .CoredumpReceive }}
+{{ end -}}
+{{ if isset . "SendSIGKILL" -}}SendSIGKILL={{ .SendSIGKILL }}
+{{ end -}}
+{{ if isset . "SendSIGHUP" -}}SendSIGHUP={{ .SendSIGHUP }}
+{{ end -}}
+{{ if isset . "KillMode" -}}KillMode={{ .KillMode }}
+{{ end -}}
+{{ if isset . "KillSignal" -}}KillSignal={{ .KillSignal }}
+{{ end -}}
+{{ if isset . "RestartKillSignal" -}}RestartKillSignal={{ .RestartKillSignal }}
+{{ end -}}
+{{ if isset . "FinalKillSignal" -}}FinalKillSignal={{ .FinalKillSignal }}
+{{ end -}}
+{{ if isset . "WatchdogSignal" -}}WatchdogSignal={{ .WatchdogSignal }}
+{{ end -}}
+{{ end -}}
+{{- end -}}
 {{- define "install" -}}
 {{ if . }}
 [Install]

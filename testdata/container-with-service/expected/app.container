@@ -15,8 +15,8 @@ HealthTimeout=5s
 
 [Service]
 Restart=always
-MemoryMax=1G
 CPUQuota=50%
+MemoryMax=1G
 
 [Install]
 WantedBy=multi-user.target
