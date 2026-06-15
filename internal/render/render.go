@@ -49,7 +49,7 @@ func New(tplFS fs.FS) (*Renderer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	for kind := range kinds.Ext {
+	for _, kind := range kinds.Kinds() {
 		if tmpl.Lookup(kind+".tpl") == nil {
 			return nil, fmt.Errorf("missing template %q.tpl", kind)
 		}
@@ -79,7 +79,7 @@ func (r *Renderer) BuildFileSet(quadlets []eval.Quadlet) (map[string]FileContent
 			}
 			files[u.Filename] = FileContent{Content: content}
 			if u.Kind == "build" {
-				if err := addBuildArtifacts(files, u); err != nil {
+				if err := addBuildArtifacts(files, owners, q.Name, u); err != nil {
 					return nil, fmt.Errorf("build artifacts for %s: %w", u.Stem, err)
 				}
 			}
@@ -116,15 +116,39 @@ func (r *Renderer) renderUnit(u eval.UnitRecord) ([]byte, error) {
 }
 
 // addBuildArtifacts emits the inline Containerfile and any build context files.
-// Context entries are either a plain string (mode 0644) or a {content, mode}
-// struct; the normalization the prototype did in CUE happens here instead.
-func addBuildArtifacts(files map[string]FileContent, u eval.UnitRecord) error {
-	if cf, ok := u.Data["ContainerFile"].(string); ok {
-		files["images/"+u.Stem+".Containerfile"] = FileContent{Content: []byte(cf)}
-	}
-	ctx, ok := u.Data["Context"].(map[string]any)
-	if !ok {
+// Every emitted path is registered in owners so two builds that resolve to the
+// same artifact path are a hard error rather than a silent overwrite (the same
+// guarantee BuildFileSet gives unit files). Type mismatches in the build data
+// fail loudly instead of silently producing an empty file or a default mode:
+// render validates its inputs rather than trusting the schema to have done so,
+// since a silently-wrong file mode is a nasty failure to track down.
+func addBuildArtifacts(files map[string]FileContent, owners map[string]string, owner string, u eval.UnitRecord) error {
+	add := func(path string, fc FileContent) error {
+		if prev, ok := owners[path]; ok {
+			return fmt.Errorf("duplicate output file %q: emitted by both quadlet %q and quadlet %q", path, prev, owner)
+		}
+		owners[path] = owner
+		files[path] = fc
 		return nil
+	}
+
+	if v, present := u.Data["ContainerFile"]; present {
+		cf, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("value of ContainerFile must be a string, got %T", v)
+		}
+		if err := add("images/"+u.Stem+".Containerfile", FileContent{Content: []byte(cf)}); err != nil {
+			return err
+		}
+	}
+
+	v, present := u.Data["Context"]
+	if !present {
+		return nil
+	}
+	ctx, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("value of Context must be a map, got %T", v)
 	}
 	keys := make([]string, 0, len(ctx))
 	for k := range ctx {
@@ -132,21 +156,42 @@ func addBuildArtifacts(files map[string]FileContent, u eval.UnitRecord) error {
 	}
 	sort.Strings(keys)
 	for _, p := range keys {
-		var content, mode string
-		switch x := ctx[p].(type) {
-		case string:
-			content, mode = x, "0644"
-		case map[string]any:
-			content, _ = x["content"].(string)
-			if m, ok := x["mode"].(string); ok && m != "" {
-				mode = m
-			} else {
-				mode = "0644"
-			}
-		default:
-			return fmt.Errorf("context entry %q: unexpected type %T", p, ctx[p])
+		content, mode, err := contextEntry(p, ctx[p])
+		if err != nil {
+			return err
 		}
-		files["images/"+u.Stem+".context/"+p] = FileContent{Content: []byte(content), Mode: mode}
+		if err := add("images/"+u.Stem+".context/"+p, FileContent{Content: []byte(content), Mode: mode}); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// contextEntry normalizes one build-context entry: a plain string (mode 0644)
+// or a {content, mode} struct. A present-but-wrong-typed content or mode is an
+// error, not a silent default, so malformed data never yields an empty file or
+// a wrong (e.g. non-executable) mode. An omitted mode defaults to 0644.
+func contextEntry(name string, v any) (content, mode string, err error) {
+	switch x := v.(type) {
+	case string:
+		return x, "0644", nil
+	case map[string]any:
+		c, ok := x["content"].(string)
+		if !ok {
+			return "", "", fmt.Errorf("context entry %q: content must be a string, got %T", name, x["content"])
+		}
+		switch m := x["mode"].(type) {
+		case nil:
+			return c, "0644", nil // mode omitted
+		case string:
+			if m == "" {
+				return c, "0644", nil
+			}
+			return c, m, nil
+		default:
+			return "", "", fmt.Errorf("context entry %q: mode must be a string, got %T", name, m)
+		}
+	default:
+		return "", "", fmt.Errorf("context entry %q: unexpected type %T", name, v)
+	}
 }
