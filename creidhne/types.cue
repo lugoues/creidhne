@@ -96,6 +96,17 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 // See systemd.unit(5).
 #JobMode: "replace" | "fail" | "replace-irreversibly" | "isolate" | "flush" | "ignore-dependencies" | "ignore-requirements"
 
+// systemd emergency action for FailureAction/SuccessAction/StartLimitAction/
+// JobTimeoutAction (values from systemd's emergency_action_table).
+// See systemd.unit(5).
+#EmergencyAction: "none" | "reboot" | "reboot-force" | "reboot-immediate" |
+	"poweroff" | "poweroff-force" | "poweroff-immediate" |
+	"exit" | "exit-force" | "soft-reboot" | "soft-reboot-force" |
+	"kexec" | "kexec-force" | "halt" | "halt-force" | "halt-immediate"
+
+// systemd unit garbage-collection mode for CollectMode. See systemd.unit(5).
+#CollectMode: "inactive" | "inactive-or-failed"
+
 // --- Podman value types ---
 
 // Podman byte size: bare integer (bytes), or integer with b/k/m/g suffix (case-insensitive).
@@ -197,32 +208,10 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 #PodExitPolicy: "stop" | "continue"
 
 // Systemd common sections that can appear in any unit file.
-
-#UnitSection: {
-	Description?:   string
-	Documentation?: string
-	Requires?: [...string]
-	After?: [...string]
-	Before?: [...string]
-	Wants?: [...string]
-	BindsTo?: [...string]
-	PartOf?: [...string]
-	Conflicts?: [...string]
-	Condition?: [...string]
-	Assert?: [...string]
-	SourcePath?:            string
-	StopWhenUnneeded?:      bool
-	RefuseManualStart?:     bool
-	RefuseManualStop?:      bool
-	AllowIsolate?:          bool
-	IgnoreOnIsolate?:       bool
-	OnSuccess?:             string
-	OnFailure?:             string
-	OnSuccessJobMode?:      #JobMode
-	OnFailureJobMode?:      #JobMode
-	StartLimitIntervalSec?: #TimeSpan
-	StartLimitBurst?:       int & >=0
-}
+//
+// #UnitSection and #InstallSection are generated from systemd's own parser table
+// into systemd_sections.gen.cue (see tools/gen-systemd-sections). #ServiceSection
+// is still hand-written below (its ~270 directives are a future generator target).
 
 #ServiceSection: {
 	Type?:             "simple" | "exec" | "forking" | "oneshot" | "dbus" | "notify" | "idle"
@@ -262,14 +251,6 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 	LimitNPROC?:   #ResourceLimit
 	LimitCORE?:    #ByteLimit
 	LimitMEMLOCK?: #ByteLimit
-}
-
-#InstallSection: {
-	WantedBy?: [...string]
-	RequiredBy?: [...string]
-	UpheldBy?: [...string]
-	Alias?: [...string]
-	DefaultInstance?: string
 }
 
 // Quadlet-specific section

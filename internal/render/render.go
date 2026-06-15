@@ -23,7 +23,7 @@ type FileContent struct {
 
 // Renderer holds the parsed templates, one per unit kind.
 type Renderer struct {
-	tpl map[string]*template.Template
+	tmpl *template.Template // all .tpl files in one set, so shared partials resolve
 }
 
 // funcMap exposes helpers to the templates. isset reports whether a key is
@@ -40,22 +40,21 @@ var funcMap = template.FuncMap{
 	},
 }
 
-// New parses every <kind>.tpl from tplFS (expected to contain the templates at
-// its root, e.g. fs.Sub(embeddedFS, "templates") or os.DirFS("templates")).
+// New parses every *.tpl from tplFS into one template set (expected at its root,
+// e.g. fs.Sub(embeddedFS, "templates") or os.DirFS("templates")). Parsing them
+// together lets the per-kind templates invoke shared partials (e.g. the
+// generated "unit"/"install" section partials).
 func New(tplFS fs.FS) (*Renderer, error) {
-	r := &Renderer{tpl: make(map[string]*template.Template, len(kinds.Ext))}
-	for kind := range kinds.Ext {
-		b, err := fs.ReadFile(tplFS, kind+".tpl")
-		if err != nil {
-			return nil, fmt.Errorf("read template %q: %w", kind, err)
-		}
-		t, err := template.New(kind).Funcs(funcMap).Parse(string(b))
-		if err != nil {
-			return nil, fmt.Errorf("parse template %q: %w", kind, err)
-		}
-		r.tpl[kind] = t
+	tmpl, err := template.New("creidhne").Funcs(funcMap).ParseFS(tplFS, "*.tpl")
+	if err != nil {
+		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	return r, nil
+	for kind := range kinds.Ext {
+		if tmpl.Lookup(kind+".tpl") == nil {
+			return nil, fmt.Errorf("missing template %q.tpl", kind)
+		}
+	}
+	return &Renderer{tmpl: tmpl}, nil
 }
 
 // BuildFileSet renders every unit across all quadlets into a filename->content
@@ -94,8 +93,8 @@ func (r *Renderer) BuildFileSet(quadlets []eval.Quadlet) (map[string]FileContent
 // data plus, for builds with an inline Containerfile, the injected
 // containerfilePath/contextPath the prototype's render.cue used to supply.
 func (r *Renderer) renderUnit(u eval.UnitRecord) ([]byte, error) {
-	t, ok := r.tpl[u.Kind]
-	if !ok {
+	name := u.Kind + ".tpl"
+	if r.tmpl.Lookup(name) == nil {
 		return nil, fmt.Errorf("unknown unit kind %q", u.Kind)
 	}
 	root := make(map[string]any, len(u.Data)+2)
@@ -111,7 +110,7 @@ func (r *Renderer) renderUnit(u eval.UnitRecord) ([]byte, error) {
 		}
 	}
 	var buf bytes.Buffer
-	if err := t.Execute(&buf, root); err != nil {
+	if err := r.tmpl.ExecuteTemplate(&buf, name, root); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
