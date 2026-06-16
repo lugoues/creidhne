@@ -60,7 +60,7 @@ func Validate(dir string, overlay map[string]load.Source) error {
 	if err != nil {
 		return err
 	}
-	return v.Validate(cue.Concrete(true))
+	return cueError("validate "+dir, v.Validate(cue.Concrete(true)))
 }
 
 // buildInstance loads and builds the CUE package in dir into a single value,
@@ -75,13 +75,27 @@ func buildInstance(dir string, overlay map[string]load.Source) (cue.Value, error
 		return cue.Value{}, fmt.Errorf("no CUE instances found in %s", dir)
 	}
 	if err := insts[0].Err; err != nil {
-		return cue.Value{}, fmt.Errorf("load %s: %w", dir, err)
+		return cue.Value{}, cueError("load "+dir, err)
 	}
 	v := cuecontext.New().BuildInstance(insts[0])
 	if err := v.Err(); err != nil {
-		return cue.Value{}, fmt.Errorf("build %s: %w", dir, err)
+		return cue.Value{}, cueError("build "+dir, err)
 	}
 	return v, nil
+}
+
+// cueError expands a cuelang error so every underlying error is shown with its
+// file position, instead of cue's default "<first error> (and N more errors)"
+// truncation that hides all but one. A nil err returns nil.
+func cueError(context string, err error) error {
+	if err == nil {
+		return nil
+	}
+	details := strings.TrimSpace(errors.Details(err, nil))
+	if details == "" {
+		details = err.Error()
+	}
+	return fmt.Errorf("%s:\n%s", context, details)
 }
 
 // extractQuadlets finds every #Quadlet value (one carrying a manifest list)
