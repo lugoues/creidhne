@@ -25,12 +25,36 @@ The binary **embeds the CUE evaluator and schema**, so you don't need `cue` (or 
 
 ## Install
 
-```sh
-# From source (Go 1.25+):
-go install github.com/lugoues/creidhne/cmd/crei@latest
+Creidhne runs on **Linux** with **systemd** and **Podman 4.4+** (Quadlet's minimum).
 
-# Or download a release binary from:
-# https://github.com/lugoues/creidhne/releases
+### Release binary
+
+Pick your architecture from the [latest release](https://github.com/lugoues/creidhne/releases/latest):
+
+### Script (recommended)
+This script will download the latest binary, verify it's signatures, and install crei into `/usr/local/bin`.
+```sh
+ver=latest arch=amd64   # or arm64
+base=https://github.com/lugoues/creidhne/releases/download/v$ver
+curl -fsSLO "$base/crei_${ver}_linux_$arch"{,.sha256,.sigstore.json}
+
+# integrity
+echo "$(cat crei_${ver}_linux_$arch.sha256)  crei_${ver}_linux_$arch" | sha256sum -c -
+
+# provenance: verify it was built by this repo's release workflow (keyless cosign)
+cosign verify-blob \
+  --bundle crei_${ver}_linux_$arch.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/lugoues/creidhne/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  crei_${ver}_linux_$arch
+
+install -m755 crei_${ver}_linux_$arch /usr/local/bin/crei
+```
+
+### From source
+
+```sh
+go install github.com/lugoues/creidhne/cmd/crei@latest   # Go 1.25+
 ```
 
 ## Quick start
@@ -77,6 +101,8 @@ app: creidhne.#Quadlet & {
 ```
 
 `crei apply` writes `app.container` and `app-data.volume` into your quadlet directory (default `~/.config/containers/systemd`), then tells you to run `systemctl --user daemon-reload` (or does it for you with `--reload-systemd`).
+
+For a realistic, copyable setup (a Traefik pod with volumes, networks, and external unit dependencies), see [`example/`](example/).
 
 ## Writing quadlets
 

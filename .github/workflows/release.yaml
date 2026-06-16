@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write # create the release and upload assets
+  id-token: write # OIDC token for keyless cosign signing (Fulcio/Rekor)
 
 jobs:
   goreleaser:
@@ -19,6 +20,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      - uses: sigstore/cosign-installer@v3 # provides the cosign binary goreleaser signs with
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
