@@ -7,13 +7,61 @@ traefik: creidhne.#Quadlet & {
 	name: "traefik"
 
 	units: {
-		// Build the traefik image from a local Containerfile.
+		// Build the traefik image from an inline Containerfile.
 		#build: {
 			Build: {
 				BuildArg: ["TRAEFIK_VERSION=3.6.11"]
 				ImageTag: ["localhost/traefik:quadlet"]
-				SetWorkingDirectory: "/etc/containers/images/traefik"
-				File:                "/etc/containers/images/traefik/Containerfile"
+			}
+			ContainerFile: """
+				ARG TRAEFIK_VERSION
+				FROM ghcr.io/traefik/traefik:${TRAEFIK_VERSION}
+
+				COPY . /
+				"""
+			Context: {
+				"etc/traefik/traefik.yml": """
+					domain: mydomain.dev
+
+					api:
+					  dashboard: true
+					  insecure: false
+
+					ping:
+					  terminatingStatusCode: 204
+
+					global:
+					  checkNewVersion: false
+					  sendAnonymousUsage: false
+
+					log:
+					  level: DEBUG
+					  format: json
+
+					accessLog:
+					  format: json
+
+					providers:
+					  docker:
+					    exposedByDefault: false
+					    endpoint: unix:///mnt/spx/socket-proxy.sock
+					    constraints: "Label(`traefik.enable`, `true`)"
+
+					entryPoints:
+					  tailscale:
+					    asDefault: true
+					    address: ":443"
+
+					certificatesResolvers:
+					  letsencrypt:
+					    acme:
+					      storage: /etc/traefik/acme/acme.json
+					      dnsChallenge:
+					        provider: xxx
+
+					serversTransport:
+					  insecureSkipVerify: true
+					"""
 			}
 		}
 
@@ -36,7 +84,7 @@ traefik: creidhne.#Quadlet & {
 
 			Container: {
 				Image:         units.#build.#ref
-				Pod:           "\(units.#pod.#ref)"
+				Pod:           units.#pod.#ref
 				ContainerName: "traefik"
 
 				Secret: [
