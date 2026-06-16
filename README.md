@@ -34,7 +34,8 @@ Pick your architecture from the [latest release](https://github.com/lugoues/crei
 ### Script (recommended)
 This script will download the latest binary, verify it's signatures, and install crei into `/usr/local/bin`.
 ```sh
-ver=latest arch=amd64   # or arm64
+ver=1.0.1
+arch=amd64   # or arm64
 base=https://github.com/lugoues/creidhne/releases/download/v$ver
 curl -fsSLO "$base/crei_${ver}_linux_$arch"{,.sha256,.sigstore.json}
 
