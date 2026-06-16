@@ -191,6 +191,39 @@ app: creidhne.#Quadlet & {
 
 Well-known systemd targets (default, multi-user, network-online, graphical, ...) are pre-populated. Or skip the helper and use raw strings: `Unit: After: ["network-online.target"]`.
 
+### Inline Containerfile & Context
+Craei supports inlining Containerfiles and their context within a Build unit. Context files will be placed next to the Containerfile when being build so `COPY . /` is all you need to pull your context in. This is useful when you want only minor changes to the original image (such as installing packages).
+```
+traefik: creidhne.#Quadlet & {
+    name: "traefik"
+
+    units: {
+        // Build the traefik image from an inline Containerfile.
+        #build: {
+            Build: {
+                BuildArg: ["TRAEFIK_VERSION=3.6.11"]
+                ImageTag: ["localhost/traefik:quadlet"]
+            }
+            ContainerFile: """
+                ARG TRAEFIK_VERSION
+                FROM ghcr.io/traefik/traefik:${TRAEFIK_VERSION}
+
+                COPY . /
+                """
+            Context: {
+                "etc/traefik/traefik.yml": """
+                    domain: mydomain.dev
+
+                    api:
+                      dashboard: true
+                      insecure: false
+                    """
+            }
+        }
+    }
+}
+```
+
 ### Supported sections
 
 Every unit type supports the standard systemd sections plus its own:
