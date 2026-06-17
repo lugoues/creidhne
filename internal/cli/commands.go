@@ -259,11 +259,9 @@ func printSummary(w io.Writer, s reconcile.Summary, addVerb, changeVerb, removeV
 }
 
 // colorizeDiff colors the built-in unified diff (difflib emits none). External
-// tools are assumed to color their own output.
+// tools are assumed to color their own output. The lipgloss-backed color
+// helpers render plain when color is unavailable, so no useColor guard is needed.
 func colorizeDiff(diff string) string {
-	if !useColor {
-		return diff
-	}
 	lines := strings.Split(diff, "\n")
 	for i, line := range lines {
 		switch {

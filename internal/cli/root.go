@@ -12,7 +12,10 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"cuelang.org/go/cue/load"
 
@@ -263,29 +266,33 @@ func sortedKeys(m map[string]reconcile.DesiredFile) []string {
 
 // --- output helpers ---
 
-var useColor = isTTY(os.Stdout) && os.Getenv("NO_COLOR") == ""
+// Colors are rendered through lipgloss, which detects the output's color profile
+// and honors NO_COLOR / non-TTY automatically (rendering plain text when color
+// is unavailable), so callers need no useColor guard.
+var (
+	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	dimStyle    = lipgloss.NewStyle().Faint(true)
+)
 
-func isTTY(f *os.File) bool {
-	fi, err := f.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
+func green(s string) string  { return greenStyle.Render(s) }
+func yellow(s string) string { return yellowStyle.Render(s) }
+func red(s string) string    { return redStyle.Render(s) }
+func dim(s string) string    { return dimStyle.Render(s) }
 
-func colorize(code, s string) string {
-	if !useColor {
-		return s
-	}
-	return "\x1b[" + code + "m" + s + "\x1b[0m"
-}
-
-func green(s string) string  { return colorize("32", s) }
-func yellow(s string) string { return colorize("33", s) }
-func red(s string) string    { return colorize("31", s) }
-func dim(s string) string    { return colorize("2", s) }
-
-// confirm prompts for a y/N answer. It returns an error when no answer can be
-// read (stdin closed/EOF) so callers can fail loudly instead of treating a
-// non-interactive run as a silent "no".
+// confirm asks for a y/N answer. On an interactive terminal it uses a huh
+// prompt; otherwise (piped stdin, CI, tests) it reads a line and returns an
+// error when no answer can be read, so a non-interactive run fails loudly
+// instead of silently treating "no input" as "no".
 func confirm(in io.Reader, out io.Writer, prompt string) (bool, error) {
+	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		yes := false
+		if err := huh.NewConfirm().Title(prompt).Value(&yes).Run(); err != nil {
+			return false, err
+		}
+		return yes, nil
+	}
 	fmt.Fprintf(out, "%s [y/N] ", prompt)
 	sc := bufio.NewScanner(in)
 	if !sc.Scan() {
