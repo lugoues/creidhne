@@ -165,6 +165,34 @@ func TestCmdDiff(t *testing.T) {
 	}
 }
 
+// TestCmdDiffStyleInline: diff_style="inline" renders a modified line as a single
+// "~" line carrying both the removed and added runs, not the "- old" / "+ new"
+// pair. Stripped of color, the line holds the common prefix plus both values.
+func TestCmdDiffStyleInline(t *testing.T) {
+	dir := setupProject(t, testMain)
+	mustWrite(t, filepath.Join(dir, "crei.toml"), "diff_style = \"inline\"\n")
+	qd := t.TempDir()
+	if _, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "apply", "-y", "--reload-systemd=false"); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "main.cue"), strings.Replace(testMain, "nginx:latest", "nginx:1.0", 1))
+	out, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "diff")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "~ Image=docker.io/nginx:") {
+		t.Errorf("inline style should render the change as one '~' line:\n%s", out)
+	}
+	// Both the removed and added runs are present (word-diff), and there is no
+	// "- old" / "+ new" pair.
+	if !strings.Contains(out, "latest") || !strings.Contains(out, "1.0") {
+		t.Errorf("inline style should show both old and new runs:\n%s", out)
+	}
+	if strings.Contains(out, "- Image=") || strings.Contains(out, "+ Image=") {
+		t.Errorf("inline style should not emit the '- old' / '+ new' pair:\n%s", out)
+	}
+}
+
 // --- adversarial / negative command-level cases ---
 
 func TestCmdRenderInvalidCUE(t *testing.T) {

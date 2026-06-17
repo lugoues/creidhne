@@ -292,7 +292,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 |---|---|
 | `crei init` | Scaffold a project (`cue.mod`, `main.cue`, `crei.toml`) and vendor the schema for editor/LSP support. |
 | `crei render` | Render all unit files to stdout. |
-| `crei plan` | Show what `apply` would add/update/remove. |
+| `crei plan` | Show what `apply` would add/update/remove, as an inline diff (`--no-diff` for the compact list). |
 | `crei diff` | Show detailed diffs against the live files. |
 | `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
 | `crei validate` | Type-check the CUE without rendering. |
@@ -308,12 +308,39 @@ Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
 | Project dir | `-C`, `--dir` | n/a | n/a | `.` |
 | Quadlet dir | `--quadlet-dir` | `QUADLET_DIR` | `quadlet_dir` | `~/.config/containers/systemd` |
 | Diff tool | `--diff-tool` | `DIFF_TOOL` | `diff_tool` | built-in unified diff |
+| Diff style | n/a | n/a | `diff_style` | `highlight` |
 | Reload systemd after apply | `--reload-systemd` | n/a | `reload_systemd` | `true` (on, like `podman quadlet install`) |
 | Secrets field | n/a | n/a | `secrets_field` | `secrets` |
 
 Run `crei config` to print the resolved values and where each came from.
 
 Writing to a system path like `/etc/containers/systemd` requires elevated privileges, so run `sudo crei apply`. The CLI never escalates on its own; if a write is denied it tells you to re-run with `sudo`.
+
+### Diff output
+
+`plan`, `diff`, and `apply` render a Terraform-style inline diff of each change: a bold `# <file>` header, a `+`/`-` gutter, collapsed unchanged regions (`# (N unmodified lines hidden)`), and highlighting of what changed within a line. Pass `--no-diff` to `plan`/`apply` for just the compact `+`/`~`/`-` change list.
+
+How a *modified* line renders is set by `diff_style` in `crei.toml`:
+
+| `diff_style` | A modified line shows as |
+|---|---|
+| `highlight` (default) | `- old` / `+ new` pair, with the changed span highlighted on each |
+| `plain` | `- old` / `+ new` pair, whole lines colored |
+| `inline` | a single `~` line (word-diff): the removed run struck through, the added run in the add color |
+
+Colors are truecolor by default and degrade automatically to 256/16-color or plain (honoring `NO_COLOR` and non-TTY output). Restyle any element under a `[style]` table — each entry is a color string (foreground) or a table of `fg`/`bg` plus `bold`/`italic`/`underline`/`reverse`/`strikethrough`/`faint`:
+
+```toml
+[style]
+header      = { bold = true }                 # the "# <file>" header
+context     = "#6E7681"                       # unchanged context lines
+add         = "#3FB950"                       # added lines / "+"
+remove      = "#F85149"                       # removed lines / "-"
+add_char    = { fg = "#3FB950", bold = true } # added inline span (defaults to add)
+remove_char = { fg = "#F85149", bold = true } # removed inline span (defaults to remove)
+```
+
+Colors are hex (`#3FB950`) or an ANSI index (`0`–`255`); an unknown attribute or unparseable color is reported when the config loads. An external `diff_tool` (e.g. `delta`) formats its own output, so `diff_style` and `[style]` apply only to the built-in differ.
 
 ## How it works
 

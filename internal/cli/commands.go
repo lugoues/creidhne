@@ -93,7 +93,7 @@ func newDiffCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			if err := printDiff(out, changes, cfg.QuadletDir, cfg.DiffTool); err != nil {
+			if err := printDiff(out, changes, cfg.QuadletDir, cfg.DiffTool, cfg.DiffStyle); err != nil {
 				return err
 			}
 			printSummary(out, reconcile.Summarize(changes), "new", "changed", "stale")
@@ -218,7 +218,7 @@ func renderPlan(w io.Writer, changes []reconcile.Change, cfg config, noDiff bool
 		printChangeList(w, changes)
 		return nil
 	}
-	return printDiff(w, changes, cfg.QuadletDir, cfg.DiffTool)
+	return printDiff(w, changes, cfg.QuadletDir, cfg.DiffTool, cfg.DiffStyle)
 }
 
 // printChangeList prints one +/~/- line per change (the compact view).
@@ -237,11 +237,12 @@ func printChangeList(w io.Writer, changes []reconcile.Change) {
 	}
 }
 
-// printDiff renders each change as an inline diff, Terraform-style: a new file
-// shows its content as added lines, a removed file shows the (live) content as
-// removed lines, and a changed file shows a unified diff. Unchanged files are
-// omitted; the summary reports their count. Entries are separated by one blank.
-func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool string) error {
+// printDiff renders each change as an inline diff, Terraform-style: a bold "#
+// name" header, then a new file's content as added lines, a removed file's (live)
+// content as removed lines, and a changed file as a structured inline diff.
+// Unchanged files are omitted; the summary reports their count. Entries are
+// separated by one blank line.
+func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool, diffStyle string) error {
 	printed := false
 	for _, c := range changes {
 		if c.Action == reconcile.ActionUnchanged {
@@ -251,39 +252,43 @@ func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool str
 			fmt.Fprintln(w)
 		}
 		printed = true
+		fmt.Fprintln(w, diffHeaderStyle.Render("# "+c.Name))
 		switch c.Action {
 		case reconcile.ActionAdd:
-			fmt.Fprintln(w, green("+ "+c.Name))
-			writeBodyLines(w, c.Content, "+", green)
-		case reconcile.ActionChange:
-			fmt.Fprintln(w, yellow("~ "+c.Name))
-			live := filepath.Join(quadletDir, filepath.FromSlash(c.Name))
-			d, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, diffTool)
-			if err != nil {
-				return err
-			}
-			if diffTool == "" || diffTool == "diff" {
-				d = colorizeDiff(d)
-			}
-			for _, line := range splitLines(d) {
-				fmt.Fprintln(w, "  "+line)
+			for _, l := range bodyLines(c.Content) {
+				bodyln(w, green("+ "+l))
 			}
 		case reconcile.ActionRemove:
-			fmt.Fprintln(w, red("- "+c.Name))
 			// The change carries no content for removals; read what's on disk so
 			// the user sees what is about to be deleted.
-			if body, err := os.ReadFile(filepath.Join(quadletDir, filepath.FromSlash(c.Name))); err == nil {
-				writeBodyLines(w, body, "-", red)
+			body, _ := os.ReadFile(filepath.Join(quadletDir, filepath.FromSlash(c.Name)))
+			for _, l := range bodyLines(body) {
+				bodyln(w, red("- "+l))
+			}
+		case reconcile.ActionChange:
+			// Built-in differ: render a structured inline diff from the in-memory
+			// old/new content. A configured external tool formats (and colors) its
+			// own output, so pass it through indented.
+			if diffTool == "" || diffTool == "diff" {
+				renderInlineDiff(w, c.Existing, c.Content, diffStyle)
+			} else {
+				live := filepath.Join(quadletDir, filepath.FromSlash(c.Name))
+				d, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, diffTool)
+				if err != nil {
+					return err
+				}
+				for _, l := range splitLines(d) {
+					bodyln(w, l)
+				}
 			}
 		}
 	}
 	return nil
 }
 
-// writeBodyLines prints each line of content, prefixed with sign ("+"/"-"),
-// colored and indented under its file header. Leading and trailing blank lines
-// (rendered unit files start with one) are dropped.
-func writeBodyLines(w io.Writer, content []byte, sign string, color func(string) string) {
+// bodyLines splits content into lines, dropping leading and trailing blank lines
+// (rendered unit files start with one).
+func bodyLines(content []byte) []string {
 	lines := splitLines(string(content))
 	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
 		lines = lines[1:]
@@ -291,9 +296,7 @@ func writeBodyLines(w io.Writer, content []byte, sign string, color func(string)
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
-	for _, line := range lines {
-		fmt.Fprintln(w, color("  "+sign+" "+line))
-	}
+	return lines
 }
 
 func splitLines(s string) []string {
@@ -303,24 +306,4 @@ func splitLines(s string) []string {
 func printSummary(w io.Writer, s reconcile.Summary, addVerb, changeVerb, removeVerb string) {
 	fmt.Fprintf(w, "\n%d file(s): %d %s, %d %s, %d unchanged, %d %s\n",
 		s.Total, s.Added, addVerb, s.Changed, changeVerb, s.Unchanged, s.Removed, removeVerb)
-}
-
-// colorizeDiff colors the built-in unified diff (difflib emits none). External
-// tools are assumed to color their own output. The lipgloss-backed color
-// helpers render plain when color is unavailable, so no useColor guard is needed.
-func colorizeDiff(diff string) string {
-	lines := strings.Split(diff, "\n")
-	for i, line := range lines {
-		switch {
-		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
-			// file headers: leave uncolored
-		case strings.HasPrefix(line, "+"):
-			lines[i] = green(line)
-		case strings.HasPrefix(line, "-"):
-			lines[i] = red(line)
-		case strings.HasPrefix(line, "@@"):
-			lines[i] = dim(line)
-		}
-	}
-	return strings.Join(lines, "\n")
 }

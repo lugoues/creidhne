@@ -107,6 +107,7 @@ func printConfig(out io.Writer, cfg config) {
 		diff = "built-in unified diff"
 	}
 	row("diff tool", diff, cfg.diffToolSource)
+	row("diff style", cfg.DiffStyle, cfg.diffStyleSource)
 
 	reload := "no"
 	if cfg.ReloadSystemd {
@@ -372,6 +373,13 @@ quadlet_dir = "~/.config/containers/systemd"
 # Optional external diff tool (e.g. "delta"); empty uses the built-in differ.
 # diff_tool = ""
 
+# How a modified line renders in plan/diff/apply (built-in differ only):
+#   "highlight" (default) - "- old" / "+ new" pair, changed span highlighted
+#   "plain"               - "- old" / "+ new" pair, no span highlight
+#   "inline"              - single "~" line, word-diff style: removed run struck
+#                           through (remove color), added run (add color)
+# diff_style = "highlight"
+
 # Run 'systemctl daemon-reload' after 'crei apply'. On by default (matching
 # podman quadlet install); set false to disable, or override per-run with
 # --reload-systemd[=false].
@@ -379,4 +387,16 @@ quadlet_dir = "~/.config/containers/systemd"
 
 # Top-level CUE field 'crei secrets' reads the #SecretRegistry from.
 # secrets_field = "secrets"
+
+# Output styles for plan/diff/apply. Each entry is a color string (foreground)
+# or a table { fg, bg, bold, italic, underline, reverse, strikethrough, faint }.
+# Colors are hex (#3FB950) or an ANSI index 0-255, degrading to 256/16-color or
+# plain on lesser terminals (or when piped / NO_COLOR). Uncomment to override.
+# [style]
+# header      = { bold = true }   # "# name" file header
+# context     = "#6E7681"         # unchanged context lines
+# add         = "#3FB950"         # added lines
+# remove      = "#F85149"         # removed lines
+# add_char    = { fg = "#3FB950", bold = true } # added inline span (defaults to 'add')
+# remove_char = { fg = "#F85149", bold = true } # removed inline span (defaults to 'remove')
 `

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // TestResolveConfigProvenance checks the precedence chain (flag > env >
@@ -112,6 +114,24 @@ func TestResolveConfigMalformedToml(t *testing.T) {
 	}
 }
 
+// TestResolveConfigInvalidDiffStyle: an unknown diff_style is a hard error, not
+// silently coerced to the default.
+func TestResolveConfigInvalidDiffStyle(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
+	flagQuadletDir, flagDiffTool = "", ""
+	t.Setenv("QUADLET_DIR", "")
+	t.Setenv("DIFF_TOOL", "")
+
+	bad := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bad, "crei.toml"), []byte("diff_style = \"fancy\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flagProjectDir = bad
+	if _, err := resolveConfig(); err == nil {
+		t.Fatal("invalid diff_style should error")
+	}
+}
+
 // TestResolveConfigDefaults: with nothing set, quadlet_dir comes from the
 // default (and ~ is expanded), and no config file is reported.
 func TestResolveConfigDefaults(t *testing.T) {
@@ -132,5 +152,78 @@ func TestResolveConfigDefaults(t *testing.T) {
 	}
 	if cfg.configFilePath != "" {
 		t.Fatalf("no crei.toml expected, got %q", cfg.configFilePath)
+	}
+}
+
+// TestApplyStyles: [style] overrides land on the right styles, unset entries
+// fall back to defaults, and the inline-span colors inherit their line color
+// unless given their own.
+func TestApplyStyles(t *testing.T) {
+	t.Cleanup(func() { applyStyles(styleConfig{}) }) // restore defaults
+
+	applyStyles(styleConfig{
+		Add:        styleSpec{Fg: "#abcdef", set: true},
+		RemoveChar: styleSpec{Fg: "#123456", set: true},
+		Header:     styleSpec{Fg: "#ffffff", set: true},
+	})
+
+	if got := greenStyle.GetForeground(); got != lipgloss.Color("#abcdef") {
+		t.Errorf("add color = %v, want #abcdef", got)
+	}
+	if got := addSpanStyle.GetForeground(); got != lipgloss.Color("#abcdef") {
+		t.Errorf("add_char (unset) should inherit add, got %v", got)
+	}
+	if got := delSpanStyle.GetForeground(); got != lipgloss.Color("#123456") {
+		t.Errorf("remove_char = %v, want #123456", got)
+	}
+	if got := redStyle.GetForeground(); got != lipgloss.Color(colorRemove) {
+		t.Errorf("remove (unset) should be the default %s, got %v", colorRemove, got)
+	}
+	if got := diffHeaderStyle.GetForeground(); got != lipgloss.Color("#ffffff") {
+		t.Errorf("header color = %v, want #ffffff", got)
+	}
+
+	// Defaults restore an uncolored (bold-only) header.
+	applyStyles(styleConfig{})
+	if got := diffHeaderStyle.GetForeground(); got != (lipgloss.NoColor{}) {
+		t.Errorf("default header should carry no color, got %v", got)
+	}
+}
+
+// TestStyleConfigParsing: a [style] entry is either a bare color string (fg) or
+// a table with fg/bg + attributes; unknown keys and bad color values are
+// rejected at parse time.
+func TestStyleConfigParsing(t *testing.T) {
+	write := func(t *testing.T, body string) (fileConfig, error) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "crei.toml"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		fc, _, err := loadConfigFile(dir)
+		return fc, err
+	}
+
+	fc, err := write(t, "[style]\nadd = \"#003500\"\nremove = { bg = \"#5e0000\", bold = true }\n")
+	if err != nil {
+		t.Fatalf("valid [style] should parse: %v", err)
+	}
+	if !fc.Style.Add.set || fc.Style.Add.Fg != "#003500" {
+		t.Errorf("bare string should set fg: %+v", fc.Style.Add)
+	}
+	if !fc.Style.Remove.set || fc.Style.Remove.Bg != "#5e0000" || !fc.Style.Remove.Bold {
+		t.Errorf("table should set bg + bold: %+v", fc.Style.Remove)
+	}
+	if fc.Style.Add.style().GetForeground() != lipgloss.Color("#003500") {
+		t.Error("parsed spec should build the foreground")
+	}
+
+	if _, err := write(t, "[style]\nadd = { fgg = \"#fff\" }\n"); err == nil {
+		t.Error("unknown style attribute should error")
+	}
+	if _, err := write(t, "[style]\nadd = \"reddish\"\n"); err == nil {
+		t.Error("invalid color value should error")
+	}
+	if _, err := write(t, "[style]\nadd = { bold = \"yes\" }\n"); err == nil {
+		t.Error("non-boolean attribute should error")
 	}
 }

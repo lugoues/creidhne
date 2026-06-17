@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -49,6 +50,14 @@ func newRootCmd() *cobra.Command {
 			"`import \"github.com/lugoues/creidhne@v0\"` offline.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Theme the output from crei.toml [style] before any command runs.
+		// Best-effort: a malformed file is ignored here (resolveConfig reports it
+		// for real commands) so defaults apply and `version` never fails on it.
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			fc, _, _ := loadConfigFile(flagProjectDir)
+			applyStyles(fc.Style)
+			return nil
+		},
 	}
 	pf := root.PersistentFlags()
 	pf.StringVarP(&flagProjectDir, "dir", "C", ".", "project directory containing CUE files")
@@ -74,6 +83,8 @@ type config struct {
 	ProjectDir string
 	QuadletDir string
 	DiffTool   string
+	// DiffStyle selects how modified lines render: highlight, plain, or inline.
+	DiffStyle string
 	// ReloadSystemd is the default for `apply`'s systemctl daemon-reload (on,
 	// matching `podman quadlet install --reload-systemd`, unless crei.toml sets
 	// it false); the --reload-systemd flag overrides it per-run.
@@ -85,16 +96,174 @@ type config struct {
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
 	diffToolSource      string
+	diffStyleSource     string
 	reloadSystemdSource string
 	secretsFieldSource  string
 	configFilePath      string // crei.toml path if present, else ""
 }
 
 type fileConfig struct {
-	QuadletDir    string `toml:"quadlet_dir"`
-	DiffTool      string `toml:"diff_tool"`
-	ReloadSystemd *bool  `toml:"reload_systemd"` // pointer: distinguish unset from false
-	SecretsField  string `toml:"secrets_field"`
+	QuadletDir    string      `toml:"quadlet_dir"`
+	DiffTool      string      `toml:"diff_tool"`
+	DiffStyle     string      `toml:"diff_style"`
+	ReloadSystemd *bool       `toml:"reload_systemd"` // pointer: distinguish unset from false
+	SecretsField  string      `toml:"secrets_field"`
+	Style         styleConfig `toml:"style"`
+}
+
+// diff_style values: how a modified line renders in plan/diff/apply.
+const (
+	diffStyleHighlight = "highlight" // "- old" / "+ new" pair, changed span highlighted (default)
+	diffStylePlain     = "plain"     // "- old" / "+ new" pair, whole lines colored, no span highlight
+	diffStyleInline    = "inline"    // single "~" line, word-diff: removed run struck (remove color), added run (add color)
+)
+
+// styleConfig overrides the output styles from crei.toml's [style] table. Each
+// element is either a bare color string (foreground only) or an inline table
+// (fg/bg + attribute toggles); an unset element keeps its built-in default.
+type styleConfig struct {
+	Header     styleSpec `toml:"header"`      // "# name" file header (default: bold)
+	Context    styleSpec `toml:"context"`     // unchanged context lines
+	Add        styleSpec `toml:"add"`         // added lines (+)
+	Remove     styleSpec `toml:"remove"`      // removed lines (-)
+	AddChar    styleSpec `toml:"add_char"`    // added inline span (defaults to add's color)
+	RemoveChar styleSpec `toml:"remove_char"` // removed inline span (defaults to remove's color)
+}
+
+// styleSpec is a configurable lipgloss style. In crei.toml it unmarshals from
+// either a color string (foreground only) or an inline table with fg/bg and
+// attribute toggles. Colors are hex ("#3FB950"), an ANSI index ("0".."255"), or
+// "" for the terminal default; lipgloss degrades them to the terminal's profile.
+type styleSpec struct {
+	Fg, Bg                                                 string
+	Bold, Italic, Underline, Reverse, Strikethrough, Faint bool
+	set                                                    bool // present in the config
+}
+
+// UnmarshalTOML accepts a bare string (foreground) or a table, rejecting unknown
+// keys and unparseable colors so a typo fails loudly instead of rendering plain.
+func (s *styleSpec) UnmarshalTOML(v interface{}) error {
+	s.set = true
+	switch val := v.(type) {
+	case string:
+		s.Fg = val
+		return validateColor("fg", s.Fg)
+	case map[string]interface{}:
+		for k, raw := range val {
+			var err error
+			switch k {
+			case "fg":
+				err = assignColor(&s.Fg, k, raw)
+			case "bg":
+				err = assignColor(&s.Bg, k, raw)
+			case "bold":
+				err = assignBool(&s.Bold, k, raw)
+			case "italic":
+				err = assignBool(&s.Italic, k, raw)
+			case "underline":
+				err = assignBool(&s.Underline, k, raw)
+			case "reverse":
+				err = assignBool(&s.Reverse, k, raw)
+			case "strikethrough":
+				err = assignBool(&s.Strikethrough, k, raw)
+			case "faint":
+				err = assignBool(&s.Faint, k, raw)
+			default:
+				err = fmt.Errorf("unknown color attribute %q (want fg, bg, bold, italic, underline, reverse, strikethrough, faint)", k)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("color must be a string or a table, got %T", v)
+	}
+}
+
+func (s styleSpec) style() lipgloss.Style {
+	st := lipgloss.NewStyle()
+	if s.Fg != "" {
+		st = st.Foreground(lipgloss.Color(s.Fg))
+	}
+	if s.Bg != "" {
+		st = st.Background(lipgloss.Color(s.Bg))
+	}
+	return st.Bold(s.Bold).Italic(s.Italic).Underline(s.Underline).
+		Reverse(s.Reverse).Strikethrough(s.Strikethrough).Faint(s.Faint)
+}
+
+func assignColor(dst *string, key string, v interface{}) error {
+	s, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("color attribute %q must be a string", key)
+	}
+	if err := validateColor(key, s); err != nil {
+		return err
+	}
+	*dst = s
+	return nil
+}
+
+func assignBool(dst *bool, key string, v interface{}) error {
+	b, ok := v.(bool)
+	if !ok {
+		return fmt.Errorf("color attribute %q must be true or false", key)
+	}
+	*dst = b
+	return nil
+}
+
+// validateColor accepts a hex color (#rgb or #rrggbb), an ANSI index 0-255, or
+// "" (terminal default) -- the set lipgloss understands. Anything else (a name
+// like "red", a typo) renders as no color, so reject it up front.
+func validateColor(key, s string) error {
+	if s == "" {
+		return nil
+	}
+	if rest, ok := strings.CutPrefix(s, "#"); ok {
+		if len(rest) != 3 && len(rest) != 6 {
+			return fmt.Errorf("color %q for %q: hex must be #rgb or #rrggbb", s, key)
+		}
+		if _, err := strconv.ParseUint(rest, 16, 64); err != nil {
+			return fmt.Errorf("color %q for %q: invalid hex digits", s, key)
+		}
+		return nil
+	}
+	if n, err := strconv.Atoi(s); err == nil && n >= 0 && n <= 255 {
+		return nil
+	}
+	return fmt.Errorf("color %q for %q: want a hex color (#3FB950), an ANSI index 0-255, or empty", s, key)
+}
+
+// applyStyles rebuilds the shared output styles from the configured [style]
+// table, falling back to the built-in defaults. An unset add_char/remove_char
+// inherits its line color. The CLI is single-threaded and this runs before any
+// output (root PersistentPreRunE), so mutating the package-level styles is safe.
+func applyStyles(c styleConfig) {
+	addFg := orElse(c.Add.Fg, colorAdd)
+	removeFg := orElse(c.Remove.Fg, colorRemove)
+	greenStyle = resolveStyle(c.Add, lipgloss.NewStyle().Foreground(lipgloss.Color(addFg)))
+	redStyle = resolveStyle(c.Remove, lipgloss.NewStyle().Foreground(lipgloss.Color(removeFg)))
+	diffContextStyle = resolveStyle(c.Context, lipgloss.NewStyle().Foreground(lipgloss.Color(colorContext)))
+	addSpanStyle = resolveStyle(c.AddChar, lipgloss.NewStyle().Foreground(lipgloss.Color(addFg)).Bold(true))
+	delSpanStyle = resolveStyle(c.RemoveChar, lipgloss.NewStyle().Foreground(lipgloss.Color(removeFg)).Bold(true))
+	diffHeaderStyle = resolveStyle(c.Header, lipgloss.NewStyle().Bold(true))
+}
+
+// resolveStyle returns the configured style if the element was set, else def.
+func resolveStyle(spec styleSpec, def lipgloss.Style) lipgloss.Style {
+	if spec.set {
+		return spec.style()
+	}
+	return def
+}
+
+func orElse(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 // sourcedValue is a candidate config value paired with a human label for where
@@ -139,6 +308,16 @@ func resolveConfig() (config, error) {
 		sourcedValue{fc.DiffTool, "crei.toml"},
 		sourcedValue{"", "built-in"},
 	)
+	ds := pickSourced(
+		sourcedValue{fc.DiffStyle, "crei.toml"},
+		sourcedValue{diffStyleHighlight, "default"},
+	)
+	switch ds.value {
+	case diffStyleHighlight, diffStylePlain, diffStyleInline:
+	default:
+		return config{}, fmt.Errorf("invalid diff_style %q in crei.toml (want %q, %q, or %q)",
+			ds.value, diffStyleHighlight, diffStylePlain, diffStyleInline)
+	}
 	reload, reloadSource := true, "default" // matches podman quadlet install
 	if fc.ReloadSystemd != nil {
 		reload, reloadSource = *fc.ReloadSystemd, "crei.toml"
@@ -151,10 +330,12 @@ func resolveConfig() (config, error) {
 		ProjectDir:          flagProjectDir,
 		QuadletDir:          expanded,
 		DiffTool:            dt.value,
+		DiffStyle:           ds.value,
 		ReloadSystemd:       reload,
 		SecretsField:        sf.value,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
+		diffStyleSource:     ds.source,
 		reloadSystemdSource: reloadSource,
 		secretsFieldSource:  sf.source,
 		configFilePath:      fcPath,
@@ -280,11 +461,19 @@ func sortedKeys(m map[string]reconcile.DesiredFile) []string {
 
 // Colors are rendered through lipgloss, which detects the output's color profile
 // and honors NO_COLOR / non-TTY automatically (rendering plain text when color
-// is unavailable), so callers need no useColor guard.
+// is unavailable), so callers need no useColor guard. Defaults are truecolor
+// hex; lipgloss degrades them to 256-color or basic ANSI on lesser terminals.
+const (
+	colorAdd     = "#3FB950" // green: added lines / success
+	colorChanged = "#D29922" // amber: in-place changes (compact list ~)
+	colorRemove  = "#F85149" // red: removed lines / errors
+	colorContext = "#6E7681" // gray: unchanged context lines
+)
+
 var (
-	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colorAdd))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorChanged))
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorRemove))
 	dimStyle    = lipgloss.NewStyle().Faint(true)
 )
 
