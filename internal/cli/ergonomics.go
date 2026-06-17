@@ -376,4 +376,7 @@ quadlet_dir = "~/.config/containers/systemd"
 # podman quadlet install); set false to disable, or override per-run with
 # --reload-systemd[=false].
 # reload_systemd = true
+
+# Top-level CUE field 'crei secrets' reads the #SecretRegistry from.
+# secrets_field = "secrets"
 `

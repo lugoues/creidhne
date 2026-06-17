@@ -191,6 +191,40 @@ app: creidhne.#Quadlet & {
 
 Well-known systemd targets (default, multi-user, network-online, graphical, ...) are pre-populated. Or skip the helper and use raw strings: `Unit: After: ["network-online.target"]`.
 
+### Secrets
+
+Declare the podman secrets your quadlets use in a `#SecretRegistry`, then reference them in a container's `Secret` field, adding the consumption details (the registry entry and the consumption fields unify into one secret reference):
+
+```cue
+secrets: creidhne.#SecretRegistry & {
+    db_password: _                  // podman secret name defaults to the key
+    tls_cert: {name: "tls-cert"}    // or set it explicitly
+}
+
+app: creidhne.#Quadlet & {
+    name: "app"
+    units: #container: {
+        Container: {
+            Image: "docker.io/myapp:latest"
+            Secret: [
+                secrets.db_password & {type: "env", target: "DB_PASSWORD"},
+                secrets.tls_cert & {type: "mount", target: "/etc/ssl/cert.pem", mode: "0400"},
+            ]
+        }
+    }
+}
+```
+
+`crei secrets` reconciles that registry against podman's secret store:
+
+```sh
+crei secrets                    # table of each secret: present or missing in podman
+crei secrets create db_password # create one, typing (hidden) or generating its value
+crei secrets create -a          # walk through every secret missing from podman
+```
+
+`create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The registry is read from the top-level `secrets` field by default; override with `secrets_field` in `crei.toml`.
+
 ### Inline Containerfile & Context
 Craei supports inlining Containerfiles and their context within a Build unit. Context files will be placed next to the Containerfile when being build so `COPY . /` is all you need to pull your context in. This is useful when you want only minor changes to the original image (such as installing packages).
 ```
@@ -263,6 +297,8 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
 | `crei validate` | Type-check the CUE without rendering. |
 | `crei config` | Show the resolved configuration and where each value came from. |
+| `crei secrets` | List the secret registry and whether each secret exists in podman. |
+| `crei secrets create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
 | `crei version` | Print version info. |
 
 Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
@@ -273,6 +309,7 @@ Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
 | Quadlet dir | `--quadlet-dir` | `QUADLET_DIR` | `quadlet_dir` | `~/.config/containers/systemd` |
 | Diff tool | `--diff-tool` | `DIFF_TOOL` | `diff_tool` | built-in unified diff |
 | Reload systemd after apply | `--reload-systemd` | n/a | `reload_systemd` | `true` (on, like `podman quadlet install`) |
+| Secrets field | n/a | n/a | `secrets_field` | `secrets` |
 
 Run `crei config` to print the resolved values and where each came from.
 
