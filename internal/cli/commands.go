@@ -40,7 +40,8 @@ func newRenderCmd() *cobra.Command {
 }
 
 func newPlanCmd() *cobra.Command {
-	return &cobra.Command{
+	var noDiff bool
+	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Show what apply would do without making changes",
 		Args:  cobra.NoArgs,
@@ -58,7 +59,9 @@ func newPlanCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			printChanges(out, changes, true)
+			if err := renderPlan(out, changes, cfg, noDiff); err != nil {
+				return err
+			}
 			s := reconcile.Summarize(changes)
 			printSummary(out, s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
@@ -67,6 +70,8 @@ func newPlanCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&noDiff, "no-diff", false, "show only the change list, not inline diffs")
+	return cmd
 }
 
 func newDiffCmd() *cobra.Command {
@@ -88,29 +93,8 @@ func newDiffCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			for _, c := range changes {
-				switch c.Action {
-				case reconcile.ActionAdd:
-					fmt.Fprintln(out, green("+ "+c.Name+" (new)"))
-					for _, line := range strings.Split(strings.TrimRight(string(c.Content), "\n"), "\n") {
-						fmt.Fprintln(out, "  "+line)
-					}
-					fmt.Fprintln(out)
-				case reconcile.ActionChange:
-					fmt.Fprintln(out, yellow("~ "+c.Name+" (changed)"))
-					live := filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name))
-					diffOut, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, cfg.DiffTool)
-					if err != nil {
-						return err
-					}
-					if cfg.DiffTool == "" || cfg.DiffTool == "diff" {
-						diffOut = colorizeDiff(diffOut)
-					}
-					fmt.Fprint(out, diffOut)
-					fmt.Fprintln(out)
-				case reconcile.ActionRemove:
-					fmt.Fprintln(out, red("- "+c.Name+" (stale, will be removed)"))
-				}
+			if err := printDiff(out, changes, cfg.QuadletDir, cfg.DiffTool); err != nil {
+				return err
 			}
 			printSummary(out, reconcile.Summarize(changes), "new", "changed", "stale")
 			return nil
@@ -119,7 +103,7 @@ func newDiffCmd() *cobra.Command {
 }
 
 func newApplyCmd() *cobra.Command {
-	var reloadSystemd, yes bool
+	var reloadSystemd, yes, noDiff bool
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Write generated quadlet files to the quadlet directory",
@@ -140,7 +124,9 @@ func newApplyCmd() *cobra.Command {
 				return err
 			}
 			s := reconcile.Summarize(changes)
-			printChanges(out, changes, false)
+			if err := renderPlan(out, changes, cfg, noDiff); err != nil {
+				return err
+			}
 			printSummary(out, s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
 				fmt.Fprintln(out, "Nothing to do.")
@@ -221,36 +207,97 @@ func newApplyCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&reloadSystemd, "reload-systemd", false, "run systemctl daemon-reload after applying (default: reload_systemd in crei.toml, else on)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
+	cmd.Flags().BoolVar(&noDiff, "no-diff", false, "show only the change list, not inline diffs")
 	return cmd
 }
 
-// printChanges prints the +/~/- change lines. withVerb adds the
-// (add)/(update)/(remove) suffixes used by `plan`; `apply` passes false.
-func printChanges(w io.Writer, changes []reconcile.Change, withVerb bool) {
+// renderPlan prints the change set: an inline diff per change (Terraform-style)
+// by default, or just the +/~/- change list when noDiff is set.
+func renderPlan(w io.Writer, changes []reconcile.Change, cfg config, noDiff bool) error {
+	if noDiff {
+		printChangeList(w, changes)
+		return nil
+	}
+	return printDiff(w, changes, cfg.QuadletDir, cfg.DiffTool)
+}
+
+// printChangeList prints one +/~/- line per change (the compact view).
+func printChangeList(w io.Writer, changes []reconcile.Change) {
 	for _, c := range changes {
 		switch c.Action {
 		case reconcile.ActionAdd:
-			line := "  + " + c.Name
-			if withVerb {
-				line += " (add)"
-			}
-			fmt.Fprintln(w, green(line))
+			fmt.Fprintln(w, green("+ "+c.Name))
 		case reconcile.ActionChange:
-			line := "  ~ " + c.Name
-			if withVerb {
-				line += " (update)"
-			}
-			fmt.Fprintln(w, yellow(line))
-		case reconcile.ActionUnchanged:
-			fmt.Fprintln(w, dim("    "+c.Name+" (unchanged)"))
+			fmt.Fprintln(w, yellow("~ "+c.Name))
 		case reconcile.ActionRemove:
-			line := "  - " + c.Name
-			if withVerb {
-				line += " (remove)"
-			}
-			fmt.Fprintln(w, red(line))
+			fmt.Fprintln(w, red("- "+c.Name))
+		case reconcile.ActionUnchanged:
+			fmt.Fprintln(w, dim("  "+c.Name))
 		}
 	}
+}
+
+// printDiff renders each change as an inline diff, Terraform-style: a new file
+// shows its content as added lines, a removed file shows the (live) content as
+// removed lines, and a changed file shows a unified diff. Unchanged files are
+// omitted; the summary reports their count. Entries are separated by one blank.
+func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool string) error {
+	printed := false
+	for _, c := range changes {
+		if c.Action == reconcile.ActionUnchanged {
+			continue
+		}
+		if printed {
+			fmt.Fprintln(w)
+		}
+		printed = true
+		switch c.Action {
+		case reconcile.ActionAdd:
+			fmt.Fprintln(w, green("+ "+c.Name))
+			writeBodyLines(w, c.Content, "+", green)
+		case reconcile.ActionChange:
+			fmt.Fprintln(w, yellow("~ "+c.Name))
+			live := filepath.Join(quadletDir, filepath.FromSlash(c.Name))
+			d, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, diffTool)
+			if err != nil {
+				return err
+			}
+			if diffTool == "" || diffTool == "diff" {
+				d = colorizeDiff(d)
+			}
+			for _, line := range splitLines(d) {
+				fmt.Fprintln(w, "  "+line)
+			}
+		case reconcile.ActionRemove:
+			fmt.Fprintln(w, red("- "+c.Name))
+			// The change carries no content for removals; read what's on disk so
+			// the user sees what is about to be deleted.
+			if body, err := os.ReadFile(filepath.Join(quadletDir, filepath.FromSlash(c.Name))); err == nil {
+				writeBodyLines(w, body, "-", red)
+			}
+		}
+	}
+	return nil
+}
+
+// writeBodyLines prints each line of content, prefixed with sign ("+"/"-"),
+// colored and indented under its file header. Leading and trailing blank lines
+// (rendered unit files start with one) are dropped.
+func writeBodyLines(w io.Writer, content []byte, sign string, color func(string) string) {
+	lines := splitLines(string(content))
+	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	for _, line := range lines {
+		fmt.Fprintln(w, color("  "+sign+" "+line))
+	}
+}
+
+func splitLines(s string) []string {
+	return strings.Split(strings.TrimRight(s, "\n"), "\n")
 }
 
 func printSummary(w io.Writer, s reconcile.Summary, addVerb, changeVerb, removeVerb string) {

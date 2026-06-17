@@ -243,6 +243,36 @@ a: q.#Quadlet & {name: "a", units: #container: Container: {Image: "img", Contain
 	}
 }
 
+// TestCmdPlanShowsDiff: plan renders the inline diff by default (the new file's
+// content as added lines), not just the change list.
+func TestCmdPlanShowsDiff(t *testing.T) {
+	dir := setupProject(t, testMain)
+	qd := t.TempDir()
+	out, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "+ Image=docker.io/nginx:latest") {
+		t.Errorf("plan should show the inline diff body:\n%s", out)
+	}
+}
+
+// TestCmdPlanNoDiff: --no-diff shows the compact change list, not file content.
+func TestCmdPlanNoDiff(t *testing.T) {
+	dir := setupProject(t, testMain)
+	qd := t.TempDir()
+	out, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "plan", "--no-diff")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "+ z.container") {
+		t.Errorf("--no-diff should show the change list:\n%s", out)
+	}
+	if strings.Contains(out, "Image=docker.io/nginx") {
+		t.Errorf("--no-diff should not show file content:\n%s", out)
+	}
+}
+
 func TestCmdApplyPermissionHint(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses filesystem permissions")
