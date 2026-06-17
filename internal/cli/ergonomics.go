@@ -119,6 +119,7 @@ func printConfig(out io.Writer, cfg config) {
 		scope, reason = "--user", "quadlet dir under $HOME"
 	}
 	row("reload scope", scope, reason)
+	row("secrets field", cfg.SecretsField, cfg.secretsFieldSource)
 
 	cfgFile, cfgSource := cfg.configFilePath, "loaded"
 	if cfgFile == "" {

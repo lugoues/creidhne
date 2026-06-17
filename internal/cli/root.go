@@ -62,6 +62,7 @@ func newRootCmd() *cobra.Command {
 		newInitCmd(),
 		newValidateCmd(),
 		newConfigCmd(),
+		newSecretsCmd(),
 		newVersionCmd(),
 	)
 	return root
@@ -77,11 +78,15 @@ type config struct {
 	// matching `podman quadlet install --reload-systemd`, unless crei.toml sets
 	// it false); the --reload-systemd flag overrides it per-run.
 	ReloadSystemd bool
+	// SecretsField is the top-level CUE field `crei secrets` reads the
+	// #SecretRegistry from (default "secrets").
+	SecretsField string
 
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
 	diffToolSource      string
 	reloadSystemdSource string
+	secretsFieldSource  string
 	configFilePath      string // crei.toml path if present, else ""
 }
 
@@ -89,6 +94,7 @@ type fileConfig struct {
 	QuadletDir    string `toml:"quadlet_dir"`
 	DiffTool      string `toml:"diff_tool"`
 	ReloadSystemd *bool  `toml:"reload_systemd"` // pointer: distinguish unset from false
+	SecretsField  string `toml:"secrets_field"`
 }
 
 // sourcedValue is a candidate config value paired with a human label for where
@@ -137,14 +143,20 @@ func resolveConfig() (config, error) {
 	if fc.ReloadSystemd != nil {
 		reload, reloadSource = *fc.ReloadSystemd, "crei.toml"
 	}
+	sf := pickSourced(
+		sourcedValue{fc.SecretsField, "crei.toml"},
+		sourcedValue{"secrets", "default"},
+	)
 	return config{
 		ProjectDir:          flagProjectDir,
 		QuadletDir:          expanded,
 		DiffTool:            dt.value,
 		ReloadSystemd:       reload,
+		SecretsField:        sf.value,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
 		reloadSystemdSource: reloadSource,
+		secretsFieldSource:  sf.source,
 		configFilePath:      fcPath,
 	}, nil
 }

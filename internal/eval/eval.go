@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -96,6 +97,41 @@ func cueError(context string, err error) error {
 		details = err.Error()
 	}
 	return fmt.Errorf("%s:\n%s", context, details)
+}
+
+// SecretRegistry returns the podman secret names declared in the project's
+// #SecretRegistry, read from the top-level field named `field` (e.g. "secrets").
+// A missing field yields no names (no registry). Each entry's `name` (which
+// defaults to its key) is the podman secret name; names are deduplicated and
+// sorted. Only the registry needs to be concrete, so this works even when other
+// parts of the project are incomplete.
+func SecretRegistry(dir string, overlay map[string]load.Source, field string) ([]string, error) {
+	v, err := buildInstance(dir, overlay)
+	if err != nil {
+		return nil, err
+	}
+	reg := v.LookupPath(cue.ParsePath(field))
+	if !reg.Exists() {
+		return nil, nil
+	}
+	iter, err := reg.Fields()
+	if err != nil {
+		return nil, fmt.Errorf("%q is not a secret registry (want a struct of {name: string} entries): %w", field, err)
+	}
+	seen := map[string]bool{}
+	var names []string
+	for iter.Next() {
+		name, err := iter.Value().LookupPath(cue.ParsePath("name")).String()
+		if err != nil {
+			return nil, fmt.Errorf("%s.%s has no concrete string \"name\"; is %q your #SecretRegistry?", field, iter.Selector(), field)
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // extractQuadlets finds every #Quadlet value (one carrying a manifest list)
