@@ -193,6 +193,41 @@ func TestCmdDiffStyleInline(t *testing.T) {
 	}
 }
 
+// TestCmdCrossQuadletNetworkName is a regression test: a quadlet that references
+// another quadlet's computed #networkName renders it blank under a specific (and
+// realistic) combination — the reference goes through a *named* unit (the plural
+// `containers` map), and the two quadlets are defined in *separate files*. The
+// #<type>Name fields used to be defined conditionally (`if #unitType == "..."`);
+// that conditional definition resolved to "" when read cross-file through the
+// manifest comprehension, so the consumer's rendered label silently blanked.
+// Both factors are load-bearing: the same content in one file, or via the
+// #container primary, resolved fine — which is why it was so hard to pin down.
+// Fixed by defining the name fields unconditionally in creidhne/reference.cue.
+func TestCmdCrossQuadletNetworkName(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "cue.mod", "module.cue"),
+		"module: \"example.com/test@v0\"\nlanguage: version: \"v0.16.0\"\n")
+	mustWrite(t, filepath.Join(dir, "provider.cue"), `package config
+import q "github.com/lugoues/creidhne@v0"
+provider: q.#Quadlet & {name: "provider", units: networks: internal: Network: Internal: true}
+`)
+	// Separate file + named container ("web") are what trigger the old bug.
+	mustWrite(t, filepath.Join(dir, "consumer.cue"), `package config
+import q "github.com/lugoues/creidhne@v0"
+consumer: q.#Quadlet & {name: "consumer", units: containers: "web": Container: {
+	Image: "img"
+	Label: ["net=\(provider.units.networks.internal.#networkName)"]
+}}
+`)
+	out, err := runCmd(t, "--dir", dir, "render")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "net=systemd-provider-internal") {
+		t.Errorf("cross-quadlet #networkName must resolve, got blank (regression):\n%s", out)
+	}
+}
+
 // --- adversarial / negative command-level cases ---
 
 func TestCmdRenderInvalidCUE(t *testing.T) {

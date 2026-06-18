@@ -1,9 +1,10 @@
 package creidhne
 
 #Artifact: {
-	#Reference
-	#unitType:      "artifact"
-	#serviceSuffix: "-artifact"
+	// #stem is injected by #Units; identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).artifact"
+	#service: "\(#stem)-artifact.service"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

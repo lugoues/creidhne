@@ -1,13 +1,13 @@
 package creidhne
 
 #Network: {
-	#Reference
-	#unitType:      "network"
-	#serviceSuffix: "-network"
+	// #stem is injected by #Units; identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).network"
+	#service: "\(#stem)-network.service"
 
-	// #networkName (from #Reference) resolves to the explicit NetworkName, else
-	// the systemd-%N default.
-	if Network != _|_ if Network.NetworkName != _|_ {#explicitName: Network.NetworkName}
+	// #networkName resolves to the explicit NetworkName, else systemd-%N.
+	#networkName: *Network.NetworkName | "systemd-\(#stem)"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

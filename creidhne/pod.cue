@@ -1,13 +1,13 @@
 package creidhne
 
 #Pod: {
-	#Reference
-	#unitType:      "pod"
-	#serviceSuffix: "-pod"
+	// #stem is injected by #Units; identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).pod"
+	#service: "\(#stem)-pod.service"
 
-	// #podName (from #Reference) resolves to the explicit PodName, else the
-	// systemd-%N default.
-	if Pod != _|_ if Pod.PodName != _|_ {#explicitName: Pod.PodName}
+	// #podName resolves to the explicit PodName, else systemd-%N.
+	#podName: *Pod.PodName | "systemd-\(#stem)"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

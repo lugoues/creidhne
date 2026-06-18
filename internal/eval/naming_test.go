@@ -78,17 +78,17 @@ svc: q.#Quadlet & {
 	}
 }
 
-// TestStemPluralAndNameOverride covers the two stem variations: a plural unit
-// keyed by the map key (quadlet-key), and the `name:` override that lets a
-// CUE-friendly key (gw_tmp) produce a hyphenated stem (gw-tmp).
-func TestStemPluralAndNameOverride(t *testing.T) {
+// TestStemPlural covers the plural stem (quadlet-key), including a quoted key
+// with a hyphen, which is how a hyphenated stem is produced now that the `name:`
+// override is gone (volumes: "gw-tmp": ... instead of gw_tmp: {name: "gw-tmp"}).
+func TestStemPlural(t *testing.T) {
 	quads := loadSource(t, `package naming
 import q "github.com/lugoues/creidhne@v0"
 app: q.#Quadlet & {
 	name: "app"
 	units: {
 		containers: web: Container: {Image: "img"}
-		volumes: gw_tmp: {name: "gw-tmp", Volume: {}}
+		volumes: "gw-tmp": Volume: {}
 	}
 }
 `)
@@ -100,7 +100,7 @@ app: q.#Quadlet & {
 		t.Errorf("plural stem: app-web.container -> service %q, want app-web.service", got["app-web.container"])
 	}
 	if svc, ok := got["app-gw-tmp.volume"]; !ok || svc != "app-gw-tmp-volume.service" {
-		t.Errorf("name override should yield app-gw-tmp.volume / app-gw-tmp-volume.service, got %+v", got)
+		t.Errorf("quoted-key stem should yield app-gw-tmp.volume / app-gw-tmp-volume.service, got %+v", got)
 	}
 }
 

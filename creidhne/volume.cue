@@ -1,13 +1,13 @@
 package creidhne
 
 #Volume: {
-	#Reference
-	#unitType:      "volume"
-	#serviceSuffix: "-volume"
+	// #stem is injected by #Units; identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).volume"
+	#service: "\(#stem)-volume.service"
 
-	// #volumeName (from #Reference) resolves to the explicit VolumeName, else the
-	// systemd-%N default.
-	if Volume != _|_ if Volume.VolumeName != _|_ {#explicitName: Volume.VolumeName}
+	// #volumeName resolves to the explicit VolumeName, else systemd-%N.
+	#volumeName: *Volume.VolumeName | "systemd-\(#stem)"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

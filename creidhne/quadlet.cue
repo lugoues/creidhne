@@ -11,25 +11,25 @@ package creidhne
 	#quadletName: string
 	let _qn = #quadletName
 
-	// Primary units (singular, uses quadlet name directly)
-	#container?: #Container & {#quadletName: _qn}
-	#pod?:       #Pod & {#quadletName: _qn}
-	#volume?:    #Volume & {#quadletName: _qn}
-	#network?:   #Network & {#quadletName: _qn}
-	#kube?:      #Kube & {#quadletName: _qn}
-	#build?:     #Build & {#quadletName: _qn}
-	#image?:     #Image & {#quadletName: _qn}
-	#artifact?:  #Artifact & {#quadletName: _qn}
+	// Primary units (singular): stem is the quadlet name.
+	#container?: #Container & {#stem: _qn}
+	#pod?:       #Pod & {#stem: _qn}
+	#volume?:    #Volume & {#stem: _qn}
+	#network?:   #Network & {#stem: _qn}
+	#kube?:      #Kube & {#stem: _qn}
+	#build?:     #Build & {#stem: _qn}
+	#image?:     #Image & {#stem: _qn}
+	#artifact?:  #Artifact & {#stem: _qn}
 
-	// Additional units (plural, keyed, uses quadlet name + key)
-	containers: [Key=string]: #Container & {#unitName: Key, #quadletName: _qn}
-	pods: [Key=string]:       #Pod & {#unitName: Key, #quadletName: _qn}
-	volumes: [Key=string]:    #Volume & {#unitName: Key, #quadletName: _qn}
-	networks: [Key=string]:   #Network & {#unitName: Key, #quadletName: _qn}
-	kubes: [Key=string]:      #Kube & {#unitName: Key, #quadletName: _qn}
-	builds: [Key=string]:     #Build & {#unitName: Key, #quadletName: _qn}
-	images: [Key=string]:     #Image & {#unitName: Key, #quadletName: _qn}
-	artifacts: [Key=string]:  #Artifact & {#unitName: Key, #quadletName: _qn}
+	// Additional units (plural, keyed): stem is "<quadlet>-<key>".
+	containers: [Key=string]: #Container & {#stem: "\(_qn)-\(Key)"}
+	pods: [Key=string]:       #Pod & {#stem: "\(_qn)-\(Key)"}
+	volumes: [Key=string]:    #Volume & {#stem: "\(_qn)-\(Key)"}
+	networks: [Key=string]:   #Network & {#stem: "\(_qn)-\(Key)"}
+	kubes: [Key=string]:      #Kube & {#stem: "\(_qn)-\(Key)"}
+	builds: [Key=string]:     #Build & {#stem: "\(_qn)-\(Key)"}
+	images: [Key=string]:     #Image & {#stem: "\(_qn)-\(Key)"}
+	artifacts: [Key=string]:  #Artifact & {#stem: "\(_qn)-\(Key)"}
 }
 
 // #Quadlet is a self-contained, named deployment unit.
@@ -77,21 +77,21 @@ package creidhne
 	// come from the plural maps. Ordering is irrelevant. The renderer sorts by
 	// filename.
 	manifest: [
-		for u in [units.#container] if u != _|_ {kind: "container", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.containers {kind: "container", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#pod] if u != _|_ {kind: "pod", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.pods {kind: "pod", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#volume] if u != _|_ {kind: "volume", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.volumes {kind: "volume", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#network] if u != _|_ {kind: "network", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.networks {kind: "network", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#kube] if u != _|_ {kind: "kube", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.kubes {kind: "kube", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#build] if u != _|_ {kind: "build", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.builds {kind: "build", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#image] if u != _|_ {kind: "image", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.images {kind: "image", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for u in [units.#artifact] if u != _|_ {kind: "artifact", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
-		for _, u in units.artifacts {kind: "artifact", stem: u.stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#container] if u != _|_ {kind: "container", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.containers {kind: "container", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#pod] if u != _|_ {kind: "pod", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.pods {kind: "pod", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#volume] if u != _|_ {kind: "volume", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.volumes {kind: "volume", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#network] if u != _|_ {kind: "network", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.networks {kind: "network", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#kube] if u != _|_ {kind: "kube", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.kubes {kind: "kube", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#build] if u != _|_ {kind: "build", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.builds {kind: "build", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#image] if u != _|_ {kind: "image", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.images {kind: "image", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for u in [units.#artifact] if u != _|_ {kind: "artifact", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
+		for _, u in units.artifacts {kind: "artifact", stem: u.#stem, filename: u.#ref, service: u.#service, data: u},
 	]
 }

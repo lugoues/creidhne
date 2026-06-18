@@ -1,9 +1,10 @@
 package creidhne
 
 #Kube: {
-	#Reference
-	#unitType:      "kube"
-	#serviceSuffix: ""
+	// #stem is injected by #Units; identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).kube"
+	#service: "\(#stem).service"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

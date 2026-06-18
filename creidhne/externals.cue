@@ -33,15 +33,15 @@ package creidhne
 }
 
 #ExternalUnits: {
-	// Quadlet types (ref/service computed via #Reference)
-	containers: [Name=string]: #Reference & {#quadletName: Name, #unitType: "container", #serviceSuffix: ""}
-	networks: [Name=string]:   #Reference & {#quadletName: Name, #unitType: "network", #serviceSuffix: "-network"}
-	volumes: [Name=string]:    #Reference & {#quadletName: Name, #unitType: "volume", #serviceSuffix: "-volume"}
-	pods: [Name=string]:       #Reference & {#quadletName: Name, #unitType: "pod", #serviceSuffix: "-pod"}
-	builds: [Name=string]:     #Reference & {#quadletName: Name, #unitType: "build", #serviceSuffix: "-build"}
-	images: [Name=string]:     #Reference & {#quadletName: Name, #unitType: "image", #serviceSuffix: "-image"}
-	kubes: [Name=string]:      #Reference & {#quadletName: Name, #unitType: "kube", #serviceSuffix: ""}
-	artifacts: [Name=string]:  #Reference & {#quadletName: Name, #unitType: "artifact", #serviceSuffix: "-artifact"}
+	// Quadlet types: ref/service computed inline from the unit name (the key).
+	containers: [Name=string]: {#ref: "\(Name).container", #service: "\(Name).service"}
+	networks: [Name=string]:   {#ref: "\(Name).network", #service: "\(Name)-network.service"}
+	volumes: [Name=string]:    {#ref: "\(Name).volume", #service: "\(Name)-volume.service"}
+	pods: [Name=string]:       {#ref: "\(Name).pod", #service: "\(Name)-pod.service"}
+	builds: [Name=string]:     {#ref: "\(Name).build", #service: "\(Name)-build.service"}
+	images: [Name=string]:     {#ref: "\(Name).image", #service: "\(Name)-image.service"}
+	kubes: [Name=string]:      {#ref: "\(Name).kube", #service: "\(Name).service"}
+	artifacts: [Name=string]:  {#ref: "\(Name).artifact", #service: "\(Name)-artifact.service"}
 
 	// Native systemd types (only #ref, not quadlet-managed)
 	services: [Name=string]: #ExtUnit & {_key: Name, _type: "service"}

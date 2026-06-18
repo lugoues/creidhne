@@ -1,14 +1,16 @@
 package creidhne
 
 #Container: {
-	#Reference
-	#unitType:      "container"
-	#serviceSuffix: ""
+	// #stem is injected by #Units (the quadlet name for a primary unit,
+	// "<quadlet>-<key>" for a keyed one); identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).container"
+	#service: "\(#stem).service"
 
-	// #containerName (from #Reference) is the resolved ContainerName: the
-	// explicit value if set, else podman's systemd-%N default. Reference it from
-	// other units, e.g. Network: ["container:\(db.units.#container.#containerName)"].
-	if Container.ContainerName != _|_ {#explicitName: Container.ContainerName}
+	// #containerName is the resolved ContainerName: the explicit value if set,
+	// else podman's systemd-%N default. Reference it from other units, e.g.
+	// Network: ["container:\(db.units.#container.#containerName)"].
+	#containerName: *Container.ContainerName | "systemd-\(#stem)"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

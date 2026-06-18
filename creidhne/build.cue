@@ -1,9 +1,10 @@
 package creidhne
 
 #Build: {
-	#Reference
-	#unitType:      "build"
-	#serviceSuffix: "-build"
+	// #stem is injected by #Units; identity is computed inline from it.
+	#stem:    string
+	#ref:     "\(#stem).build"
+	#service: "\(#stem)-build.service"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection
