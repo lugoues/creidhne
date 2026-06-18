@@ -16,9 +16,11 @@ var (
 	diffHiddenStyle = lipgloss.NewStyle().Faint(true).Italic(true)
 	// Unchanged context lines: gray so changes stand out (configurable).
 	diffContextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorContext))
-	// On a modified line the text stays the terminal default ("white"); only the
-	// changed run is colored (bold red removed / bold green added) so it pops
-	// without the whole line drowning in color.
+	// Unchanged text within a modified row -- its own knob; defaults to the
+	// normal text style (terminal default), distinct from the context lines above.
+	inlineContextStyle = lipgloss.NewStyle()
+	// On a modified line the unchanged text uses inlineContextStyle; only the
+	// changed run is colored (bold red removed / bold green added) so it pops.
 	delSpanStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorRemove)).Bold(true)
 	addSpanStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorAdd)).Bold(true)
 )
@@ -113,23 +115,26 @@ func diffSpans(oldLine, newLine string) (pre, oldMid, newMid, suf string) {
 }
 
 // inlineHighlight renders a changed line pair ("- old" / "+ new"): the gutter
-// sign is colored and the changed run is colored (bold), while the unchanged
-// text stays the terminal default so only the change draws the eye.
+// sign is colored, the changed run is colored (bold), and the unchanged text
+// uses the context style, so only the change draws the eye.
 func inlineHighlight(oldLine, newLine string) (del, ins string) {
 	pre, oldMid, newMid, suf := diffSpans(oldLine, newLine)
-	del = red("- ") + pre + emph(delSpanStyle, oldMid) + suf
-	ins = green("+ ") + pre + emph(addSpanStyle, newMid) + suf
+	preS, sufS := emph(inlineContextStyle, pre), emph(inlineContextStyle, suf)
+	del = red("- ") + preS + emph(delSpanStyle, oldMid) + sufS
+	ins = green("+ ") + preS + emph(addSpanStyle, newMid) + sufS
 	return del, ins
 }
 
 // inlineSingle renders a changed line as one "~" line, word-diff style: the
-// unchanged text stays the terminal default, then at the point of change the
-// removed run is struck through in the remove color followed by the added run in
-// the add color. So both sides show on one line (e.g. "...sock:r̶o̶w" for ro->rw,
+// unchanged text uses the context style, then at the point of change the removed
+// run is struck through in the remove color followed by the added run in the add
+// color. So both sides show on one line (e.g. "...sock:r̶o̶w" for ro->rw,
 // "...ALL L̶L̶L̶" for ALLLLL->ALL, "...Pr s oxy" for Proxy->Prsoxy).
 func inlineSingle(oldLine, newLine string) string {
 	pre, oldMid, newMid, suf := diffSpans(oldLine, newLine)
-	return yellow("~ ") + pre + emph(delSpanStyle.Strikethrough(true), oldMid) + emph(addSpanStyle, newMid) + suf
+	return yellow("~ ") + emph(inlineContextStyle, pre) +
+		emph(delSpanStyle.Strikethrough(true), oldMid) +
+		emph(addSpanStyle, newMid) + emph(inlineContextStyle, suf)
 }
 
 // emph styles s, returning "" for an empty span so no stray escape is emitted.

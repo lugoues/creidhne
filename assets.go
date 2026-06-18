@@ -16,3 +16,10 @@ var SchemaFS embed.FS
 //
 //go:embed templates/*.tpl
 var TemplatesFS embed.FS
+
+// ConfigSchema is the JSON Schema for crei.toml. `crei init` writes it next to
+// the config and points a Taplo "#:schema" directive at it, so editors (Even
+// Better TOML) validate and autocomplete the config offline.
+//
+//go:embed crei.schema.json
+var ConfigSchema []byte

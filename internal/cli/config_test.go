@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/lugoues/creidhne"
 )
 
 // TestResolveConfigProvenance checks the precedence chain (flag > env >
@@ -162,9 +165,10 @@ func TestApplyStyles(t *testing.T) {
 	t.Cleanup(func() { applyStyles(styleConfig{}) }) // restore defaults
 
 	applyStyles(styleConfig{
-		Add:        styleSpec{Fg: "#abcdef", set: true},
-		RemoveChar: styleSpec{Fg: "#123456", set: true},
-		Header:     styleSpec{Fg: "#ffffff", set: true},
+		Add:           styleSpec{Fg: "#abcdef", set: true},
+		RemoveChar:    styleSpec{Fg: "#123456", set: true},
+		Header:        styleSpec{Fg: "#ffffff", set: true},
+		InlineContext: styleSpec{Fg: "#fedcba", set: true},
 	})
 
 	if got := greenStyle.GetForeground(); got != lipgloss.Color("#abcdef") {
@@ -182,11 +186,27 @@ func TestApplyStyles(t *testing.T) {
 	if got := diffHeaderStyle.GetForeground(); got != lipgloss.Color("#ffffff") {
 		t.Errorf("header color = %v, want #ffffff", got)
 	}
+	if got := inlineContextStyle.GetForeground(); got != lipgloss.Color("#fedcba") {
+		t.Errorf("inline_context color = %v, want #fedcba", got)
+	}
+	if got := diffContextStyle.GetForeground(); got != lipgloss.Color(colorContext) {
+		t.Errorf("context (unset) should stay the default %s, got %v", colorContext, got)
+	}
 
-	// Defaults restore an uncolored (bold-only) header.
+	// inline_context, when unset, inherits the text (normal) style.
+	applyStyles(styleConfig{Text: styleSpec{Fg: "#0a0b0c", set: true}})
+	if got := inlineContextStyle.GetForeground(); got != lipgloss.Color("#0a0b0c") {
+		t.Errorf("inline_context (unset) should inherit text, got %v", got)
+	}
+
+	// Defaults: a bold (uncolored) header, and normal/inline text at the
+	// terminal default (no color).
 	applyStyles(styleConfig{})
 	if got := diffHeaderStyle.GetForeground(); got != (lipgloss.NoColor{}) {
 		t.Errorf("default header should carry no color, got %v", got)
+	}
+	if got := inlineContextStyle.GetForeground(); got != (lipgloss.NoColor{}) {
+		t.Errorf("default inline_context should be the terminal default, got %v", got)
 	}
 }
 
@@ -226,4 +246,40 @@ func TestStyleConfigParsing(t *testing.T) {
 	if _, err := write(t, "[style]\nadd = { bold = \"yes\" }\n"); err == nil {
 		t.Error("non-boolean attribute should error")
 	}
+}
+
+// TestConfigSchemaCoversFields guards against the embedded crei.schema.json
+// drifting from the config structs: every TOML field must appear as a schema
+// property, so adding a config key without a schema entry fails here.
+func TestConfigSchemaCoversFields(t *testing.T) {
+	var schema struct {
+		Properties map[string]struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(creidhne.ConfigSchema, &schema); err != nil {
+		t.Fatalf("crei.schema.json is not valid JSON: %v", err)
+	}
+
+	for _, tag := range tomlTags(reflect.TypeOf(fileConfig{})) {
+		if _, ok := schema.Properties[tag]; !ok {
+			t.Errorf("crei.schema.json missing top-level property %q", tag)
+		}
+	}
+	style := schema.Properties["style"].Properties
+	for _, tag := range tomlTags(reflect.TypeOf(styleConfig{})) {
+		if _, ok := style[tag]; !ok {
+			t.Errorf("crei.schema.json [style] missing property %q", tag)
+		}
+	}
+}
+
+func tomlTags(typ reflect.Type) []string {
+	var out []string
+	for i := 0; i < typ.NumField(); i++ {
+		if tag := typ.Field(i).Tag.Get("toml"); tag != "" {
+			out = append(out, tag)
+		}
+	}
+	return out
 }

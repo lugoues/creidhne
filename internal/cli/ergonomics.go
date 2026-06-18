@@ -170,6 +170,13 @@ func runInit(out io.Writer, projectDir string) error {
 	}
 	report(out, created, "crei.toml")
 
+	// JSON Schema for crei.toml (referenced by the "#:schema" directive in the
+	// sample). Written unconditionally so it stays current after a binary upgrade.
+	if err := os.WriteFile(filepath.Join(projectDir, "crei.schema.json"), creidhne.ConfigSchema, 0o644); err != nil {
+		return fmt.Errorf("write crei.schema.json: %w", err)
+	}
+	fmt.Fprintf(out, "  %s crei.schema.json (JSON Schema for crei.toml)\n", green("✓"))
+
 	if err := vendorSchema(projectDir); err != nil {
 		return fmt.Errorf("vendor schema: %w", err)
 	}
@@ -367,7 +374,9 @@ hello: creidhne.#Quadlet & {
 }
 `
 
-const sampleConfig = `# Target directory for generated quadlet unit files.
+const sampleConfig = `#:schema ./crei.schema.json
+
+# Target directory for generated quadlet unit files.
 quadlet_dir = "~/.config/containers/systemd"
 
 # Optional external diff tool (e.g. "delta"); empty uses the built-in differ.
@@ -393,10 +402,12 @@ quadlet_dir = "~/.config/containers/systemd"
 # Colors are hex (#3FB950) or an ANSI index 0-255, degrading to 256/16-color or
 # plain on lesser terminals (or when piped / NO_COLOR). Uncomment to override.
 # [style]
-# header      = { bold = true }   # "# name" file header
-# context     = "#6E7681"         # unchanged context lines
-# add         = "#3FB950"         # added lines
-# remove      = "#F85149"         # removed lines
-# add_char    = { fg = "#3FB950", bold = true } # added inline span (defaults to 'add')
-# remove_char = { fg = "#F85149", bold = true } # removed inline span (defaults to 'remove')
+# header         = { bold = true }   # "# name" file header
+# text           = ""                # normal text (empty = terminal default)
+# context        = "#6E7681"         # unchanged context lines
+# inline_context = ""                # unchanged text in a modified row (empty = inherit 'text')
+# add            = "#3FB950"         # added lines
+# remove         = "#F85149"         # removed lines
+# add_char       = { fg = "#3FB950", bold = true } # added inline span (defaults to 'add')
+# remove_char    = { fg = "#F85149", bold = true } # removed inline span (defaults to 'remove')
 `

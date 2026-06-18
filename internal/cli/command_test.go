@@ -66,7 +66,7 @@ func TestCmdInit(t *testing.T) {
 	if _, err := runCmd(t, "--dir", dir, "init"); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"cue.mod/module.cue", "main.cue", "crei.toml", "cue.mod/usr"} {
+	for _, f := range []string{"cue.mod/module.cue", "main.cue", "crei.toml", "crei.schema.json", "cue.mod/usr"} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("init did not create %s: %v", f, err)
 		}

@@ -122,12 +122,14 @@ const (
 // element is either a bare color string (foreground only) or an inline table
 // (fg/bg + attribute toggles); an unset element keeps its built-in default.
 type styleConfig struct {
-	Header     styleSpec `toml:"header"`      // "# name" file header (default: bold)
-	Context    styleSpec `toml:"context"`     // unchanged context lines
-	Add        styleSpec `toml:"add"`         // added lines (+)
-	Remove     styleSpec `toml:"remove"`      // removed lines (-)
-	AddChar    styleSpec `toml:"add_char"`    // added inline span (defaults to add's color)
-	RemoveChar styleSpec `toml:"remove_char"` // removed inline span (defaults to remove's color)
+	Header        styleSpec `toml:"header"`         // "# name" file header (default: bold)
+	Text          styleSpec `toml:"text"`           // normal text (default: terminal default)
+	Context       styleSpec `toml:"context"`        // unchanged context lines
+	InlineContext styleSpec `toml:"inline_context"` // unchanged text in a modified row (defaults to text)
+	Add           styleSpec `toml:"add"`            // added lines (+)
+	Remove        styleSpec `toml:"remove"`         // removed lines (-)
+	AddChar       styleSpec `toml:"add_char"`       // added inline span (defaults to add's color)
+	RemoveChar    styleSpec `toml:"remove_char"`    // removed inline span (defaults to remove's color)
 }
 
 // styleSpec is a configurable lipgloss style. In crei.toml it unmarshals from
@@ -243,9 +245,13 @@ func validateColor(key, s string) error {
 func applyStyles(c styleConfig) {
 	addFg := orElse(c.Add.Fg, colorAdd)
 	removeFg := orElse(c.Remove.Fg, colorRemove)
+	// "Normal" text defaults to the terminal default; inline context (unchanged
+	// text within a modified row) inherits it unless given its own style.
+	text := resolveStyle(c.Text, lipgloss.NewStyle())
 	greenStyle = resolveStyle(c.Add, lipgloss.NewStyle().Foreground(lipgloss.Color(addFg)))
 	redStyle = resolveStyle(c.Remove, lipgloss.NewStyle().Foreground(lipgloss.Color(removeFg)))
 	diffContextStyle = resolveStyle(c.Context, lipgloss.NewStyle().Foreground(lipgloss.Color(colorContext)))
+	inlineContextStyle = resolveStyle(c.InlineContext, text)
 	addSpanStyle = resolveStyle(c.AddChar, lipgloss.NewStyle().Foreground(lipgloss.Color(addFg)).Bold(true))
 	delSpanStyle = resolveStyle(c.RemoveChar, lipgloss.NewStyle().Foreground(lipgloss.Color(removeFg)).Bold(true))
 	diffHeaderStyle = resolveStyle(c.Header, lipgloss.NewStyle().Bold(true))
