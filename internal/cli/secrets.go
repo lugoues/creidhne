@@ -25,10 +25,31 @@ var (
 )
 
 func newSecretsCmd() *cobra.Command {
+	// A command group: bare `crei secrets` prints help (like `podman secret`),
+	// and an unknown subcommand errors rather than silently succeeding.
 	cmd := &cobra.Command{
 		Use:   "secrets",
-		Short: "List the secret registry and whether each secret exists in podman",
-		Args:  cobra.NoArgs,
+		Short: "Inspect and create podman secrets from the registry",
+		Long: "secrets works with the #SecretRegistry declared in your CUE (the\n" +
+			"top-level \"secrets\" field by default). 'list' shows which registry\n" +
+			"secrets exist in podman; 'create' adds the missing ones.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+		},
+	}
+	cmd.AddCommand(newSecretsListCmd(), newSecretsCreateCmd())
+	return cmd
+}
+
+func newSecretsListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List the secret registry and whether each secret exists in podman",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig()
 			if err != nil {
@@ -72,8 +93,6 @@ func newSecretsCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(newSecretsCreateCmd())
-	return cmd
 }
 
 func newSecretsCreateCmd() *cobra.Command {

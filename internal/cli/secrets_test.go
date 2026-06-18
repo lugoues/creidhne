@@ -28,14 +28,14 @@ func stubSecrets(t *testing.T, existing map[string]bool, create func(string, []b
 	secretValuer = value
 }
 
-// TestCmdSecretsList drives `crei secrets` end to end (registry extraction + the
-// podman existence check, with podman stubbed). app-db exists, api_key does not,
-// exercising both the name-override and default-name registry forms.
+// TestCmdSecretsList drives `crei secrets list` end to end (registry extraction +
+// the podman existence check, with podman stubbed). app-db exists, api_key does
+// not, exercising both the name-override and default-name registry forms.
 func TestCmdSecretsList(t *testing.T) {
 	dir := setupProject(t, secretsRegistryMain)
 	stubSecrets(t, map[string]bool{"app-db": true}, nil, nil)
 
-	out, err := runCmd(t, "--dir", dir, "secrets")
+	out, err := runCmd(t, "--dir", dir, "secrets", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestCmdSecretsNoRegistry(t *testing.T) {
 	stubSecrets(t, nil, nil, nil)
 	podmanListSecrets = func() (map[string]bool, error) { called = true; return nil, nil }
 
-	out, err := runCmd(t, "--dir", dir, "secrets")
+	out, err := runCmd(t, "--dir", dir, "secrets", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +63,33 @@ func TestCmdSecretsNoRegistry(t *testing.T) {
 	}
 	if called {
 		t.Error("podman must not be queried when there is no registry")
+	}
+}
+
+// TestCmdSecretsHelp: bare `crei secrets` prints help listing its subcommands
+// (no RunE), mirroring `podman secret`, and never touches podman.
+func TestCmdSecretsHelp(t *testing.T) {
+	called := false
+	stubSecrets(t, nil, nil, nil)
+	podmanListSecrets = func() (map[string]bool, error) { called = true; return nil, nil }
+
+	out, err := runCmd(t, "--dir", t.TempDir(), "secrets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"list", "create"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("`crei secrets` help should list the %q subcommand:\n%s", want, out)
+		}
+	}
+	if called {
+		t.Error("bare `crei secrets` should not query podman")
+	}
+
+	// An unknown subcommand errors (matches podman), rather than printing help
+	// with a success exit code.
+	if _, err := runCmd(t, "--dir", t.TempDir(), "secrets", "bogus"); err == nil {
+		t.Error("`crei secrets bogus` should error on an unknown subcommand")
 	}
 }
 

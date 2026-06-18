@@ -218,7 +218,7 @@ app: creidhne.#Quadlet & {
 `crei secrets` reconciles that registry against podman's secret store:
 
 ```sh
-crei secrets                    # table of each secret: present or missing in podman
+crei secrets list               # table of each secret: present or missing in podman
 crei secrets create db_password # create one, typing (hidden) or generating its value
 crei secrets create -a          # walk through every secret missing from podman
 ```
@@ -297,7 +297,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
 | `crei validate` | Type-check the CUE without rendering. |
 | `crei config` | Show the resolved configuration and where each value came from. |
-| `crei secrets` | List the secret registry and whether each secret exists in podman. |
+| `crei secrets list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
 | `crei secrets create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
 | `crei version` | Print version info. |
 
