@@ -1,13 +1,14 @@
 package creidhne
 
 #Network: {
-	// #stem is injected by #Units; identity is computed inline from it.
-	#stem:    string
-	#ref:     "\(#stem).network"
-	#service: "\(#stem)-network.service"
+	name:     string
+	// _stem is injected by #Units; identity is computed inline from it.
+	_stem:    string
+	#ref:     "\(_stem).network"
+	#service: "\(_stem)-network.service"
 
 	// #networkName resolves to the explicit NetworkName, else systemd-%N.
-	#networkName: *Network.NetworkName | "systemd-\(#stem)"
+	#networkName: *Network.NetworkName | "systemd-\(_stem)"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

@@ -78,9 +78,9 @@ svc: q.#Quadlet & {
 	}
 }
 
-// TestStemPlural covers the plural stem (quadlet-key), including a quoted key
-// with a hyphen, which is how a hyphenated stem is produced now that the `name:`
-// override is gone (volumes: "gw-tmp": ... instead of gw_tmp: {name: "gw-tmp"}).
+// TestStemPlural covers the plural stem ("<quadlet>-<name>", name defaulting to
+// the key). Here key "gw_tmp" is the CUE-side handle and name "gw-tmp" sets the
+// hyphenated stem, producing app-gw-tmp.volume.
 func TestStemPlural(t *testing.T) {
 	quads := loadSource(t, `package naming
 import q "github.com/lugoues/creidhne@v0"
@@ -88,7 +88,7 @@ app: q.#Quadlet & {
 	name: "app"
 	units: {
 		containers: web: Container: {Image: "img"}
-		volumes: "gw-tmp": Volume: {}
+		volumes: "gw_tmp": {name: "gw-tmp", Volume: {}}
 	}
 }
 `)

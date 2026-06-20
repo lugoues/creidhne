@@ -1,0 +1,12 @@
+[Unit]
+Requires=database.service
+After=database.service
+After=internet-egress-network.service
+
+[Container]
+Image=docker.io/myapp:latest
+ContainerName=app
+Network=internet-egress.network
+
+[Install]
+WantedBy=multi-user.target

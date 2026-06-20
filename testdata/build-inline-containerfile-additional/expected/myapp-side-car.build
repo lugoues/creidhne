@@ -1,0 +1,5 @@
+
+[Build]
+ImageTag=quadlets.localhost/myapp-side-car:latest
+SetWorkingDirectory=unit
+File=images/myapp-side-car.Containerfile

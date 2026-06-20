@@ -1,10 +1,11 @@
 package creidhne
 
 #Build: {
-	// #stem is injected by #Units; identity is computed inline from it.
-	#stem:    string
-	#ref:     "\(#stem).build"
-	#service: "\(#stem)-build.service"
+	name:     string
+	// _stem is injected by #Units; identity is computed inline from it.
+	_stem:    string
+	#ref:     "\(_stem).build"
+	#service: "\(_stem)-build.service"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection
@@ -34,8 +35,8 @@ package creidhne
 		}
 	}) & {
 		Build: {
-			// Specifies the name(s) assigned to the resulting image if the build completes successfully.
-			ImageTag: [...string] & [_, ...]
+			// Specifies the name(s) assigned to the resulting image if the build completes successfully. (optional: default "quadlets.localhost/\(_stem):latest")
+			ImageTag:  *["quadlets.localhost/\(_stem):latest"] | [ ...string]
 			// Override the default systemd service unit name.
 			ServiceName?: string
 			// Path to an alternate .containerignore file to use when building the image.

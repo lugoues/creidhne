@@ -1,10 +1,11 @@
 package creidhne
 
 #Image: {
-	// #stem is injected by #Units; identity is computed inline from it.
-	#stem:    string
-	#ref:     "\(#stem).image"
-	#service: "\(#stem)-image.service"
+	name:     string
+	// _stem is injected by #Units; identity is computed inline from it.
+	_stem:    string
+	#ref:     "\(_stem).image"
+	#service: "\(_stem)-image.service"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

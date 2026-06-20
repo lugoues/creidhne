@@ -1,10 +1,11 @@
 package creidhne
 
 #Kube: {
-	// #stem is injected by #Units; identity is computed inline from it.
-	#stem:    string
-	#ref:     "\(#stem).kube"
-	#service: "\(#stem).service"
+	name:     string
+	// _stem is injected by #Units; identity is computed inline from it.
+	_stem:    string
+	#ref:     "\(_stem).kube"
+	#service: "\(_stem).service"
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

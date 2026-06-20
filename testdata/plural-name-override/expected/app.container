@@ -1,0 +1,12 @@
+[Unit]
+After=app-cache-volume.service
+
+[Container]
+Image=docker.io/myapp:latest
+ContainerName=app
+Network=app-internal.network
+Volume=app-cache.volume:/cache
+Volume=app-logs.volume:/logs
+
+[Install]
+WantedBy=multi-user.target

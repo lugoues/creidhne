@@ -30,20 +30,21 @@ test: testing.#Test & {
 			}
 
 			builds: sidecar: {
+				name: "side-car"
 				ContainerFile: """
 					FROM golang:1.22
 					COPY . .
 					RUN go build -o /sidecar
 					"""
-				Build: ImageTag: ["localhost/myapp-sidecar:latest"]
+				Build: {}
 			}
 		}
 	}
 	expected: {
 		"myapp-main.build": _ @embed(file=expected/myapp-main.build,type=text)
-		"myapp-sidecar.build": _ @embed(file=expected/myapp-sidecar.build,type=text)
+		"myapp-side-car.build": _ @embed(file='expected/myapp-side-car.build',type=text)
 		"myapp.container": _ @embed(file=expected/myapp.container,type=text)
 		"images/myapp-main.Containerfile": _ @embed(file=expected/images/myapp-main.Containerfile,type=text)
-		"images/myapp-sidecar.Containerfile": _ @embed(file=expected/images/myapp-sidecar.Containerfile,type=text)
+		"images/myapp-side-car.Containerfile": _ @embed(file='expected/images/myapp-side-car.Containerfile',type=text)
 	}
 }
