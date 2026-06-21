@@ -249,7 +249,10 @@ func decodeJSONNumbers(b []byte) (map[string]any, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return nil, err
 	}
-	coerced := coerceNumbers(raw)
+	coerced, err := coerceNumbers(raw)
+	if err != nil {
+		return nil, err
+	}
 	m, ok := coerced.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("decoded unit data is %T, want a JSON object", coerced)
@@ -257,28 +260,43 @@ func decodeJSONNumbers(b []byte) (map[string]any, error) {
 	return m, nil
 }
 
-func coerceNumbers(v any) any {
+func coerceNumbers(v any) (any, error) {
 	switch x := v.(type) {
 	case map[string]any:
 		for k, e := range x {
-			x[k] = coerceNumbers(e)
+			c, err := coerceNumbers(e)
+			if err != nil {
+				return nil, err
+			}
+			x[k] = c
 		}
-		return x
+		return x, nil
 	case []any:
 		for i, e := range x {
-			x[i] = coerceNumbers(e)
+			c, err := coerceNumbers(e)
+			if err != nil {
+				return nil, err
+			}
+			x[i] = c
 		}
-		return x
+		return x, nil
 	case json.Number:
 		if i, err := x.Int64(); err == nil {
-			return i
+			return i, nil
+		}
+		// Not int64-representable. An integer literal that doesn't fit is an
+		// overflow: erroring beats the old float64 fallback, which rendered as
+		// %!d(float64=N) in a {{ printf "%d" }} field — a silently corrupt unit.
+		// A genuinely fractional literal still falls through to float64.
+		if !strings.ContainsAny(x.String(), ".eE") {
+			return nil, fmt.Errorf("integer %s is out of range (exceeds int64)", x.String())
 		}
 		if f, err := x.Float64(); err == nil {
-			return f
+			return f, nil
 		}
-		return x.String()
+		return x.String(), nil
 	default:
-		return v
+		return v, nil
 	}
 }
 

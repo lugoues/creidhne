@@ -30,3 +30,23 @@ func TestDecodeJSONNumbersCoercesIntegers(t *testing.T) {
 		t.Errorf("list[0]: want int64, got %T", m["list"].([]any)[0])
 	}
 }
+
+// An integer too large for int64 must be rejected, not silently degraded to a
+// float64 (which renders as %!d(float64=...) in a {{ printf "%d" }} field like
+// UID/GID/HealthRetries). A generator must fail loudly, not emit a corrupt unit.
+func TestDecodeJSONNumbersRejectsOverflowInteger(t *testing.T) {
+	if m, err := decodeJSONNumbers([]byte(`{"UID": 99999999999999999999}`)); err == nil {
+		t.Fatalf("want error for int64-overflow integer, got %#v (%T)", m["UID"], m["UID"])
+	}
+}
+
+// The boundary value (max int64) must still be accepted as an int64.
+func TestDecodeJSONNumbersAcceptsMaxInt64(t *testing.T) {
+	m, err := decodeJSONNumbers([]byte(`{"n": 9223372036854775807}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := m["n"].(int64); !ok || got != 9223372036854775807 {
+		t.Errorf("n: got %#v (%T), want int64 9223372036854775807", m["n"], m["n"])
+	}
+}
