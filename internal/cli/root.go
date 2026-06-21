@@ -391,11 +391,32 @@ func underHome(dir string) bool {
 	if err != nil {
 		return false
 	}
+	// Resolve symlinks on both sides before comparing: a symlinked $HOME (e.g.
+	// /home/user -> /data/user) with the quadlet dir given via its resolved path
+	// would otherwise be judged outside $HOME, picking system scope instead of
+	// `--user` so rootless units never reload.
+	home = resolveSymlinks(home)
+	abs = resolveSymlinks(abs)
 	rel, err := filepath.Rel(home, abs)
 	if err != nil {
 		return false
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolveSymlinks returns the symlink-resolved path. The quadlet dir may not
+// exist yet (first apply), so when EvalSymlinks fails it resolves the deepest
+// existing ancestor and re-appends the missing tail, so a symlinked $HOME still
+// matches a not-yet-created dir beneath it.
+func resolveSymlinks(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	parent := filepath.Dir(p)
+	if parent == p { // reached the root; nothing resolved
+		return p
+	}
+	return filepath.Join(resolveSymlinks(parent), filepath.Base(p))
 }
 
 // --- generation pipeline (eval + render) ---
