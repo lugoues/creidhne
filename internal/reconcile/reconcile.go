@@ -247,7 +247,16 @@ func ensureDir(dir string) error {
 // directory, which is fsync'd and then renamed over the target, and the
 // directory entry is fsync'd, so neither a crash mid-write nor a power loss
 // leaves a partial unit file for systemd/podman to read.
-func WriteFile(path string, content []byte, mode string) error {
+func WriteFile(path string, content []byte, mode string) (err error) {
+	// Name the target unit in any failure: the atomic write stages through an
+	// internal .crei-*.tmp file, so an unwrapped error (e.g. ENOSPC) would name
+	// the temp file, not the unit the user is trying to write. %w preserves the
+	// chain so callers' errors.Is(fs.ErrPermission) still detects permission.
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("writing %s: %w", path, err)
+		}
+	}()
 	dir := filepath.Dir(path)
 	if err := ensureDir(dir); err != nil {
 		return err

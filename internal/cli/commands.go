@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,7 +170,9 @@ func newApplyCmd() *cobra.Command {
 						continue
 					}
 					if werr != nil {
-						if os.IsPermission(werr) {
+						// errors.Is (not os.IsPermission) so the check still sees a
+						// permission error through reconcile.WriteFile's %w wrap.
+						if errors.Is(werr, fs.ErrPermission) {
 							return fmt.Errorf("permission denied writing to %s\n  re-run with elevated privileges, e.g.: sudo crei apply --quadlet-dir %q", dir, dir)
 						}
 						return werr

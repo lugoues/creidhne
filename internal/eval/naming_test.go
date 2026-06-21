@@ -236,3 +236,18 @@ func TestRejectsTraversalAndEmptyName(t *testing.T) {
 		}
 	}
 }
+
+// TestIncompleteUnitErrorNamesUnit guards the incomplete-unit message: when the
+// missing field is the name itself, the derived filename is also empty, so the
+// error must fall back to another identifier instead of reading "unit  is ...".
+func TestIncompleteUnitErrorNamesUnit(t *testing.T) {
+	src := "package naming\nimport q \"github.com/lugoues/creidhne@v0\"\n" +
+		"app: q.#Quadlet & {units: #container: Container: {Image: \"img\"}}\n" // no name
+	err := loadSourceErr(t, src)
+	if err == nil {
+		t.Fatal("want error for missing name")
+	}
+	if strings.Contains(err.Error(), "unit  is") {
+		t.Errorf("blank unit identifier in error: %q", err.Error())
+	}
+}

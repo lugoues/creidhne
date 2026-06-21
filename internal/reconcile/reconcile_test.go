@@ -386,3 +386,17 @@ func TestComputePlanRejectsNonLocalName(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteFileErrorNamesTarget guards the apply error message: a write failure
+// must name the target unit, not an internal .crei-*.tmp file. An invalid mode
+// fails deterministically before the temp file is created.
+func TestWriteFileErrorNamesTarget(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "app.container")
+	err := WriteFile(dest, []byte("x"), "999") // 999 is not octal
+	if err == nil {
+		t.Fatal("want error for invalid mode")
+	}
+	if !strings.Contains(err.Error(), "app.container") {
+		t.Errorf("error should name the target unit, got: %v", err)
+	}
+}

@@ -59,6 +59,12 @@ var funcMap = template.FuncMap{
 // together lets the per-kind templates invoke shared partials (e.g. the
 // generated "unit"/"install" section partials).
 func New(tplFS fs.FS) (*Renderer, error) {
+	// Note: missingkey=error is deliberately NOT set. The templates access
+	// optional top-level sections (.Unit, .Service, .Install, .Quadlet) directly
+	// and rely on a missing section rendering as absent; missingkey=error would
+	// turn every unset optional section into a render error. The silent-<no
+	// value> risk for unguarded direct-print fields is instead covered upstream
+	// by eval's cue.Concrete validation, which rejects incomplete unit data.
 	tmpl, err := template.New("creidhne").Funcs(funcMap).ParseFS(tplFS, "*.tpl")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)

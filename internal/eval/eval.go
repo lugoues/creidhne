@@ -207,7 +207,17 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 		// multi-KB dump of the whole resolved struct; report a concise hint
 		// instead and point at `crei validate` for the full diagnostic.
 		if err := dataV.Validate(cue.Concrete(true)); err != nil {
-			return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s", ur.Filename, incompleteHint(err))
+			// The filename is derived from name, so when name itself is the unset
+			// field the filename is empty too; fall back to the stem, then the
+			// kind, so the message never reads "unit  is incomplete".
+			label := ur.Filename
+			if label == "" {
+				label = ur.Stem
+			}
+			if label == "" {
+				label = "a " + ur.Kind
+			}
+			return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s", label, incompleteHint(err))
 		}
 		b, err := dataV.MarshalJSON()
 		if err != nil {
