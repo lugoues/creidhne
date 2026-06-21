@@ -13,8 +13,10 @@ import (
 // render/reconcile enforce filepath.IsLocal as a belt-and-suspenders layer.
 #UnitName: string & =~"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
 
-// Port mapping: ip:hostPort:containerPort/protocol
-#PortMapping: =~"^([0-9.]*:)?[0-9]+(-[0-9]+)?(:[0-9]+(-[0-9]+)?)?(/(tcp|udp|sctp))?$" | =~"^[0-9]+(-[0-9]+)?$"
+// Port mapping: [ip:]hostPort[-range][:containerPort[-range]][/protocol]. The
+// host IP may be IPv4 or a bracketed IPv6 address ([::1]:80:90), matching
+// podman/quadlet (see quadlet's ports_ipv6.container test).
+#PortMapping: =~"^((\\[[0-9a-fA-F:]+\\]|[0-9.]*):)?[0-9]+(-[0-9]+)?(:[0-9]+(-[0-9]+)?)?(/(tcp|udp|sctp))?$" | =~"^[0-9]+(-[0-9]+)?$"
 
 // Key=Value pair for labels, annotations, environment variables
 #KeyValue: =~"^[^=]+=.*$"
@@ -64,9 +66,11 @@ _#pct: =~"^[0-9]+%$"
 // Units: us, ms, s, min, h, d, w.  See systemd.time(7).
 _#systemdDuration: =~"^[0-9]+(us|ms|s|min|h|d|w)( [0-9]+(us|ms|s|min|h|d|w))*$"
 
-// Go duration format, including compounds (e.g. "30s", "1h30m", "500ms").
-// Units: ns, us, ms, s, m, h.  See Go time.ParseDuration.
-_#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
+// Go duration format, including fractional and compound spans (e.g. "30s",
+// "1h30m", "500ms", "0.5s"). Units: ns, us, ms, s, m, h.  See Go
+// time.ParseDuration. A leading sign is intentionally not allowed: a negative
+// interval/timeout/delay is a config error for every field that uses this.
+_#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 
 // --- Systemd value types ---
 
@@ -104,9 +108,10 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 // See systemd.exec(5).
 #ByteLimit: "infinity" | _#bareInt | _#systemdByteSuffix | =~"^([0-9]+[KMGTPE]?|infinity):([0-9]+[KMGTPE]?|infinity)$"
 
-// POSIX signal name (e.g. SIGTERM, SIGKILL, SIGHUP).
+// POSIX signal, matching podman's ParseSignal: an optional "SIG" prefix, a bare
+// name (TERM), a number (9), or a realtime signal (SIGRTMIN+3, RTMAX-1).
 // See signal(7).
-#Signal: =~"^SIG[A-Z0-9]+$"
+#Signal: =~"^(SIG)?([A-Z]+([+-][0-9]+)?|[0-9]+)$"
 
 // systemd job mode for OnSuccessJobMode/OnFailureJobMode.
 // See systemd.unit(5).
@@ -176,7 +181,9 @@ _#goDuration: =~"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
 	target?: string
 	uid?:    int & >=0
 	gid?:    int & >=0
-	mode?:   =~"^0[0-7]{3,4}$"
+	// File mode in octal, 3-4 digits, leading zero optional ("400", "0640",
+	// "4000"). podman parses this with base-8 ParseUint, so "400" is valid.
+	mode?: =~"^0?[0-7]{3,4}$"
 
 	_rendered: strings.Join(list.Concat([
 		[name],
