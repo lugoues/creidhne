@@ -200,3 +200,39 @@ consumer: q.#Quadlet & {
 		t.Fatalf("resolved names:\n got: %v\nwant: %v", got, want)
 	}
 }
+
+// loadSourceErr is loadSource's negative twin: it returns the load error instead
+// of failing the test, for asserting that invalid input is rejected.
+func loadSourceErr(t *testing.T, src string) error {
+	t.Helper()
+	tmp := t.TempDir()
+	overlay, err := eval.Overlay(tmp, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
+		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.16.0\"\n")
+	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(src)
+	_, err = eval.LoadAndValidate(tmp, overlay)
+	return err
+}
+
+// TestRejectsTraversalAndEmptyName locks down the unit-identity guard: a quadlet
+// or unit name that is empty or contains path separators / ".." must be rejected
+// at validation, since it feeds the on-disk filename (see the reconcile/render
+// IsLocal guards for the defense-in-depth layer).
+func TestRejectsTraversalAndEmptyName(t *testing.T) {
+	cases := map[string]string{
+		"traversal quadlet name": `app: q.#Quadlet & {name: "../escape", units: #container: Container: {Image: "img"}}`,
+		"slash quadlet name":     `app: q.#Quadlet & {name: "a/b", units: #container: Container: {Image: "img"}}`,
+		"empty quadlet name":     `app: q.#Quadlet & {name: "", units: #container: Container: {Image: "img"}}`,
+		"traversal plural key":   `app: q.#Quadlet & {name: "app", units: volumes: "../evil": {Volume: {}}}`,
+		"traversal plural name":  `app: q.#Quadlet & {name: "app", units: volumes: data: {name: "../evil", Volume: {}}}`,
+	}
+	for desc, body := range cases {
+		src := "package naming\nimport q \"github.com/lugoues/creidhne@v0\"\n" + body + "\n"
+		if err := loadSourceErr(t, src); err == nil {
+			t.Errorf("%s: LoadAndValidate accepted invalid name, want error", desc)
+		}
+	}
+}

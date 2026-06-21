@@ -84,6 +84,13 @@ func ComputePlan(desired map[string]DesiredFile, dir string) ([]Change, error) {
 
 	for _, name := range names {
 		fc := desired[name]
+		// Safety boundary: never join a path that escapes dir. A desired name
+		// with ".." or an absolute path would otherwise be written outside the
+		// managed directory (and, under sudo, anywhere root can write). The
+		// renderer and CUE schema reject these too; this is the last line.
+		if !filepath.IsLocal(filepath.FromSlash(name)) {
+			return nil, fmt.Errorf("refusing unsafe output path %q: must be a relative path inside %s", name, dir)
+		}
 		dest := filepath.Join(dir, filepath.FromSlash(name))
 		fi, err := os.Lstat(dest)
 		switch {

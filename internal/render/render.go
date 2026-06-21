@@ -7,12 +7,26 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"sort"
 	"text/template"
 
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/kinds"
 )
+
+// ensureLocal rejects any output path that is not a relative path contained
+// within the quadlet directory. A unit name or build-context key carrying ".."
+// or an absolute path would otherwise be joined onto the quadlet dir at apply
+// time and write outside it. The CUE schema constrains unit names too; this is
+// the defense-in-depth layer that also covers build-context keys (which are
+// legitimately path-shaped) and any caller that bypasses the schema.
+func ensureLocal(name string) error {
+	if !filepath.IsLocal(filepath.FromSlash(name)) {
+		return fmt.Errorf("refusing unsafe output path %q: must be a relative path inside the quadlet directory", name)
+	}
+	return nil
+}
 
 // FileContent is a rendered file plus an optional octal mode (set for build
 // context files like executable scripts; empty means default permissions).
@@ -69,6 +83,9 @@ func (r *Renderer) BuildFileSet(quadlets []eval.Quadlet) (map[string]FileContent
 	owners := make(map[string]string)
 	for _, q := range quadlets {
 		for _, u := range q.Units {
+			if err := ensureLocal(u.Filename); err != nil {
+				return nil, fmt.Errorf("quadlet %q: %w", q.Name, err)
+			}
 			if prev, ok := owners[u.Filename]; ok {
 				return nil, fmt.Errorf("duplicate output file %q: emitted by both quadlet %q and quadlet %q", u.Filename, prev, q.Name)
 			}
@@ -124,6 +141,9 @@ func (r *Renderer) renderUnit(u eval.UnitRecord) ([]byte, error) {
 // since a silently-wrong file mode is a nasty failure to track down.
 func addBuildArtifacts(files map[string]FileContent, owners map[string]string, owner string, u eval.UnitRecord) error {
 	add := func(path string, fc FileContent) error {
+		if err := ensureLocal(path); err != nil {
+			return err
+		}
 		if prev, ok := owners[path]; ok {
 			return fmt.Errorf("duplicate output file %q: emitted by both quadlet %q and quadlet %q", path, prev, owner)
 		}

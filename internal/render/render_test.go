@@ -186,3 +186,29 @@ func TestBuildFileSetDistinctFilenames(t *testing.T) {
 		t.Fatalf("want 2 files, got %d: %v", len(files), files)
 	}
 }
+
+// TestBuildFileSetRejectsTraversal is a security regression guard: a unit
+// filename or a build-context key that escapes the output dir must be refused at
+// render time, before it can reach reconcile/apply.
+func TestBuildFileSetRejectsTraversal(t *testing.T) {
+	r := newTestRenderer(t)
+
+	esc := eval.UnitRecord{
+		Kind: "container", Stem: "../escape", Filename: "../escape.container",
+		Data: map[string]any{"Container": map[string]any{"Image": "img", "ContainerName": "x"}},
+	}
+	if _, err := r.BuildFileSet([]eval.Quadlet{{Name: "x", Units: []eval.UnitRecord{esc}}}); err == nil {
+		t.Error("BuildFileSet accepted a traversal unit filename, want error")
+	}
+
+	bu := eval.UnitRecord{
+		Kind: "build", Stem: "b", Filename: "b.build",
+		Data: map[string]any{
+			"ContainerFile": "FROM scratch\n",
+			"Context":       map[string]any{"../../../etc/cron.d/x": "* * * * * root id\n"},
+		},
+	}
+	if _, err := r.BuildFileSet([]eval.Quadlet{{Name: "b", Units: []eval.UnitRecord{bu}}}); err == nil {
+		t.Error("BuildFileSet accepted a traversal build-context key, want error")
+	}
+}

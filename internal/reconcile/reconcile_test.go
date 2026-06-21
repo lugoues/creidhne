@@ -368,3 +368,21 @@ func TestWriteFileAtomicLeavesNoTemp(t *testing.T) {
 		t.Fatalf("expected only a.container, got %v", names)
 	}
 }
+
+// TestComputePlanRejectsNonLocalName is a security regression guard: a desired
+// filename that escapes the quadlet dir (via "..", an absolute path, or a build
+// context key with "..") must be refused, never joined and written. Without the
+// guard, filepath.Join(dir, "../escape.container") writes outside dir.
+func TestComputePlanRejectsNonLocalName(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{
+		"../escape.container",
+		"images/x.context/../../../etc/cron.d/x",
+		"/etc/cron.d/evil.container",
+	} {
+		desired := map[string]DesiredFile{name: {Content: []byte("x")}}
+		if _, err := ComputePlan(desired, dir); err == nil {
+			t.Errorf("ComputePlan accepted non-local name %q, want error", name)
+		}
+	}
+}

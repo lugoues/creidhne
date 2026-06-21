@@ -7,6 +7,12 @@ import (
 
 // Common types used across all Quadlet unit definitions.
 
+// #UnitName constrains a quadlet/unit name. It feeds the on-disk filename
+// (stem), so it must be a single safe path segment: no separators, no "..", no
+// leading dot/dash. This is the validation half of the path-traversal defense;
+// render/reconcile enforce filepath.IsLocal as a belt-and-suspenders layer.
+#UnitName: string & =~"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+
 // Port mapping: ip:hostPort:containerPort/protocol
 #PortMapping: =~"^([0-9.]*:)?[0-9]+(-[0-9]+)?(:[0-9]+(-[0-9]+)?)?(/(tcp|udp|sctp))?$" | =~"^[0-9]+(-[0-9]+)?$"
 
