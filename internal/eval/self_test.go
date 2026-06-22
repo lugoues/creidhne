@@ -26,7 +26,7 @@ func containerData(t *testing.T, src, field string) []any {
 func TestVolumeSelfFlattensToMountString(t *testing.T) {
 	got := containerData(t, selfQuadlet(`{
 		volumes: data: {Volume: {}}
-		#container: Container: {Image: "img", Volume: [units.volumes.data.#self & {target: "/etc/x", options: "U"}]}
+		#container: Container: {Image: "img", Volume: [units.volumes.data.#self & {target: "/etc/x", options: ["U"]}]}
 	}`), "volumeStrings")
 	if len(got) != 1 || got[0] != "app-data.volume:/etc/x:U" {
 		t.Fatalf("volumeStrings = %v, want [app-data.volume:/etc/x:U]", got)

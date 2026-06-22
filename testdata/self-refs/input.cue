@@ -25,7 +25,7 @@ svc: creidhne.#Quadlet & {
 			Container: {
 				Image:         units.#build.#self
 				ContainerName: "svc"
-				Volume: [units.volumes.data.#self & {target: "/data", options: "ro,U"}]
+				Volume: [units.volumes.data.#self & {target: "/data", options: ["ro", "U"]}]
 				Mount: [creidhne.#MountRef & {ref: units.volumes.data.#self, destination: "/mnt", options: ["ro"]}]
 			}
 			Install: WantedBy: ["default.target"]

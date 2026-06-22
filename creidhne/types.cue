@@ -64,17 +64,27 @@ import (
 	_rendered: source
 }
 
+// #VolumeMountOption is a podman volume mount flag (the ":options" field of a
+// Volume= mount): a fixed enum of binary flags plus idmap, which may carry a
+// custom mapping value. See podman-run(1) --volume.
+#VolumeMountOption: "ro" | "rw" | "z" | "Z" | "U" | "chown" | "O" |
+	"copy" | "nocopy" | "dev" | "nodev" | "exec" | "noexec" |
+	"suid" | "nosuid" | "private" | "rprivate" | "shared" | "rshared" |
+	"slave" | "rslave" | "unbindable" | "runbindable" |
+	=~"^idmap(=.*)?$"
+
 // #VolumeSelf is a volume's handle: a bare volume ref optionally decorated with
-// a mount target and options, flattening to "source[:target[:options]]".
+// a mount target and options, flattening to "source[:target[:opt,opt,...]]".
 #VolumeSelf: {
-	_kind:    "volume"
-	source:   string
-	target?:  string
-	options?: string
+	_kind:   "volume"
+	source:  string
+	target?: string
+	options?: [...#VolumeMountOption]
+	_optStr: strings.Join([ if options != _|_ for o in options {o}], ",")
 	_rendered: strings.Join(list.Concat([
 		[source],
 		[ if target != _|_ {target}],
-		[ if options != _|_ {options}],
+		[ if _optStr != "" {_optStr}],
 	]), ":")
 }
 
