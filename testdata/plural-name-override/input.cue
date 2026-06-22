@@ -22,8 +22,8 @@ test: testing.#Test & {
 					Image:         "docker.io/myapp:latest"
 					ContainerName: "app"
 					Volume: [
-						"\(test.subject.units.volumes.data.#ref):/cache",
-						"\(test.subject.units.volumes.logs.#ref):/logs",
+						test.subject.units.volumes.data.#self & {target: "/cache"},
+						test.subject.units.volumes.logs.#self & {target: "/logs"},
 					]
 					Network: ["\(test.subject.units.networks.mesh.#ref)"]
 				}

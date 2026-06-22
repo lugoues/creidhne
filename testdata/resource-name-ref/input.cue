@@ -45,8 +45,8 @@ test: testing.#Test & {
 					Network: ["container:\(test.subjects.cache.units.#container.#containerName)"]
 					// link to db by its explicit resource name
 					Environment: ["DB_HOST=\(test.subjects.db.units.#container.#containerName)"]
-					// mount the volume by its default resource name
-					Volume: ["\(test.subjects.data.units.#volume.#volumeName):/var/lib/app"]
+					// mount the managed volume via its #self handle
+					Volume: [test.subjects.data.units.#volume.#self & {target: "/var/lib/app"}]
 				}
 				Install: WantedBy: ["default.target"]
 			}

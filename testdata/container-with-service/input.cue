@@ -19,7 +19,7 @@ test: testing.#Test & {
 						"APP_ENV=production",
 						"LOG_LEVEL=info",
 					]
-					Volume: ["app-data.volume:/data"]
+					Volume: [units.volumes.data.#self & {target: "/data"}]
 					HealthCmd:       "curl -f http://localhost/health"
 					HealthInterval:  "30s"
 					HealthRetries:   3

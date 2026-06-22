@@ -75,9 +75,11 @@ package creidhne
 		// Controls whether proxy environment variables pass from Podman into the container.
 		HttpProxy?: bool
 
-		// Mount a volume in the container. Accepts a raw string mount or a managed/
-		// external volume's #self handle: units.volumes.X.#self & {target: "/path"}.
-		Volume?: [...(#VolumeMount | #VolumeMountRef)]
+		// Mount a volume in the container. Accepts a host bind/anonymous mount
+		// (#HostMount) or a managed/external volume via its #self handle:
+		// units.volumes.X.#self & {target: "/path"}. (Strict: no bare volume names;
+		// reference managed/external volumes through #self.)
+		Volume?: [...(#HostMount | #VolumeMountRef)]
 		// Attach a filesystem mount to the container.
 		Mount?: [...string]
 		// Mount a tmpfs in the container.

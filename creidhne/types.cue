@@ -37,6 +37,11 @@ import (
 //   source:/dest:opts    with mount options (ro, z, U, ...)
 #VolumeMount: =~"^(/[^:]+|[^:]+:/[^:]+(:[^:]+)?)$"
 
+// #HostMount is the strict raw Volume= form: a host bind or anonymous volume
+// only. The source must be a host path (absolute "/..." or relative "./...");
+// a bare volume name is rejected — reference managed/external volumes via #self.
+#HostMount: =~"^(/[^:]+|[/.][^:]*:/[^:]+(:[^:]+)?)$"
+
 // --- Cross-unit reference handles (#self) ---
 //
 // Every unit exposes a `#self` field: a typed, decoratable handle that other

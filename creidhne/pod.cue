@@ -45,9 +45,9 @@ package creidhne
 		// Add host-to-IP mapping to /etc/hosts. Format: hostname:ip.
 		AddHost?: [...#HostMapping]
 
-		// Mount a volume in the pod. Accepts a raw string mount or a managed/
-		// external volume's #self handle: units.volumes.X.#self & {target: "/path"}.
-		Volume?: [...(#VolumeMount | #VolumeMountRef)]
+		// Mount a volume in the pod. Accepts a host bind/anonymous mount or a
+		// managed/external volume via its #self handle. (Strict: no bare names.)
+		Volume?: [...(#HostMount | #VolumeMountRef)]
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 

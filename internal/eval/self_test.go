@@ -31,16 +31,31 @@ func TestVolumeSelfFlattensToMountString(t *testing.T) {
 	if len(got) != 1 || got[0] != "app-data.volume:/etc/x:U" {
 		t.Fatalf("volumeStrings = %v, want [app-data.volume:/etc/x:U]", got)
 	}
+}
 
-	// The raw string form must produce byte-identical output.
-	raw := containerData(t, selfQuadlet(`{
+// TestVolumeRejectsBareNameString: strict refuses a bare volume-name source;
+// managed/external volumes must be referenced via #self.
+func TestVolumeRejectsBareNameString(t *testing.T) {
+	err := loadSourceErr(t, selfQuadlet(`{
 		volumes: data: {Volume: {}}
-		#container: Container: {Image: "img", Volume: ["app-data.volume:/etc/x:U"]}
-	}`), "volumeStrings")
-	if len(raw) != 1 || raw[0] != got[0] {
-		t.Fatalf("raw form = %v, want same as #self form %v", raw, got)
+		#container: Container: {Image: "img", Volume: ["app-data.volume:/etc/x"]}
+	}`))
+	if err == nil {
+		t.Error("strict Volume= must reject a bare volume-name source (use #self)")
 	}
 }
+
+// TestVolumeAcceptsHostMount: host binds and anonymous mounts stay raw strings.
+func TestVolumeAcceptsHostMount(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		#container: Container: {Image: "img", Volume: ["/run/x.sock:/run/x.sock:ro", "/data"]}
+	}`), "volumeStrings")
+	want := []any{"/run/x.sock:/run/x.sock:ro", "/data"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("volumeStrings = %v, want %v", got, want)
+	}
+}
+
 
 // TestVolumeSelfBareRefNoOptions covers a target without options.
 func TestVolumeSelfBareRefNoOptions(t *testing.T) {

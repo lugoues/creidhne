@@ -41,7 +41,7 @@ test: testing.#Test & {
 					Container: {
 						Image:         "docker.io/myapp:latest"
 						ContainerName: "app"
-						Volume: ["\(test.subjects.app.units.#volume.#ref):/data"]
+						Volume: [test.subjects.app.units.#volume.#self & {target: "/data"}]
 						Network: ["proxy-backend.network"]
 					}
 					Install: WantedBy: ["multi-user.target"]
