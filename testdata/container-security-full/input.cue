@@ -7,6 +7,8 @@ import (
 	"github.com/lugoues/quadlets-test:testing"
 )
 
+externals: creidhne.#ExternalUnits & {pods: mypod: _}
+
 test: testing.#Test & {
 	subject: creidhne.#Quadlet & {
 		name: "secure"
@@ -22,7 +24,7 @@ test: testing.#Test & {
 					ReadOnly:              true
 					ReadOnlyTmpfs:         true
 					HttpProxy:             true
-					Pod:                   "mypod.pod"
+					Pod:                   externals.pods.mypod.#self
 					StartWithPod:          true
 					NoNewPrivileges:       true
 					SeccompProfile:        "/etc/seccomp.json"

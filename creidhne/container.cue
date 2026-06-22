@@ -185,9 +185,9 @@ package creidhne
 		// Assign additional groups to the primary user running within the container process.
 		GroupAdd?: [...string]
 
-		// Link the container to a Quadlet .pod unit. Accepts a raw "<name>.pod"
-		// string or a pod #self handle: units.#pod.#self.
-		Pod?: (string | #PodSelf)
+		// Link the container to a Quadlet .pod unit via its #self handle:
+		// Pod: units.#pod.#self. (Strict: Pod= is ref-only, no raw values.)
+		Pod?: #PodSelf
 		// Determines whether the container starts with the associated pod. Defaults to true.
 		StartWithPod?: bool
 

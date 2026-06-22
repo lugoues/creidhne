@@ -30,7 +30,7 @@ test: testing.#Test & {
 				Container: {
 					Image:         "docker.io/myapp:latest"
 					ContainerName: "webapp-app"
-					Pod:           test.subject.units.#pod.#ref
+					Pod:           test.subject.units.#pod.#self
 				}
 				Install: WantedBy: ["multi-user.target"]
 			}
@@ -39,7 +39,7 @@ test: testing.#Test & {
 				Container: {
 					Image:         "docker.io/envoy:latest"
 					ContainerName: "webapp-sidecar"
-					Pod:           test.subject.units.#pod.#ref
+					Pod:           test.subject.units.#pod.#self
 				}
 				Install: WantedBy: ["multi-user.target"]
 			}

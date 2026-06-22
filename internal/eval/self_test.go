@@ -155,12 +155,16 @@ func TestPodSelfFlattens(t *testing.T) {
 	if got != "app.pod" {
 		t.Fatalf("podString = %q, want app.pod", got)
 	}
-	raw := scalarField(t, selfQuadlet(`{
+}
+
+// TestPodRejectsRawString: strict Pod= is ref-only; a bare string is rejected.
+func TestPodRejectsRawString(t *testing.T) {
+	err := loadSourceErr(t, selfQuadlet(`{
 		#pod: {}
 		#container: Container: {Image: "img", Pod: "app.pod"}
-	}`), "podString")
-	if raw != got {
-		t.Fatalf("raw Pod = %q, want same as #self %q", raw, got)
+	}`))
+	if err == nil {
+		t.Error("strict Pod= must reject a raw string (use units.#pod.#self)")
 	}
 }
 
