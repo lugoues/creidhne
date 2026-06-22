@@ -41,8 +41,8 @@ test: testing.#Test & {
 			units: #container: {
 				Container: {
 					Image: "docker.io/app:latest"
-					// join cache's network namespace by its default resource name
-					Network: ["container:\(test.subjects.cache.units.#container.#containerName)"]
+					// join cache's network namespace via its #self handle (.container)
+					Network: [test.subjects.cache.units.#container.#self]
 					// link to db by its explicit resource name
 					Environment: ["DB_HOST=\(test.subjects.db.units.#container.#containerName)"]
 					// mount the managed volume via its #self handle

@@ -83,6 +83,12 @@ import (
 #NetworkSelf:   #RefSelf & {_kind: "network"}
 #ContainerSelf: #RefSelf & {_kind: "container"}
 
+// #NetworkMode is the strict raw Network= form: the nameless podman modes only.
+// Named references (a .network, or netns reuse of a .container) go through
+// #NetworkSelf / #ContainerSelf; out-of-band networks go through externals.
+#NetworkMode: "host" | "none" | "bridge" | "private" |
+	=~"^pasta(:.*)?$" | =~"^slirp4netns(:.*)?$" | =~"^ns:.+$"
+
 // Pod= destination form: only a pod's #self (the spec accepts no raw values
 // other than the .pod reference itself).
 #PodSelf: #RefSelf & {_kind: "pod"}

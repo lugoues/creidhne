@@ -19,7 +19,7 @@ test: testing.#Test & {
 					Container: {
 						Image:         "docker.io/haproxy:latest"
 						ContainerName: "proxy"
-						Network: ["backend.network"]
+						Network: [units.networks.backend.#self]
 					}
 					Unit: {
 						After:    [test.subjects.app.units.#container.#service]
@@ -42,7 +42,7 @@ test: testing.#Test & {
 						Image:         "docker.io/myapp:latest"
 						ContainerName: "app"
 						Volume: [test.subjects.app.units.#volume.#self & {target: "/data"}]
-						Network: ["proxy-backend.network"]
+						Network: [test.subjects.proxy.units.networks.backend.#self]
 					}
 					Install: WantedBy: ["multi-user.target"]
 				}

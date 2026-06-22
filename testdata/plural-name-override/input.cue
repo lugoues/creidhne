@@ -25,7 +25,7 @@ test: testing.#Test & {
 						test.subject.units.volumes.data.#self & {target: "/cache"},
 						test.subject.units.volumes.logs.#self & {target: "/logs"},
 					]
-					Network: ["\(test.subject.units.networks.mesh.#ref)"]
+					Network: [test.subject.units.networks.mesh.#self]
 				}
 				Unit: After: [test.subject.units.volumes.data.#service]
 				Install: WantedBy: ["multi-user.target"]

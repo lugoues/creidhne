@@ -23,9 +23,9 @@ package creidhne
 		// Override the default systemd service unit name.
 		ServiceName?: string
 
-		// Specify a custom network for the pod. Accepts raw modes or a
-		// network/container #self handle.
-		Network?: [...(string | #NetworkSelf | #ContainerSelf)]
+		// Specify a custom network for the pod. Accepts a raw mode (#NetworkMode)
+		// or a network/container #self handle. (Strict: named refs go through #self.)
+		Network?: [...(#NetworkMode | #NetworkSelf | #ContainerSelf)]
 		// Add a network-scoped alias for the pod for DNS resolution grouping.
 		NetworkAlias?: [...string]
 		// Exposes a port, or a range of ports, from the pod to the host.

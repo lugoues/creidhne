@@ -5,7 +5,7 @@ After=app.service
 [Container]
 Image=docker.io/haproxy:latest
 ContainerName=proxy
-Network=backend.network
+Network=proxy-backend.network
 
 [Install]
 WantedBy=multi-user.target

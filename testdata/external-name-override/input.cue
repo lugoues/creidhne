@@ -24,7 +24,7 @@ test: testing.#Test & {
 			Container: {
 				Image:         "docker.io/myapp:latest"
 				ContainerName: "app"
-				Network: ["\(_ext.networks.egress.#ref)"]
+				Network: [_ext.networks.egress.#self]
 			}
 			Unit: {
 				After: [

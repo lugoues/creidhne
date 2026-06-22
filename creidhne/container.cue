@@ -48,10 +48,10 @@ package creidhne
 		// Use the host environment inside of the container.
 		EnvironmentHost?: bool
 
-		// Specify a custom network for the container. Accepts raw modes (host,
-		// none, bridge, container:NAME, name.network, ...) or a network/container
-		// #self handle: units.networks.X.#self.
-		Network?: [...(string | #NetworkSelf | #ContainerSelf)]
+		// Specify a custom network for the container. Accepts a raw mode
+		// (#NetworkMode: host/none/bridge/private/pasta/slirp4netns/ns:PATH) or a
+		// network/container #self handle. (Strict: named refs go through #self.)
+		Network?: [...(#NetworkMode | #NetworkSelf | #ContainerSelf)]
 		// Add a network-scoped alias for the container. Aliases can group containers in DNS resolution.
 		NetworkAlias?: [...string]
 		// Exposes a port, or a range of ports, from the container to the host.

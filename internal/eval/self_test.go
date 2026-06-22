@@ -103,14 +103,6 @@ func TestNetworkSelfFlattens(t *testing.T) {
 		t.Fatalf("networkStrings = %v, want [app-net.network]", got)
 	}
 
-	raw := containerData(t, selfQuadlet(`{
-		networks: net: {Network: {}}
-		#container: Container: {Image: "img", Network: ["app-net.network"]}
-	}`), "networkStrings")
-	if len(raw) != 1 || raw[0] != got[0] {
-		t.Fatalf("raw form = %v, want same as #self form %v", raw, got)
-	}
-
 	// A container #self in Network= is the netns-reuse form (name.container).
 	cself := containerData(t, selfQuadlet(`{
 		containers: one: Container: {Image: "img"}
@@ -132,18 +124,31 @@ func TestNetworkSlotRejectsVolumeSelf(t *testing.T) {
 	}
 }
 
-// TestNetworkRawModesStillAccepted: raw modes pass through unchanged (additive).
-func TestNetworkRawModesStillAccepted(t *testing.T) {
+// TestNetworkRawModesAccepted: the nameless podman modes pass through.
+func TestNetworkRawModesAccepted(t *testing.T) {
 	got := containerData(t, selfQuadlet(`{
-		#container: Container: {Image: "img", Network: ["host", "none", "container:other"]}
+		#container: Container: {Image: "img", Network: ["host", "none", "bridge", "slirp4netns:port_handler=slirp4netns", "ns:/run/netns/x"]}
 	}`), "networkStrings")
-	want := []any{"host", "none", "container:other"}
+	want := []any{"host", "none", "bridge", "slirp4netns:port_handler=slirp4netns", "ns:/run/netns/x"}
 	if len(got) != len(want) {
 		t.Fatalf("networkStrings = %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("networkStrings[%d] = %v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+// TestNetworkRejectsRawRefForms: strict refuses bare .network strings, raw
+// container:NAME netns reuse, and bare custom network names. Use #self/externals.
+func TestNetworkRejectsRawRefForms(t *testing.T) {
+	for _, bad := range []string{`["app-net.network"]`, `["container:systemd-cache"]`, `["mycustomnet"]`} {
+		err := loadSourceErr(t, selfQuadlet(`{
+			#container: Container: {Image: "img", Network: `+bad+`}
+		}`))
+		if err == nil {
+			t.Errorf("strict Network= must reject %s", bad)
 		}
 	}
 }
