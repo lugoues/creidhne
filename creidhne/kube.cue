@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).kube"
 	#service: "\(_stem).service"
+	// #self: reference handle.
+	#self: #RefSelf & {_kind: "kube", source: #ref}
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

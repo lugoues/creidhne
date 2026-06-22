@@ -37,6 +37,41 @@ import (
 //   source:/dest:opts    with mount options (ro, z, U, ...)
 #VolumeMount: =~"^(/[^:]+|[^:]+:/[^:]+(:[^:]+)?)$"
 
+// --- Cross-unit reference handles (#self) ---
+//
+// Every unit exposes a `#self` field: a typed, decoratable handle that other
+// units reference instead of a bare string. It carries a `_kind` discriminator
+// (so a volume's #self cannot be placed in a network slot) and a `source` (the
+// unit's #ref). A consuming field flattens `#self` to a string via `_rendered`,
+// the same mechanism #SecretRef/secretStrings already use.
+
+// #RefSelf is the base handle for kinds referenced by a bare ref (network, pod,
+// image, build, container, ...). It flattens to the plain #ref.
+#RefSelf: {
+	_kind:     string
+	source:    string
+	_rendered: source
+}
+
+// #VolumeSelf is a volume's handle: a bare volume ref optionally decorated with
+// a mount target and options, flattening to "source[:target[:options]]".
+#VolumeSelf: {
+	_kind:    "volume"
+	source:   string
+	target?:  string
+	options?: string
+	_rendered: strings.Join(list.Concat([
+		[source],
+		[ if target != _|_ {target}],
+		[ if options != _|_ {options}],
+	]), ":")
+}
+
+// #VolumeMountRef is the Volume= destination form: a volume #self that must
+// carry a mount target. A foreign kind's #self (different _kind) or a missing
+// target is rejected here.
+#VolumeMountRef: #VolumeSelf & {target: string}
+
 // Device mapping for AddDevice= ([Container]).
 // Form: [-]HOST-DEVICE[:CONTAINER-DEVICE][:PERMISSIONS] (podman-systemd.unit.5
 // AddDevice=). A leading "-" adds the device only if it exists on the host;

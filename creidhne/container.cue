@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).container"
 	#service: "\(_stem).service"
+	// #self: reference handle (e.g. for Network=container:... reuse via .container).
+	#self: #RefSelf & {_kind: "container", source: #ref}
 
 	// #containerName is the resolved ContainerName: the explicit value if set,
 	// else podman's systemd-%N default. Reference it from other units, e.g.
@@ -71,8 +73,9 @@ package creidhne
 		// Controls whether proxy environment variables pass from Podman into the container.
 		HttpProxy?: bool
 
-		// Mount a volume in the container. Supports .volume Quadlet file references.
-		Volume?: [...#VolumeMount]
+		// Mount a volume in the container. Accepts a raw string mount or a managed/
+		// external volume's #self handle: units.volumes.X.#self & {target: "/path"}.
+		Volume?: [...(#VolumeMount | #VolumeMountRef)]
 		// Attach a filesystem mount to the container.
 		Mount?: [...string]
 		// Mount a tmpfs in the container.
@@ -217,6 +220,15 @@ package creidhne
 	secretStrings: [
 		if Container.Secret != _|_ for s in Container.Secret {
 			(s & string) | (s & {_rendered: _})._rendered
+		},
+	]
+
+	// Resolved volumes: flattens #self volume refs to "source:target[:options]"
+	// strings; raw string mounts pass through unchanged. Same mechanism as
+	// secretStrings, consumed by the template instead of Container.Volume.
+	volumeStrings: [
+		if Container.Volume != _|_ for v in Container.Volume {
+			(v & string) | (v & {_rendered: _})._rendered
 		},
 	]
 }

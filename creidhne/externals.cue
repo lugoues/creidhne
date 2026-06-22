@@ -30,15 +30,17 @@ package creidhne
 }
 
 #ExternalUnits: {
-	// Quadlet types: ref/service computed from name (defaults to the map key).
-	containers: [Name=string]: {name: string | *Name, #ref: "\(name).container", #service: "\(name).service"}
-	networks: [Name=string]:   {name: string | *Name, #ref: "\(name).network", #service: "\(name)-network.service"}
-	volumes: [Name=string]:    {name: string | *Name, #ref: "\(name).volume", #service: "\(name)-volume.service"}
-	pods: [Name=string]:       {name: string | *Name, #ref: "\(name).pod", #service: "\(name)-pod.service"}
-	builds: [Name=string]:     {name: string | *Name, #ref: "\(name).build", #service: "\(name)-build.service"}
-	images: [Name=string]:     {name: string | *Name, #ref: "\(name).image", #service: "\(name)-image.service"}
-	kubes: [Name=string]:      {name: string | *Name, #ref: "\(name).kube", #service: "\(name).service"}
-	artifacts: [Name=string]:  {name: string | *Name, #ref: "\(name).artifact", #service: "\(name)-artifact.service"}
+	// Quadlet types: ref/service/self computed from name (defaults to the map key).
+	// #self mirrors the managed-unit handle so an external can be referenced the
+	// same way (e.g. Volume: [externals.volumes.cache.#self & {target: "/x"}]).
+	containers: [Name=string]: {name: string | *Name, #ref: "\(name).container", #service: "\(name).service", #self: #RefSelf & {_kind: "container", source: #ref}}
+	networks: [Name=string]:   {name: string | *Name, #ref: "\(name).network", #service: "\(name)-network.service", #self: #RefSelf & {_kind: "network", source: #ref}}
+	volumes: [Name=string]:    {name: string | *Name, #ref: "\(name).volume", #service: "\(name)-volume.service", #self: #VolumeSelf & {source: #ref}}
+	pods: [Name=string]:       {name: string | *Name, #ref: "\(name).pod", #service: "\(name)-pod.service", #self: #RefSelf & {_kind: "pod", source: #ref}}
+	builds: [Name=string]:     {name: string | *Name, #ref: "\(name).build", #service: "\(name)-build.service", #self: #RefSelf & {_kind: "build", source: #ref}}
+	images: [Name=string]:     {name: string | *Name, #ref: "\(name).image", #service: "\(name)-image.service", #self: #RefSelf & {_kind: "image", source: #ref}}
+	kubes: [Name=string]:      {name: string | *Name, #ref: "\(name).kube", #service: "\(name).service", #self: #RefSelf & {_kind: "kube", source: #ref}}
+	artifacts: [Name=string]:  {name: string | *Name, #ref: "\(name).artifact", #service: "\(name)-artifact.service", #self: #RefSelf & {_kind: "artifact", source: #ref}}
 
 	// Native systemd types (only #ref, not quadlet-managed)
 	services: [Name=string]: #ExtUnit & {_key: Name, _type: "service"}

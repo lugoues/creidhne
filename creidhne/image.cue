@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).image"
 	#service: "\(_stem)-image.service"
+	// #self: reference handle (e.g. Image= pulled by this .image).
+	#self: #RefSelf & {_kind: "image", source: #ref}
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

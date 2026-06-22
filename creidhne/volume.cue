@@ -6,6 +6,9 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).volume"
 	#service: "\(_stem)-volume.service"
+	// #self: reference handle for a Volume= field, e.g.
+	//   Volume: [units.volumes.data.#self & {target: "/data", options: "U"}]
+	#self: #VolumeSelf & {source: #ref}
 
 	// #volumeName resolves to the explicit VolumeName, else systemd-%N.
 	#volumeName: *Volume.VolumeName | "systemd-\(_stem)"

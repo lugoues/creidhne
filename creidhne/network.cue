@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).network"
 	#service: "\(_stem)-network.service"
+	// #self: reference handle for a Network= field.
+	#self: #RefSelf & {_kind: "network", source: #ref}
 
 	// #networkName resolves to the explicit NetworkName, else systemd-%N.
 	#networkName: *Network.NetworkName | "systemd-\(_stem)"

@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).build"
 	#service: "\(_stem)-build.service"
+	// #self: reference handle (e.g. Image= built by this .build).
+	#self: #RefSelf & {_kind: "build", source: #ref}
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

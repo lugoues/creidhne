@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).artifact"
 	#service: "\(_stem)-artifact.service"
+	// #self: reference handle.
+	#self: #RefSelf & {_kind: "artifact", source: #ref}
 
 	Unit?:    #UnitSection
 	Service?: #ServiceSection

@@ -25,7 +25,7 @@
 {{ end -}}
 {{ range .Pod.AddHost -}}AddHost={{ . }}
 {{ end -}}
-{{ range .Pod.Volume -}}Volume={{ . }}
+{{ range .volumeStrings -}}Volume={{ . }}
 {{ end -}}
 {{ if .Pod.ShmSize -}}ShmSize={{ .Pod.ShmSize }}
 {{ end -}}

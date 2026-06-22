@@ -50,7 +50,7 @@
 {{ end -}}
 {{ range .Container.AddHost -}}AddHost={{ . }}
 {{ end -}}
-{{ range .Container.Volume -}}Volume={{ . }}
+{{ range .volumeStrings -}}Volume={{ . }}
 {{ end -}}
 {{ range .Container.Mount -}}Mount={{ . }}
 {{ end -}}

@@ -6,6 +6,8 @@ package creidhne
 	_stem:    string
 	#ref:     "\(_stem).pod"
 	#service: "\(_stem)-pod.service"
+	// #self: reference handle for a Pod= field.
+	#self: #RefSelf & {_kind: "pod", source: #ref}
 
 	// #podName resolves to the explicit PodName, else systemd-%N.
 	#podName: *Pod.PodName | "systemd-\(_stem)"
@@ -42,8 +44,9 @@ package creidhne
 		// Add host-to-IP mapping to /etc/hosts. Format: hostname:ip.
 		AddHost?: [...#HostMapping]
 
-		// Mount a volume in the pod. Supports .volume Quadlet file references.
-		Volume?: [...#VolumeMount]
+		// Mount a volume in the pod. Accepts a raw string mount or a managed/
+		// external volume's #self handle: units.volumes.X.#self & {target: "/path"}.
+		Volume?: [...(#VolumeMount | #VolumeMountRef)]
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
@@ -74,4 +77,11 @@ package creidhne
 		// Load the specified containers.conf(5) module.
 		ContainersConfModule?: [...string]
 	}
+
+	// Resolved volumes: flattens #self volume refs to strings for the template.
+	volumeStrings: [
+		if Pod.Volume != _|_ for v in Pod.Volume {
+			(v & string) | (v & {_rendered: _})._rendered
+		},
+	]
 }
