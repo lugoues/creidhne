@@ -161,9 +161,11 @@ app: q.#Quadlet & {name: "app", units: containers: side: Container: {Image: "img
 
 consumer: q.#Quadlet & {
 	name: "consumer"
-	units: #container: {
-		Container: {Image: "img"}
-		Unit: After: [
+	units: #container: Container: {
+		Image: "img"
+		// Observe the resolved resource names via PodmanArgs (an arbitrary-string
+		// field); strict dep fields like After= would reject non-service names.
+		PodmanArgs: [
 			db.units.#container.#containerName,
 			web.units.#container.#containerName,
 			store.units.#volume.#volumeName,
@@ -180,8 +182,8 @@ consumer: q.#Quadlet & {
 		if q.Name != "consumer" {
 			continue
 		}
-		unit, _ := q.Units[0].Data["Unit"].(map[string]any)
-		after, _ = unit["After"].([]any)
+		container, _ := q.Units[0].Data["Container"].(map[string]any)
+		after, _ = container["PodmanArgs"].([]any)
 	}
 	got := make([]string, len(after))
 	for i, a := range after {

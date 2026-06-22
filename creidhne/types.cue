@@ -50,6 +50,12 @@ import (
 // unit's #ref). A consuming field flattens `#self` to a string via `_rendered`,
 // the same mechanism #SecretRef/secretStrings already use.
 
+// #ServiceName is a systemd unit name, the branded type for [Unit] dependency
+// fields (After/Requires/...). A value must end in a systemd unit suffix, so a
+// podman ref (.container/.volume #self) or a typo'd bare word is rejected.
+// A managed unit's #service and an external native unit's #ref are #ServiceNames.
+#ServiceName: string & =~"\\.(service|socket|target|timer|path|mount|automount|device|swap|slice|scope)$"
+
 // #RefSelf is the base handle for kinds referenced by a bare ref (network, pod,
 // image, build, container, ...). It flattens to the plain #ref.
 #RefSelf: {

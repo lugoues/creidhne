@@ -259,3 +259,18 @@ func TestMountRefRejectsForeignSelf(t *testing.T) {
 		t.Error("want rejection: a network #self in #MountRef.ref")
 	}
 }
+
+// TestDepFieldsRejectNonService: [Unit] dep fields take only #ServiceName. A
+// podman ref (.container string or a #self struct) or a typo'd bare word is
+// rejected; reference a managed unit's #service or an external native #ref.
+func TestDepFieldsRejectNonService(t *testing.T) {
+	for _, bad := range []string{`["app.container"]`, `["typo"]`, `[units.#pod.#self]`} {
+		err := loadSourceErr(t, selfQuadlet(`{
+			#pod: {}
+			#container: {Container: {Image: "img"}, Unit: After: `+bad+`}
+		}`))
+		if err == nil {
+			t.Errorf("strict After= must reject %s", bad)
+		}
+	}
+}
