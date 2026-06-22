@@ -32,7 +32,7 @@ socket_proxy: creidhne.#Quadlet & {
 				]
 
 				Volume: [
-					"\(units.volumes.run.#ref):/mnt/spx",
+					units.volumes.run.#self & {target: "/mnt/spx"},
 					"/run/podman/podman.sock:/var/run/docker.sock:ro",
 				]
 
@@ -46,7 +46,7 @@ socket_proxy: creidhne.#Quadlet & {
 				MemoryMax: "64M"
 			}
 
-			Install: WantedBy: ["multi-user.target", "default.target"]
+			Install: WantedBy: ["multi-user.target"]
 		}
 
 		volumes: run: {

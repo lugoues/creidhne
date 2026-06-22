@@ -7,7 +7,7 @@ traefik: creidhne.#Quadlet & {
 	name: "traefik"
 
 	units: {
-		// Build the traefik image from an inline Containerfile.
+
 		#build: {
 			Build: {
 				BuildArg: ["TRAEFIK_VERSION=3.6.11"]
@@ -83,24 +83,33 @@ traefik: creidhne.#Quadlet & {
 			}
 
 			Container: {
-				Image:         units.#build.#ref
-				Pod:           units.#pod.#ref
+				Image:         units.#build.#self
+				Pod:           units.#pod.#self
 				ContainerName: "traefik"
 
 				Secret: [
-					"porkbun_api_key,type=env,target=PORKBUN_API_KEY",
-					"porkbun_secret_api_key,type=env,target=PORKBUN_SECRET_API_KEY",
-					"traefik-otel-auth,type=env,target=OTEL_AUTH",
+					secrets.porkbun_api_key & {
+						type:   "env"
+						target: "PORKBUN_API_KEY"
+					},
+					secrets.porkbun_secret_api_key & {
+						type:   "env"
+						target: "PORKBUN_SECRET_API_KEY"
+					},
+					secrets.traefik_otel_auth & {
+						type:   "env"
+						target: "OTEL_AUTH"
+					},
 				]
 
 				Volume: [
 					"/var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro",
-					"\(units.volumes.acme.#ref):/etc/traefik/acme:U",
-					"\(units.volumes.plugins.#ref):/traefik/plugins:U",
-					"\(socket_proxy.units.volumes.run.#ref):/mnt/spx:ro",
+					units.volumes.acme.#self & {target: "/etc/traefik/acme", options: "U"},
+					units.volumes.plugins.#self & {target: "/traefik/plugins", options: "U"},
+					socket_proxy.units.volumes.run.#self & {target: "/mnt/spx", options: "ro"},
 				]
 
-				ReadOnly:        true
+				ReadOnly: true
 				DropCapability: ["ALL"]
 				NoNewPrivileges: true
 				AutoUpdate:      "registry"
@@ -149,10 +158,10 @@ traefik: creidhne.#Quadlet & {
 		containers: errors: {
 			Container: {
 				Image:         "docker.io/11notes/traefik:errors"
-				Pod:           "\(units.#pod.#ref)"
+				Pod:           units.#pod.#self
 				ContainerName: "traefik-errors"
 
-				ReadOnly:        true
+				ReadOnly: true
 				DropCapability: ["ALL"]
 				NoNewPrivileges: true
 
@@ -192,8 +201,8 @@ traefik: creidhne.#Quadlet & {
 				PodName: "traefik"
 				UserNS:  "auto"
 				Network: [
-					units.networks.internal.#ref,
-					externals.networks["internet-egress"].#ref,
+					units.networks.internal.#self,
+					externals.networks["internet-egress"].#self,
 				]
 				PublishPort: ["0.0.0.0:443:443"]
 			}
