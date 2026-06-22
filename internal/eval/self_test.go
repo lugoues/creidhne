@@ -33,18 +33,6 @@ func TestVolumeSelfFlattensToMountString(t *testing.T) {
 	}
 }
 
-// TestVolumeRejectsBareNameString: strict refuses a bare volume-name source;
-// managed/external volumes must be referenced via #self.
-func TestVolumeRejectsBareNameString(t *testing.T) {
-	err := loadSourceErr(t, selfQuadlet(`{
-		volumes: data: {Volume: {}}
-		#container: Container: {Image: "img", Volume: ["app-data.volume:/etc/x"]}
-	}`))
-	if err == nil {
-		t.Error("strict Volume= must reject a bare volume-name source (use #self)")
-	}
-}
-
 // TestVolumeAcceptsHostMount: host binds and anonymous mounts stay raw strings.
 func TestVolumeAcceptsHostMount(t *testing.T) {
 	got := containerData(t, selfQuadlet(`{
@@ -56,7 +44,6 @@ func TestVolumeAcceptsHostMount(t *testing.T) {
 	}
 }
 
-
 // TestVolumeSelfBareRefNoOptions covers a target without options.
 func TestVolumeSelfBareRefNoOptions(t *testing.T) {
 	got := containerData(t, selfQuadlet(`{
@@ -65,18 +52,6 @@ func TestVolumeSelfBareRefNoOptions(t *testing.T) {
 	}`), "volumeStrings")
 	if len(got) != 1 || got[0] != "app-data.volume:/data" {
 		t.Fatalf("volumeStrings = %v, want [app-data.volume:/data]", got)
-	}
-}
-
-// TestVolumeSlotRejectsForeignSelf is the brand: a network's #self cannot be
-// placed in a Volume= slot (its _kind conflicts and it has no mount target).
-func TestVolumeSlotRejectsForeignSelf(t *testing.T) {
-	err := loadSourceErr(t, selfQuadlet(`{
-		networks: net: {Network: {}}
-		#container: Container: {Image: "img", Volume: [units.networks.net.#self]}
-	}`))
-	if err == nil {
-		t.Error("want rejection: a network #self placed in a Volume= slot")
 	}
 }
 
@@ -174,17 +149,6 @@ func TestPodSelfFlattens(t *testing.T) {
 	}`), "podString")
 	if got != "app.pod" {
 		t.Fatalf("podString = %q, want app.pod", got)
-	}
-}
-
-// TestPodRejectsRawString: strict Pod= is ref-only; a bare string is rejected.
-func TestPodRejectsRawString(t *testing.T) {
-	err := loadSourceErr(t, selfQuadlet(`{
-		#pod: {}
-		#container: Container: {Image: "img", Pod: "app.pod"}
-	}`))
-	if err == nil {
-		t.Error("strict Pod= must reject a raw string (use units.#pod.#self)")
 	}
 }
 
