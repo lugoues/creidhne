@@ -29,7 +29,7 @@ File={{ .containerfilePath }}
 {{ end -}}
 {{ if .Build.AuthFile -}}AuthFile={{ .Build.AuthFile }}
 {{ end -}}
-{{ range .Build.Network -}}Network={{ . }}
+{{ range .Build.networkStrings -}}Network={{ . }}
 {{ end -}}
 {{ range .Build.DNS -}}DNS={{ . }}
 {{ end -}}
@@ -49,7 +49,7 @@ File={{ .containerfilePath }}
 {{ end -}}
 {{ range .Build.Secret -}}Secret={{ . }}
 {{ end -}}
-{{ range .Build.Volume -}}Volume={{ . }}
+{{ range .Build.volumeStrings -}}Volume={{ . }}
 {{ end -}}
 {{ range .Build.GroupAdd -}}GroupAdd={{ . }}
 {{ end -}}

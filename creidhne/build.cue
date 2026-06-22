@@ -56,7 +56,8 @@ package creidhne
 			// Path of the authentication file.
 			AuthFile?: string
 			// Configure network namespace for RUN instructions during build.
-			Network?: [...string]
+			// A raw mode (#NetworkMode) or a network #self. (Strict.)
+			Network?: [...(#NetworkMode | #NetworkSelf)]
 			// Set network-scoped DNS resolver/nameserver for the build container.
 			DNS?: [...#IPAddress]
 			// Set custom DNS options.
@@ -75,8 +76,9 @@ package creidhne
 			TLSVerify?: bool
 			// Pass secret information used in Containerfile build stages in a safe way.
 			Secret?: [...string]
-			// Mount a volume to containers when executing RUN instructions during the build.
-			Volume?: [...#VolumeMount]
+			// Mount a volume to containers when executing RUN instructions during the
+			// build. A host mount (#HostMount) or a volume #self. (Strict.)
+			Volume?: [...(#HostMount | #VolumeMountRef)]
 			// Assign additional groups to the primary user running within the container process.
 			GroupAdd?: [...string]
 			// Number of times to retry the image pull when an HTTP error occurs.
@@ -89,6 +91,18 @@ package creidhne
 			PodmanArgs?: [...string]
 			// Load the specified containers.conf(5) module.
 			ContainersConfModule?: [...string]
+
+			// Resolved networks/volumes: flatten #self refs to strings.
+			networkStrings: [
+				if Network != _|_ for n in Network {
+					(n & string) | (n & {_rendered: _})._rendered
+				},
+			]
+			volumeStrings: [
+				if Volume != _|_ for v in Volume {
+					(v & string) | (v & {_rendered: _})._rendered
+				},
+			]
 		}
 	}
 }
