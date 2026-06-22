@@ -198,3 +198,34 @@ func TestPodSlotRejectsForeignSelf(t *testing.T) {
 		t.Error("want rejection: a network #self placed in a Pod= slot")
 	}
 }
+
+// TestImageSelfFlattens: a build/image #self flattens to its .build/.image ref;
+// a raw image name passes through.
+func TestImageSelfFlattens(t *testing.T) {
+	got := scalarField(t, selfQuadlet(`{
+		#build: {ContainerFile: "FROM scratch\n", Build: ImageTag: ["localhost/x:latest"]}
+		#container: Container: {Image: units.#build.#self}
+	}`), "imageString")
+	if got != "app.build" {
+		t.Fatalf("imageString = %q, want app.build", got)
+	}
+	raw := scalarField(t, selfQuadlet(`{
+		#container: Container: {Image: "docker.io/x:latest"}
+	}`), "imageString")
+	if raw != "docker.io/x:latest" {
+		t.Fatalf("raw image = %q, want docker.io/x:latest", raw)
+	}
+}
+
+// TestImageRejectsRawRefString: a .build/.image ref written as a raw string is
+// rejected; managed builds/images must be referenced via #self.
+func TestImageRejectsRawRefString(t *testing.T) {
+	for _, bad := range []string{`"app.build"`, `"app.image"`} {
+		err := loadSourceErr(t, selfQuadlet(`{
+			#container: Container: {Image: `+bad+`}
+		}`))
+		if err == nil {
+			t.Errorf("strict Image= must reject raw %s (use #self)", bad)
+		}
+	}
+}

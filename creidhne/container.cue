@@ -19,7 +19,7 @@ package creidhne
 	Install?: #InstallSection
 	Quadlet?: #QuadletSection
 
-	Container: {Image: #ImageRef} | {Rootfs: string}
+	Container: {Image: (#ImageName | #ImageSelf | #BuildSelf)} | {Rootfs: string}
 	Container: {ReloadCmd: string} | {ReloadSignal: #Signal} | *{}
 	Container: {
 
@@ -249,5 +249,11 @@ package creidhne
 	// string passes through. Only present when Pod is set.
 	if Container.Pod != _|_ {
 		podString: (Container.Pod & string) | (Container.Pod & {_rendered: _})._rendered
+	}
+
+	// Resolved image (scalar): a raw image name passes through; an .image/.build
+	// #self flattens to its ref. Absent when Rootfs is used instead of Image.
+	if Container.Image != _|_ {
+		imageString: (Container.Image & string) | (Container.Image & {_rendered: _})._rendered
 	}
 }

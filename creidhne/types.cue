@@ -253,8 +253,14 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 
 #SecretEntry: string | #SecretRef
 
-// Container image reference
+// Container image reference (a raw image name; used by [Image]/[Volume] source).
 #ImageRef: string & !=""
+
+// Image= destination forms (strict). A raw image name (#ImageName, which must
+// not look like a .image/.build ref), or a managed .image/.build via #self.
+#ImageName: string & !="" & !~"\\.(image|build)$"
+#ImageSelf: #RefSelf & {_kind: "image"}
+#BuildSelf: #RefSelf & {_kind: "build"}
 
 // UID/GID mapping for UIDMap=/GIDMap= ([Container]/[Pod]).
 // Form: [flags]container_id:from_id[:amount] (podman-run --uidmap/--gidmap).

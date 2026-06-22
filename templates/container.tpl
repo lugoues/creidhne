@@ -1,6 +1,6 @@
 {{ template "unit" .Unit }}
 [Container]
-{{ if .Container.Image -}}Image={{ .Container.Image }}
+{{ if .imageString -}}Image={{ .imageString }}
 {{ end -}}
 {{ if .Container.Rootfs -}}Rootfs={{ .Container.Rootfs }}
 {{ end -}}
