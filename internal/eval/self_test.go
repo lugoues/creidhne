@@ -274,3 +274,18 @@ func TestNetworkSelfPassthrough(t *testing.T) {
 		t.Fatalf("networkStrings = %v, want [app-net.network:foo=bar]", got)
 	}
 }
+
+// TestCapabilityEnumAndEscape: known caps and "ALL" validate, a CAP_-prefixed
+// name is the forward-compat escape, and a typo is rejected.
+func TestCapabilityEnumAndEscape(t *testing.T) {
+	if err := loadSourceErr(t, selfQuadlet(`{
+		#container: Container: {Image: "img", AddCapability: ["NET_BIND_SERVICE", "CAP_NET_ADMIN"], DropCapability: ["ALL"]}
+	}`)); err != nil {
+		t.Errorf("valid capabilities rejected: %v", err)
+	}
+	if err := loadSourceErr(t, selfQuadlet(`{
+		#container: Container: {Image: "img", AddCapability: ["NET_BIND_SERVCE"]}
+	}`)); err == nil {
+		t.Error("typo'd capability must be rejected")
+	}
+}

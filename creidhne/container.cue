@@ -87,9 +87,9 @@ package creidhne
 		Tmpfs?: [...string]
 
 		// Add these capabilities, in addition to the default Podman capability set, to the container.
-		AddCapability?: [...string]
+		AddCapability?: [...#Capability]
 		// Remove capabilities from the default Podman set. Use "ALL" to drop everything.
-		DropCapability?: [...string]
+		DropCapability?: [...#Capability]
 		// If enabled, disables the container processes from gaining additional privileges.
 		NoNewPrivileges?: bool
 		// Set the seccomp profile for the container. Use "unconfined" to disable filters.
