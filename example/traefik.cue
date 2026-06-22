@@ -104,9 +104,9 @@ traefik: creidhne.#Quadlet & {
 
 				Volume: [
 					"/var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro",
-					units.volumes.acme.#self & {target: "/etc/traefik/acme", options: "U"},
-					units.volumes.plugins.#self & {target: "/traefik/plugins", options: "U"},
-					socket_proxy.units.volumes.run.#self & {target: "/mnt/spx", options: "ro"},
+					units.volumes.acme.#self & {target: "/etc/traefik/acme", options: ["U"]},
+					units.volumes.plugins.#self & {target: "/traefik/plugins", options: ["U"]},
+					socket_proxy.units.volumes.run.#self & {target: "/mnt/spx", options: ["ro"]},
 				]
 
 				ReadOnly: true
