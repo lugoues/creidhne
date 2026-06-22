@@ -72,6 +72,12 @@ import (
 // target is rejected here.
 #VolumeMountRef: #VolumeSelf & {target: string}
 
+// Network= destination forms. A Network= field accepts a network's #self
+// (Podman network systemd-$name) or a container's #self (netns reuse via
+// .container). A volume's #self (different _kind) is rejected.
+#NetworkSelf:   #RefSelf & {_kind: "network"}
+#ContainerSelf: #RefSelf & {_kind: "container"}
+
 // Device mapping for AddDevice= ([Container]).
 // Form: [-]HOST-DEVICE[:CONTAINER-DEVICE][:PERMISSIONS] (podman-systemd.unit.5
 // AddDevice=). A leading "-" adds the device only if it exists on the host;

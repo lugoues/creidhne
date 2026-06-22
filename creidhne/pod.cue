@@ -23,8 +23,9 @@ package creidhne
 		// Override the default systemd service unit name.
 		ServiceName?: string
 
-		// Specify a custom network for the pod. Supports .network Quadlet file references.
-		Network?: [...string]
+		// Specify a custom network for the pod. Accepts raw modes or a
+		// network/container #self handle.
+		Network?: [...(string | #NetworkSelf | #ContainerSelf)]
 		// Add a network-scoped alias for the pod for DNS resolution grouping.
 		NetworkAlias?: [...string]
 		// Exposes a port, or a range of ports, from the pod to the host.
@@ -82,6 +83,13 @@ package creidhne
 	volumeStrings: [
 		if Pod.Volume != _|_ for v in Pod.Volume {
 			(v & string) | (v & {_rendered: _})._rendered
+		},
+	]
+
+	// Resolved networks: flattens #self network/container refs for the template.
+	networkStrings: [
+		if Pod.Network != _|_ for n in Pod.Network {
+			(n & string) | (n & {_rendered: _})._rendered
 		},
 	]
 }

@@ -5,7 +5,7 @@
 {{ end -}}
 {{ if .Pod.ServiceName -}}ServiceName={{ .Pod.ServiceName }}
 {{ end -}}
-{{ range .Pod.Network -}}Network={{ . }}
+{{ range .networkStrings -}}Network={{ . }}
 {{ end -}}
 {{ range .Pod.NetworkAlias -}}NetworkAlias={{ . }}
 {{ end -}}

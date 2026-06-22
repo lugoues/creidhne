@@ -28,7 +28,7 @@
 {{ end -}}
 {{ if .Container.HttpProxy -}}HttpProxy=true
 {{ end -}}
-{{ range .Container.Network -}}Network={{ . }}
+{{ range .networkStrings -}}Network={{ . }}
 {{ end -}}
 {{ range .Container.NetworkAlias -}}NetworkAlias={{ . }}
 {{ end -}}

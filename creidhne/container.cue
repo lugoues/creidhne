@@ -48,8 +48,10 @@ package creidhne
 		// Use the host environment inside of the container.
 		EnvironmentHost?: bool
 
-		// Specify a custom network for the container. Supports .network Quadlet file references.
-		Network?: [...string]
+		// Specify a custom network for the container. Accepts raw modes (host,
+		// none, bridge, container:NAME, name.network, ...) or a network/container
+		// #self handle: units.networks.X.#self.
+		Network?: [...(string | #NetworkSelf | #ContainerSelf)]
 		// Add a network-scoped alias for the container. Aliases can group containers in DNS resolution.
 		NetworkAlias?: [...string]
 		// Exposes a port, or a range of ports, from the container to the host.
@@ -229,6 +231,14 @@ package creidhne
 	volumeStrings: [
 		if Container.Volume != _|_ for v in Container.Volume {
 			(v & string) | (v & {_rendered: _})._rendered
+		},
+	]
+
+	// Resolved networks: flattens #self network/container refs to their ref
+	// string; raw modes pass through unchanged.
+	networkStrings: [
+		if Container.Network != _|_ for n in Container.Network {
+			(n & string) | (n & {_rendered: _})._rendered
 		},
 	]
 }
