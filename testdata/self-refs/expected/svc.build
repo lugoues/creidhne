@@ -1,0 +1,7 @@
+
+[Build]
+ImageTag=localhost/svc:latest
+SetWorkingDirectory=unit
+File=images/svc.Containerfile
+Network=svc-net.network
+Volume=svc-data.volume:/build

@@ -1,0 +1,9 @@
+
+[Container]
+Image=svc.build
+ContainerName=svc
+Volume=svc-data.volume:/data:ro,U
+Mount=type=volume,source=svc-data.volume,destination=/mnt,ro
+
+[Install]
+WantedBy=default.target
