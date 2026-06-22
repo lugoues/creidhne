@@ -203,6 +203,43 @@ consumer: q.#Quadlet & {
 	}
 }
 
+// TestUnitDepsAcceptServiceRefs is the positive companion to
+// TestDepFieldsRejectNonService: the strict [Unit] dep fields accept and render
+// a managed unit's #service and an external native unit's #ref (this is the
+// After= coverage TestResolvedResourceNames used to provide incidentally before
+// strict deps forced it onto PodmanArgs).
+func TestUnitDepsAcceptServiceRefs(t *testing.T) {
+	quads := loadSource(t, `package naming
+import q "github.com/lugoues/creidhne@v0"
+ext: q.#ExternalUnits & {targets: "network-online": _, sockets: podman: _}
+app: q.#Quadlet & {
+	name: "app"
+	units: {
+		volumes: data: {Volume: {}}
+		#container: {
+			Container: {Image: "img"}
+			Unit: After: [units.volumes.data.#service, ext.targets["network-online"].#ref, ext.sockets.podman.#ref]
+		}
+	}
+}
+`)
+	var after []string
+	for _, u := range quads[0].Units {
+		if u.Kind == "container" {
+			unit, _ := u.Data["Unit"].(map[string]any)
+			raw, _ := unit["After"].([]any)
+			for _, a := range raw {
+				s, _ := a.(string)
+				after = append(after, s)
+			}
+		}
+	}
+	want := []string{"app-data-volume.service", "network-online.target", "podman.socket"}
+	if strings.Join(after, ",") != strings.Join(want, ",") {
+		t.Fatalf("After = %v, want %v", after, want)
+	}
+}
+
 // loadSourceErr is loadSource's negative twin: it returns the load error instead
 // of failing the test, for asserting that invalid input is rejected.
 func loadSourceErr(t *testing.T, src string) error {
