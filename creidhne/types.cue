@@ -93,16 +93,64 @@ import (
 // target is rejected here.
 #VolumeMountRef: #VolumeSelf & {target: string}
 
+// #MAC is a hardware address: six colon-separated hex octets.
+#MAC: =~"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
+
+// #NetConnOptions are the connection options shared by a bridge network and a
+// .network reference (podman-run --network): static addressing and aliases.
+// The documented set is fixed, but netavark accepts more, so `passthrough`
+// carries any not modeled here as raw key=value. Renders to "key=value,..."
+// via _connStr (empty when nothing is set).
+#NetConnOptions: {
+	_prefix:              string      // what the options decorate: "bridge" or a .network ref
+	alias?:               [...string] // repeatable -> alias=web,alias=app
+	ip?:                  #IPv4
+	ip6?:                 #IPv6
+	mac?:                 #MAC
+	interface_name?:      string
+	host_interface_name?: string
+	passthrough?: [...#KeyValue] // netavark options not modeled above
+	_connStr: strings.Join(list.Concat([
+		[ if alias != _|_ for a in alias {"alias=\(a)"}],
+		[ if ip != _|_ {"ip=\(ip)"}],
+		[ if ip6 != _|_ {"ip6=\(ip6)"}],
+		[ if mac != _|_ {"mac=\(mac)"}],
+		[ if interface_name != _|_ {"interface_name=\(interface_name)"}],
+		[ if host_interface_name != _|_ {"host_interface_name=\(host_interface_name)"}],
+		[ if passthrough != _|_ for kv in passthrough {kv}],
+	]), ",")
+	// _rendered = "_prefix[:opt,opt,...]"; defined here (not in the embedding
+	// struct) so the _connStr/_prefix references stay in #NetConnOptions's scope.
+	_rendered: strings.Join(list.Concat([[_prefix], [ if _connStr != "" {_connStr}]]), ":")
+}
+
 // Network= destination forms. A Network= field accepts a network's #self
-// (Podman network systemd-$name) or a container's #self (netns reuse via
-// .container). A volume's #self (different _kind) is rejected.
-#NetworkSelf:   #RefSelf & {_kind: "network"}
+// (optionally decorated with #NetConnOptions, rendering "name.network:ip=...,
+// alias=..."), a container's #self (netns reuse via .container, no options), a
+// raw mode (#NetworkMode), or bridge-with-options (#BridgeNet). A volume's #self
+// (different _kind) is rejected.
+#NetworkSelf: {
+	_kind:   "network"
+	source:  string
+	_prefix: source
+	#NetConnOptions
+}
 #ContainerSelf: #RefSelf & {_kind: "container"}
 
-// #NetworkMode is the strict raw Network= form: the nameless podman modes only.
-// Named references (a .network, or netns reuse of a .container) go through
-// #NetworkSelf / #ContainerSelf; out-of-band networks go through externals.
-#NetworkMode: "host" | "none" | "bridge" | "private" |
+// #BridgeNet is bridge mode carrying connection options: {mode: "bridge", ip: ...}
+// renders "bridge:ip=...". Bare "bridge" (no options) stays a plain string.
+#BridgeNet: {
+	mode:    "bridge"
+	_prefix: "bridge"
+	#NetConnOptions
+}
+
+// #NetworkMode is the strict raw Network= form: the nameless podman modes
+// (host/none/private/bridge), bridge-with-options (#BridgeNet), and the
+// open-ended pasta/slirp4netns/ns forms (pasta args and slirp4netns options are
+// not enumerable; slirp4netns is legacy/deprecated, kept as a loose escape).
+// Named references go through #self.
+#NetworkMode: "host" | "none" | "private" | "bridge" | #BridgeNet |
 	=~"^pasta(:.*)?$" | =~"^slirp4netns(:.*)?$" | =~"^ns:.+$"
 
 // Pod= destination form: only a pod's #self (the spec accepts no raw values

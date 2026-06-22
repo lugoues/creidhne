@@ -34,7 +34,7 @@ package creidhne
 	// #self mirrors the managed-unit handle so an external can be referenced the
 	// same way (e.g. Volume: [externals.volumes.cache.#self & {target: "/x"}]).
 	containers: [Name=string]: {name: string | *Name, #ref: "\(name).container", #service: "\(name).service", #self: #RefSelf & {_kind: "container", source: #ref}}
-	networks: [Name=string]:   {name: string | *Name, #ref: "\(name).network", #service: "\(name)-network.service", #self: #RefSelf & {_kind: "network", source: #ref}}
+	networks: [Name=string]:   {name: string | *Name, #ref: "\(name).network", #service: "\(name)-network.service", #self: #NetworkSelf & {source: #ref}}
 	volumes: [Name=string]:    {name: string | *Name, #ref: "\(name).volume", #service: "\(name)-volume.service", #self: #VolumeSelf & {source: #ref}}
 	pods: [Name=string]:       {name: string | *Name, #ref: "\(name).pod", #service: "\(name)-pod.service", #self: #RefSelf & {_kind: "pod", source: #ref}}
 	builds: [Name=string]:     {name: string | *Name, #ref: "\(name).build", #service: "\(name)-build.service", #self: #RefSelf & {_kind: "build", source: #ref}}

@@ -238,3 +238,39 @@ func TestDepFieldsRejectNonService(t *testing.T) {
 		}
 	}
 }
+
+// TestNetworkSelfConnOptions: a network #self decorated with connection options
+// renders "ref:alias=...,ip=...,mac=...".
+func TestNetworkSelfConnOptions(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		networks: net: {Network: {}}
+		#container: Container: {Image: "img", Network: [units.networks.net.#self & {ip: "10.0.0.5", alias: ["web", "app"], mac: "02:42:ac:11:00:02"}]}
+	}`), "networkStrings")
+	want := "app-net.network:alias=web,alias=app,ip=10.0.0.5,mac=02:42:ac:11:00:02"
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("networkStrings = %v, want [%s]", got, want)
+	}
+}
+
+// TestBridgeNetOptions: a bridge struct renders "bridge:opts"; bare "bridge" and
+// other raw modes stay plain strings.
+func TestBridgeNetOptions(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		#container: Container: {Image: "img", Network: [{mode: "bridge", ip: "10.0.0.9"}, "bridge", "host"]}
+	}`), "networkStrings")
+	want := []any{"bridge:ip=10.0.0.9", "bridge", "host"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("networkStrings = %v, want %v", got, want)
+	}
+}
+
+// TestNetworkSelfPassthrough: unmodeled netavark options go through verbatim.
+func TestNetworkSelfPassthrough(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		networks: net: {Network: {}}
+		#container: Container: {Image: "img", Network: [units.networks.net.#self & {passthrough: ["foo=bar"]}]}
+	}`), "networkStrings")
+	if len(got) != 1 || got[0] != "app-net.network:foo=bar" {
+		t.Fatalf("networkStrings = %v, want [app-net.network:foo=bar]", got)
+	}
+}
