@@ -262,6 +262,21 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 #ImageSelf: #RefSelf & {_kind: "image"}
 #BuildSelf: #RefSelf & {_kind: "build"}
 
+// #MountRef builds a Mount= entry that references a managed volume or image by
+// its #self handle, e.g.
+//   Mount: [#MountRef & {ref: units.volumes.data.#self, destination: "/data"}]
+// rendering "type=volume,source=app-data.volume,destination=/data". Raw
+// Mount= strings (type=bind/tmpfs/...) are still accepted for host mounts.
+#MountRef: {
+	ref:          #VolumeSelf | #ImageSelf
+	destination:  string
+	options?: [...string]
+	_rendered: strings.Join(list.Concat([
+		["type=\(ref._kind)", "source=\(ref.source)", "destination=\(destination)"],
+		[ if options != _|_ for o in options {o}],
+	]), ",")
+}
+
 // UID/GID mapping for UIDMap=/GIDMap= ([Container]/[Pod]).
 // Form: [flags]container_id:from_id[:amount] (podman-run --uidmap/--gidmap).
 // flags is any combination of "+" (extend previous mapping) and "u"/"g" (apply

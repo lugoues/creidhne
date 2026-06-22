@@ -52,7 +52,7 @@
 {{ end -}}
 {{ range .volumeStrings -}}Volume={{ . }}
 {{ end -}}
-{{ range .Container.Mount -}}Mount={{ . }}
+{{ range .mountStrings -}}Mount={{ . }}
 {{ end -}}
 {{ range .Container.Tmpfs -}}Tmpfs={{ . }}
 {{ end -}}

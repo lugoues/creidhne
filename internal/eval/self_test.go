@@ -229,3 +229,33 @@ func TestImageRejectsRawRefString(t *testing.T) {
 		}
 	}
 }
+
+// TestMountRefFlattens: a #MountRef builds a type=volume,source=...,destination=...
+// string from a volume #self; raw mount strings pass through.
+func TestMountRefFlattens(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		volumes: data: {Volume: {}}
+		#container: Container: {Image: "img", Mount: [q.#MountRef & {ref: units.volumes.data.#self, destination: "/data", options: ["ro"]}]}
+	}`), "mountStrings")
+	want := "type=volume,source=app-data.volume,destination=/data,ro"
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("mountStrings = %v, want [%s]", got, want)
+	}
+	raw := containerData(t, selfQuadlet(`{
+		#container: Container: {Image: "img", Mount: ["type=tmpfs,destination=/tmp"]}
+	}`), "mountStrings")
+	if len(raw) != 1 || raw[0] != "type=tmpfs,destination=/tmp" {
+		t.Fatalf("raw mount = %v, want [type=tmpfs,destination=/tmp]", raw)
+	}
+}
+
+// TestMountRefRejectsForeignSelf: #MountRef.ref accepts only a volume/image #self.
+func TestMountRefRejectsForeignSelf(t *testing.T) {
+	err := loadSourceErr(t, selfQuadlet(`{
+		networks: net: {Network: {}}
+		#container: Container: {Image: "img", Mount: [q.#MountRef & {ref: units.networks.net.#self, destination: "/x"}]}
+	}`))
+	if err == nil {
+		t.Error("want rejection: a network #self in #MountRef.ref")
+	}
+}

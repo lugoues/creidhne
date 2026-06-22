@@ -80,8 +80,9 @@ package creidhne
 		// units.volumes.X.#self & {target: "/path"}. (Strict: no bare volume names;
 		// reference managed/external volumes through #self.)
 		Volume?: [...(#HostMount | #VolumeMountRef)]
-		// Attach a filesystem mount to the container.
-		Mount?: [...string]
+		// Attach a filesystem mount to the container. Accepts a raw type= string
+		// (bind/tmpfs/...) or a #MountRef referencing a managed volume/image #self.
+		Mount?: [...(string | #MountRef)]
 		// Mount a tmpfs in the container.
 		Tmpfs?: [...string]
 
@@ -256,4 +257,12 @@ package creidhne
 	if Container.Image != _|_ {
 		imageString: (Container.Image & string) | (Container.Image & {_rendered: _})._rendered
 	}
+
+	// Resolved mounts: flattens #MountRef structs to type=...,source=... strings;
+	// raw mount strings pass through unchanged.
+	mountStrings: [
+		if Container.Mount != _|_ for m in Container.Mount {
+			(m & string) | (m & {_rendered: _})._rendered
+		},
+	]
 }
