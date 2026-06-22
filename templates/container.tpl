@@ -150,7 +150,7 @@
 {{ end -}}
 {{ range .Container.GroupAdd -}}GroupAdd={{ . }}
 {{ end -}}
-{{ if .Container.Pod -}}Pod={{ .Container.Pod }}
+{{ if .podString -}}Pod={{ .podString }}
 {{ end -}}
 {{ if .Container.StartWithPod -}}StartWithPod=true
 {{ end -}}

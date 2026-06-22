@@ -78,6 +78,10 @@ import (
 #NetworkSelf:   #RefSelf & {_kind: "network"}
 #ContainerSelf: #RefSelf & {_kind: "container"}
 
+// Pod= destination form: only a pod's #self (the spec accepts no raw values
+// other than the .pod reference itself).
+#PodSelf: #RefSelf & {_kind: "pod"}
+
 // Device mapping for AddDevice= ([Container]).
 // Form: [-]HOST-DEVICE[:CONTAINER-DEVICE][:PERMISSIONS] (podman-systemd.unit.5
 // AddDevice=). A leading "-" adds the device only if it exists on the host;

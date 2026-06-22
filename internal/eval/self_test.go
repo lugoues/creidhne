@@ -132,3 +132,45 @@ func TestNetworkRawModesStillAccepted(t *testing.T) {
 		}
 	}
 }
+
+func scalarField(t *testing.T, src, field string) string {
+	t.Helper()
+	quads := loadSource(t, src)
+	for _, u := range quads[0].Units {
+		if u.Kind == "container" {
+			s, _ := u.Data[field].(string)
+			return s
+		}
+	}
+	t.Fatalf("no container/field %q", field)
+	return ""
+}
+
+// TestPodSelfFlattens: a pod #self flattens to its .pod ref, identical to raw.
+func TestPodSelfFlattens(t *testing.T) {
+	got := scalarField(t, selfQuadlet(`{
+		#pod: {}
+		#container: Container: {Image: "img", Pod: units.#pod.#self}
+	}`), "podString")
+	if got != "app.pod" {
+		t.Fatalf("podString = %q, want app.pod", got)
+	}
+	raw := scalarField(t, selfQuadlet(`{
+		#pod: {}
+		#container: Container: {Image: "img", Pod: "app.pod"}
+	}`), "podString")
+	if raw != got {
+		t.Fatalf("raw Pod = %q, want same as #self %q", raw, got)
+	}
+}
+
+// TestPodSlotRejectsForeignSelf: only a pod #self fits a Pod= slot.
+func TestPodSlotRejectsForeignSelf(t *testing.T) {
+	err := loadSourceErr(t, selfQuadlet(`{
+		networks: net: {Network: {}}
+		#container: Container: {Image: "img", Pod: units.networks.net.#self}
+	}`))
+	if err == nil {
+		t.Error("want rejection: a network #self placed in a Pod= slot")
+	}
+}
