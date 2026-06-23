@@ -315,3 +315,13 @@ func TestCapabilityEnumAndEscape(t *testing.T) {
 		t.Error("typo'd capability must be rejected")
 	}
 }
+
+// TestUlimitAndTmpfsAccept: valid ulimits (name=soft:hard, -1, host) and tmpfs
+// (absolute path + open options) are accepted.
+func TestUlimitAndTmpfsAccept(t *testing.T) {
+	if err := loadSourceErr(t, selfQuadlet(`{
+		#container: Container: {Image: "img", Ulimit: ["nofile=1024:2048", "nproc=-1", "host"], Tmpfs: ["/run:rw,size=64m", "/tmp"]}
+	}`)); err != nil {
+		t.Errorf("valid Ulimit/Tmpfs rejected: %v", err)
+	}
+}

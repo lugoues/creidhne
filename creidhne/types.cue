@@ -248,6 +248,18 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	"SYS_RESOURCE" | "SYS_TIME" | "SYS_TTY_CONFIG" | "SYSLOG" | "WAKE_ALARM" |
 	=~"^CAP_[A-Z0-9_]+$"
 
+// #Ulimit is a Ulimit= entry: "name=soft[:hard]" where name is a kernel RLIMIT
+// type (lowercase, no RLIMIT_ prefix) and each limit is a number or -1
+// (unlimited); or "host" to copy the host's limits. See setrlimit(2).
+#Ulimit: "host" |
+	=~"^(as|core|cpu|data|fsize|locks|memlock|msgqueue|nice|nofile|nproc|rss|rtprio|rttime|sigpending|stack)=(-1|[0-9]+)(:(-1|[0-9]+))?$"
+
+// #TmpfsMount is a Tmpfs= entry: an absolute container path with optional mount
+// options ("/run:rw,size=64m,mode=1777"). podman passes the options straight to
+// the kernel as standard mount flags (open-ended per podman-run(1)), so only the
+// path is validated, not the option set.
+#TmpfsMount: =~"^/[^:]+(:.+)?$"
+
 // systemd job mode for OnSuccessJobMode/OnFailureJobMode.
 // See systemd.unit(5).
 #JobMode: "replace" | "fail" | "replace-irreversibly" | "isolate" | "flush" | "ignore-dependencies" | "ignore-requirements"

@@ -84,8 +84,10 @@ package creidhne
 		// "tmpfs"|..., source?, destination, options?}) or a #MountRef referencing a
 		// managed volume/image #self. (Strict: the raw type= string is now typed.)
 		Mount?: [...(#MountSpec | #MountRef)]
-		// Mount a tmpfs in the container.
-		Tmpfs?: [...string]
+		// Mount a tmpfs in the container: an absolute path with optional mount
+		// options (e.g. "/run:rw,size=64m"). Options are open-ended (kernel mount
+		// flags), so only the path is validated.
+		Tmpfs?: [...#TmpfsMount]
 
 		// Add these capabilities, in addition to the default Podman capability set, to the container.
 		AddCapability?: [...#Capability]
@@ -123,8 +125,9 @@ package creidhne
 		Memory?: #PodmanBytes
 		// Tune the container's pids limit.
 		PidsLimit?: -1 | (int & >0)
-		// Ulimit options. Sets the ulimits values inside of the container.
-		Ulimit?: [...string]
+		// Ulimit options ("name=soft[:hard]", or "host"). Sets the ulimit values
+		// inside the container.
+		Ulimit?: [...#Ulimit]
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
