@@ -341,18 +341,50 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 #ImageSelf: #RefSelf & {_kind: "image"}
 #BuildSelf: #RefSelf & {_kind: "build"}
 
+// #MountType is one of podman's --mount types.
+#MountType: "bind" | "volume" | "tmpfs" | "image" | "devpts" | "glob" | "ramfs" | "artifact"
+
+// #MountOption is a type-specific --mount option: a known boolean flag, or a
+// known key=value. Options not modeled here go via #MountSpec.passthrough.
+#MountOption: "ro" | "rw" | "U" | "chown" | "noswap" | "tmpcopyup" | "notmpcopyup" |
+	"bind-nonrecursive" | "noatime" |
+	=~"^bind-propagation=(r?private|r?shared|r?slave|r?unbindable)$" |
+	=~"^relabel=(shared|private)$" |
+	=~"^idmap(=.*)?$" |
+	=~"^subpath=.+$" |
+	=~"^(tmpfs-size|tmpfs-mode|uid|gid|mode|max|digest|title|name)=.+$"
+
 // #MountRef builds a Mount= entry that references a managed volume or image by
 // its #self handle, e.g.
 //   Mount: [#MountRef & {ref: units.volumes.data.#self, destination: "/data"}]
-// rendering "type=volume,source=app-data.volume,destination=/data". Raw
-// Mount= strings (type=bind/tmpfs/...) are still accepted for host mounts.
+// rendering "type=volume,source=app-data.volume,destination=/data".
 #MountRef: {
-	ref:          #VolumeSelf | #ImageSelf
-	destination:  string
-	options?: [...string]
+	ref:         #VolumeSelf | #ImageSelf
+	destination: string
+	options?: [...#MountOption]
 	_rendered: strings.Join(list.Concat([
 		["type=\(ref._kind)", "source=\(ref.source)", "destination=\(destination)"],
 		[ if options != _|_ for o in options {o}],
+	]), ",")
+}
+
+// #MountSpec is a structured raw Mount= entry: "type=TYPE,[source=SRC,]
+// destination=DST[,opt,...]". type is one of #MountType, destination is required,
+// options are validated (#MountOption), and passthrough carries any option not
+// modeled. For a managed volume/image, prefer #MountRef (it brands the ref and
+// wires the dependency).
+#MountSpec: {
+	type:        #MountType
+	source?:     string
+	destination: string
+	options?: [...#MountOption]
+	passthrough?: [...#KeyValue]
+	_rendered: strings.Join(list.Concat([
+		["type=\(type)"],
+		[ if source != _|_ {"source=\(source)"}],
+		["destination=\(destination)"],
+		[ if options != _|_ for o in options {o}],
+		[ if passthrough != _|_ for kv in passthrough {kv}],
 	]), ",")
 }
 

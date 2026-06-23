@@ -194,8 +194,8 @@ func TestImageRejectsRawRefString(t *testing.T) {
 	}
 }
 
-// TestMountRefFlattens: a #MountRef builds a type=volume,source=...,destination=...
-// string from a volume #self; raw mount strings pass through.
+// TestMountRefFlattens: a #MountRef builds type=volume,source=...,destination=...
+// from a volume #self.
 func TestMountRefFlattens(t *testing.T) {
 	got := containerData(t, selfQuadlet(`{
 		volumes: data: {Volume: {}}
@@ -205,11 +205,37 @@ func TestMountRefFlattens(t *testing.T) {
 	if len(got) != 1 || got[0] != want {
 		t.Fatalf("mountStrings = %v, want [%s]", got, want)
 	}
-	raw := containerData(t, selfQuadlet(`{
-		#container: Container: {Image: "img", Mount: ["type=tmpfs,destination=/tmp"]}
+}
+
+// TestMountSpecFlattens: a structured raw mount renders "type=...,...".
+func TestMountSpecFlattens(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		#container: Container: {Image: "img", Mount: [
+			q.#MountSpec & {type: "tmpfs", destination: "/tmp", options: ["ro", "tmpfs-size=64m"]},
+			q.#MountSpec & {type: "bind", source: "/host", destination: "/c", options: ["bind-propagation=rslave"]},
+		]}
 	}`), "mountStrings")
-	if len(raw) != 1 || raw[0] != "type=tmpfs,destination=/tmp" {
-		t.Fatalf("raw mount = %v, want [type=tmpfs,destination=/tmp]", raw)
+	want := []any{
+		"type=tmpfs,destination=/tmp,ro,tmpfs-size=64m",
+		"type=bind,source=/host,destination=/c,bind-propagation=rslave",
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("mountStrings = %v, want %v", got, want)
+	}
+}
+
+// TestMountSpecRejectsBadType: an unknown mount type / option is rejected.
+func TestMountSpecRejectsBadType(t *testing.T) {
+	for _, bad := range []string{
+		`q.#MountSpec & {type: "bnid", destination: "/x"}`,                              // bad type
+		`q.#MountSpec & {type: "tmpfs", destination: "/x", options: ["tmpfs-szie=1m"]}`, // bad option key
+	} {
+		err := loadSourceErr(t, selfQuadlet(`{
+			#container: Container: {Image: "img", Mount: [`+bad+`]}
+		}`))
+		if err == nil {
+			t.Errorf("want rejection: %s", bad)
+		}
 	}
 }
 

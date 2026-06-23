@@ -26,7 +26,10 @@ svc: creidhne.#Quadlet & {
 				Image:         units.#build.#self
 				ContainerName: "svc"
 				Volume: [units.volumes.data.#self & {target: "/data", options: ["ro", "U"]}]
-				Mount: [creidhne.#MountRef & {ref: units.volumes.data.#self, destination: "/mnt", options: ["ro"]}]
+				Mount: [
+					creidhne.#MountRef & {ref: units.volumes.data.#self, destination: "/mnt", options: ["ro"]},
+					creidhne.#MountSpec & {type: "tmpfs", destination: "/tmp", options: ["tmpfs-size=64m", "ro"]},
+				]
 			}
 			Install: WantedBy: ["default.target"]
 		}

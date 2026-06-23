@@ -80,9 +80,10 @@ package creidhne
 		// units.volumes.X.#self & {target: "/path"}. (Strict: no bare volume names;
 		// reference managed/external volumes through #self.)
 		Volume?: [...(#HostMount | #VolumeMountRef)]
-		// Attach a filesystem mount to the container. Accepts a raw type= string
-		// (bind/tmpfs/...) or a #MountRef referencing a managed volume/image #self.
-		Mount?: [...(string | #MountRef)]
+		// Attach a filesystem mount to the container. A #MountSpec ({type: "bind"|
+		// "tmpfs"|..., source?, destination, options?}) or a #MountRef referencing a
+		// managed volume/image #self. (Strict: the raw type= string is now typed.)
+		Mount?: [...(#MountSpec | #MountRef)]
 		// Mount a tmpfs in the container.
 		Tmpfs?: [...string]
 

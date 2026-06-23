@@ -4,6 +4,7 @@ Image=svc.build
 ContainerName=svc
 Volume=svc-data.volume:/data:ro,U
 Mount=type=volume,source=svc-data.volume,destination=/mnt,ro
+Mount=type=tmpfs,destination=/tmp,tmpfs-size=64m,ro
 
 [Install]
 WantedBy=default.target
