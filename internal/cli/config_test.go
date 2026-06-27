@@ -12,14 +12,23 @@ import (
 	"github.com/lugoues/creidhne"
 )
 
+// writeConfig writes body to the canonical config location, dir/.crei/config.toml.
+func writeConfig(t *testing.T, dir, body string) {
+	t.Helper()
+	creiDir := filepath.Join(dir, ".crei")
+	if err := os.MkdirAll(creiDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(creiDir, "config.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestResolveConfigProvenance checks the precedence chain (flag > env >
 // crei.toml > default) and that the winning source is recorded for `crei config`.
 func TestResolveConfigProvenance(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "crei.toml"),
-		[]byte("quadlet_dir = \"/srv/from-toml\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeConfig(t, dir, "quadlet_dir = \"/srv/from-toml\"\n")
 
 	// Reset package-level flag vars after the test.
 	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
@@ -77,9 +86,7 @@ func TestResolveConfigReloadSystemd(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()
 			if c.toml != "" {
-				if err := os.WriteFile(filepath.Join(dir, "crei.toml"), []byte(c.toml), 0o644); err != nil {
-					t.Fatal(err)
-				}
+				writeConfig(t, dir, c.toml)
 			}
 			flagProjectDir = dir
 			cfg, err := resolveConfig()
@@ -103,9 +110,7 @@ func TestResolveConfigMalformedToml(t *testing.T) {
 	t.Setenv("DIFF_TOOL", "")
 
 	bad := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bad, "crei.toml"), []byte("quadlet_dir = /unquoted\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeConfig(t, bad, "quadlet_dir = /unquoted\n")
 	flagProjectDir = bad
 	if _, err := resolveConfig(); err == nil {
 		t.Fatal("malformed crei.toml should error, not be silently ignored")
@@ -126,9 +131,7 @@ func TestResolveConfigInvalidDiffStyle(t *testing.T) {
 	t.Setenv("DIFF_TOOL", "")
 
 	bad := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bad, "crei.toml"), []byte("diff_style = \"fancy\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeConfig(t, bad, "diff_style = \"fancy\"\n")
 	flagProjectDir = bad
 	if _, err := resolveConfig(); err == nil {
 		t.Fatal("invalid diff_style should error")
@@ -155,6 +158,34 @@ func TestResolveConfigDefaults(t *testing.T) {
 	}
 	if cfg.configFilePath != "" {
 		t.Fatalf("no crei.toml expected, got %q", cfg.configFilePath)
+	}
+}
+
+// TestLoadConfigFileIgnoresLegacyRoot: config is read only from .crei/config.toml;
+// a crei.toml at the project root (the pre-.crei location) is ignored.
+func TestLoadConfigFileIgnoresLegacyRoot(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "crei.toml"), []byte("quadlet_dir = \"/legacy\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A lone legacy root crei.toml is not read.
+	fc, path, err := loadConfigFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "" || fc.QuadletDir != "" {
+		t.Fatalf("legacy root crei.toml should be ignored, got path=%q dir=%q", path, fc.QuadletDir)
+	}
+
+	// .crei/config.toml is the only location read.
+	writeConfig(t, dir, "quadlet_dir = \"/canonical\"\n")
+	fc, path, err = loadConfigFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fc.QuadletDir != "/canonical" || filepath.Dir(path) != filepath.Join(dir, ".crei") {
+		t.Fatalf(".crei/config.toml should be read, got path=%q dir=%q", path, fc.QuadletDir)
 	}
 }
 
@@ -216,9 +247,7 @@ func TestApplyStyles(t *testing.T) {
 func TestStyleConfigParsing(t *testing.T) {
 	write := func(t *testing.T, body string) (fileConfig, error) {
 		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "crei.toml"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writeConfig(t, dir, body)
 		fc, _, err := loadConfigFile(dir)
 		return fc, err
 	}

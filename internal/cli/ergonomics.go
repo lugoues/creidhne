@@ -124,7 +124,7 @@ func printConfig(out io.Writer, cfg config) {
 
 	cfgFile, cfgSource := cfg.configFilePath, "loaded"
 	if cfgFile == "" {
-		cfgFile, cfgSource = filepath.Join(cfg.ProjectDir, "crei.toml"), "not found"
+		cfgFile, cfgSource = filepath.Join(cfg.ProjectDir, ".crei", "config.toml"), "not found"
 	}
 	row("config file", cfgFile, cfgSource)
 
@@ -135,9 +135,10 @@ func newInitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Scaffold a new Creidhne project (cue.mod, sample, config) in --dir",
-		Long: "init creates a cue.mod, a sample quadlet, and a crei.toml, and\n" +
-			"vendors the embedded schema under cue.mod/usr so editors and the cue\n" +
-			"CLI resolve the import without a registry. Existing files are kept.",
+		Long: "init creates a cue.mod, a sample quadlet, and .crei/ (config.toml plus\n" +
+			"its JSON Schema), and vendors the embedded schema under cue.mod/usr so\n" +
+			"editors and the cue CLI resolve the import without a registry. Existing\n" +
+			"files are kept.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd.OutOrStdout(), flagProjectDir)
@@ -164,18 +165,25 @@ func runInit(out io.Writer, projectDir string) error {
 	}
 	report(out, created, "main.cue")
 
-	created, err = writeIfAbsent(filepath.Join(projectDir, "crei.toml"), sampleConfig)
+	// Config and its JSON Schema live under .crei/ to keep the project root clean.
+	// The "#:schema ./config.schema.json" directive in the sample resolves within
+	// .crei/ since both files sit there together.
+	creiDir := filepath.Join(projectDir, ".crei")
+	created, err = writeIfAbsent(filepath.Join(creiDir, "config.toml"), sampleConfig)
 	if err != nil {
 		return err
 	}
-	report(out, created, "crei.toml")
+	report(out, created, ".crei/config.toml")
 
-	// JSON Schema for crei.toml (referenced by the "#:schema" directive in the
-	// sample). Written unconditionally so it stays current after a binary upgrade.
-	if err := os.WriteFile(filepath.Join(projectDir, "crei.schema.json"), creidhne.ConfigSchema, 0o644); err != nil {
-		return fmt.Errorf("write crei.schema.json: %w", err)
+	// JSON Schema for config.toml. Written unconditionally so it stays current
+	// after a binary upgrade.
+	if err := os.MkdirAll(creiDir, 0o755); err != nil {
+		return err
 	}
-	fmt.Fprintf(out, "  %s crei.schema.json (JSON Schema for crei.toml)\n", green("✓"))
+	if err := os.WriteFile(filepath.Join(creiDir, "config.schema.json"), creidhne.ConfigSchema, 0o644); err != nil {
+		return fmt.Errorf("write .crei/config.schema.json: %w", err)
+	}
+	fmt.Fprintf(out, "  %s .crei/config.schema.json (JSON Schema for config.toml)\n", green("✓"))
 
 	if err := vendorSchema(projectDir); err != nil {
 		return fmt.Errorf("vendor schema: %w", err)
@@ -374,7 +382,7 @@ hello: creidhne.#Quadlet & {
 }
 `
 
-const sampleConfig = `#:schema ./crei.schema.json
+const sampleConfig = `#:schema ./config.schema.json
 
 # Target directory for generated quadlet unit files.
 quadlet_dir = "~/.config/containers/systemd"

@@ -348,14 +348,14 @@ func resolveConfig() (config, error) {
 	}, nil
 }
 
-// loadConfigFile reads crei.toml from projectDir. A missing file is fine (zero
-// config, empty path); a present-but-malformed file is a hard error rather than
-// being silently ignored. Otherwise a typo would route apply to the default
-// directory with no warning. The returned path (when the file exists) lets
-// `crei config` report which file was loaded.
+// loadConfigFile reads the config from projectDir/.crei/config.toml. A missing
+// file is fine (zero config, empty path); a present-but-malformed file is a hard
+// error rather than being silently ignored. Otherwise a typo would route apply to
+// the default directory with no warning. The returned path (when the file exists)
+// lets `crei config` report which file was loaded.
 func loadConfigFile(projectDir string) (fileConfig, string, error) {
 	var fc fileConfig
-	path := filepath.Join(projectDir, "crei.toml")
+	path := filepath.Join(projectDir, ".crei", "config.toml")
 	if _, err := os.Stat(path); err != nil {
 		return fc, "", nil
 	}

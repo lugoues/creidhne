@@ -66,7 +66,7 @@ func TestCmdInit(t *testing.T) {
 	if _, err := runCmd(t, "--dir", dir, "init"); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"cue.mod/module.cue", "main.cue", "crei.toml", "crei.schema.json", "cue.mod/usr"} {
+	for _, f := range []string{"cue.mod/module.cue", "main.cue", ".crei/config.toml", ".crei/config.schema.json", "cue.mod/usr"} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("init did not create %s: %v", f, err)
 		}
@@ -170,7 +170,7 @@ func TestCmdDiff(t *testing.T) {
 // pair. Stripped of color, the line holds the common prefix plus both values.
 func TestCmdDiffStyleInline(t *testing.T) {
 	dir := setupProject(t, testMain)
-	mustWrite(t, filepath.Join(dir, "crei.toml"), "diff_style = \"inline\"\n")
+	mustWrite(t, filepath.Join(dir, ".crei", "config.toml"), "diff_style = \"inline\"\n")
 	qd := t.TempDir()
 	if _, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "apply", "-y", "--reload-systemd=false"); err != nil {
 		t.Fatal(err)

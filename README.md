@@ -62,7 +62,7 @@ go install github.com/lugoues/creidhne/cmd/crei@latest   # Go 1.25+
 
 ```sh
 mkdir myapp && cd myapp
-crei init                 # scaffolds cue.mod, main.cue, crei.toml
+crei init                 # scaffolds cue.mod, main.cue, .crei/config.toml
 $EDITOR main.cue              # define your quadlets
 crei plan                 # preview changes against the quadlet dir
 crei apply                # write the unit files
@@ -112,7 +112,7 @@ For a realistic, copyable setup (a Traefik pod with volumes, networks, and exter
 ### Primary vs. additional units
 
 - **Primary** units are `#`-prefixed fields (`#container`, `#pod`, `#volume`, ...). One per type; the file is named after the quadlet, so `name: "app"` + `#container` gives `app.container`.
-- **Additional** units are plural maps (`containers`, `volumes`, ...) keyed by a name. The file is `<quadlet>-<key>`, so `volumes: data: {...}` gives `app-data.volume`.
+- **Additional** units are plural maps (`containers`, `volumes`, ...) keyed by a handle. The file is `<quadlet>-<name>`, where `name` defaults to the key — so `volumes: data: {...}` gives `app-data.volume`, and `volumes: data: {name: "cache"}` gives `app-cache.volume`.
 
 Mix both freely; a primary `#container` plus additional `volumes: data: {...}` is a common pattern.
 
@@ -290,7 +290,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 
 | Command | Description |
 |---|---|
-| `crei init` | Scaffold a project (`cue.mod`, `main.cue`, `crei.toml`, `crei.schema.json`) and vendor the CUE schema for editor/LSP support. |
+| `crei init` | Scaffold a project (`cue.mod`, `main.cue`, `.crei/config.toml`, `.crei/config.schema.json`) and vendor the CUE schema for editor/LSP support. |
 | `crei render` | Render all unit files to stdout. |
 | `crei plan` | Show what `apply` would add/update/remove, as an inline diff (`--no-diff` for the compact list). |
 | `crei diff` | Show detailed diffs against the live files. |
@@ -314,7 +314,7 @@ Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
 
 Run `crei config` to print the resolved values and where each came from.
 
-`crei init` also writes a JSON Schema (`crei.schema.json`) and a `#:schema` directive at the top of `crei.toml`, so editors with TOML support (e.g. [Even Better TOML](https://taplo.tamasfe.dev/) / Taplo) validate and autocomplete the config offline.
+The config lives in `.crei/config.toml`. `crei init` also writes a JSON Schema (`.crei/config.schema.json`) and a `#:schema` directive at the top of `config.toml`, so editors with TOML support (e.g. [Even Better TOML](https://taplo.tamasfe.dev/) / Taplo) validate and autocomplete the config offline.
 
 Writing to a system path like `/etc/containers/systemd` requires elevated privileges, so run `sudo crei apply`. The CLI never escalates on its own; if a write is denied it tells you to re-run with `sudo`.
 
