@@ -148,6 +148,45 @@ func TestCmdPlanApplyRoundtrip(t *testing.T) {
 	}
 }
 
+// buildAbsContextMain is a project whose build context uses an absolute-path
+// key, the shape that used to make apply oscillate add<->remove.
+const buildAbsContextMain = `package config
+import q "github.com/lugoues/creidhne@v0"
+hermes: q.#Quadlet & {
+	name: "hermes"
+	units: #build: {
+		ContainerFile: "FROM scratch\n"
+		Context: "/home/hermes/.local/bin/hermes-gateways": {
+			mode:    "0770"
+			content: "#!/bin/sh\necho hi\n"
+		}
+	}
+}
+`
+
+// TestCmdContextAbsoluteKeyIsIdempotent guards the reported bug: a build context
+// keyed by an absolute path oscillated add<->remove on every apply (and deleted
+// the context file every other run). After the first apply the plan must be a
+// no-op and the file must remain.
+func TestCmdContextAbsoluteKeyIsIdempotent(t *testing.T) {
+	dir := setupProject(t, buildAbsContextMain)
+	qd := t.TempDir()
+	if _, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "apply", "-y", "--reload-systemd=false"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Nothing to do") {
+		t.Fatalf("expected an idempotent plan, got:\n%s", out)
+	}
+	ctxFile := filepath.Join(qd, "images", "hermes.context", "home", "hermes", ".local", "bin", "hermes-gateways")
+	if _, err := os.Stat(ctxFile); err != nil {
+		t.Fatalf("context file missing after apply: %v", err)
+	}
+}
+
 func TestCmdDiff(t *testing.T) {
 	dir := setupProject(t, testMain)
 	qd := t.TempDir()

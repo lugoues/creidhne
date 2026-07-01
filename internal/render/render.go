@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"sort"
 	"text/template"
@@ -163,7 +164,7 @@ func addBuildArtifacts(files map[string]FileContent, owners map[string]string, o
 		if !ok {
 			return fmt.Errorf("value of ContainerFile must be a string, got %T", v)
 		}
-		if err := add("images/"+u.Stem+".Containerfile", FileContent{Content: []byte(cf)}); err != nil {
+		if err := add(path.Join("images", u.Stem+".Containerfile"), FileContent{Content: []byte(cf)}); err != nil {
 			return err
 		}
 	}
@@ -186,7 +187,13 @@ func addBuildArtifacts(files map[string]FileContent, owners map[string]string, o
 		if err != nil {
 			return err
 		}
-		if err := add("images/"+u.Stem+".context/"+p, FileContent{Content: []byte(content), Mode: mode}); err != nil {
+		// path.Join cleans the result, so a context key that is absolute or has
+		// redundant slashes (e.g. "/home/x") yields the same canonical relative
+		// path the filesystem stores it at. Without this the desired-set key
+		// ("images/<stem>.context//home/x", double slash) never matches the
+		// cleaned on-disk path, and every apply oscillates add<->remove. An
+		// escaping key (..) still fails the ensureLocal check inside add.
+		if err := add(path.Join("images", u.Stem+".context", p), FileContent{Content: []byte(content), Mode: mode}); err != nil {
 			return err
 		}
 	}
