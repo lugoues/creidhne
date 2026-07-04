@@ -50,7 +50,8 @@ func newGraphCmd() *cobra.Command {
 			"With no arguments it graphs the whole project; given quadlet names it\n" +
 			"graphs only those. It shows *declared* coupling only, not runtime edges\n" +
 			"(e.g. one service calling another over the network).\n\n" +
-			"Nodes are clustered by their owning quadlet; --flat disables that.\n\n" +
+			"Nodes are clustered by their owning quadlet, with external systemd\n" +
+			"targets collected in one 'external' group; --flat disables clustering.\n\n" +
 			"Formats: dot (pipe to graphviz, e.g. 'crei graph | dot -Tsvg > g.svg'),\n" +
 			"mermaid (renders on GitHub or mermaid.live), or json.",
 		Args: cobra.ArbitraryArgs,

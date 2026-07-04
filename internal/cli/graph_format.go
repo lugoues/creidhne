@@ -69,8 +69,14 @@ func writeDot(w io.Writer, g depGraph, grouped bool) {
 			}
 			fmt.Fprintln(w, "  }")
 		}
-		for _, id := range ungrouped {
-			fmt.Fprintf(w, "  %s\n", dotNodeStmt(g.nodes[id]))
+		if len(ungrouped) > 0 {
+			fmt.Fprintln(w, "  subgraph cluster_external {")
+			fmt.Fprintln(w, `    label="external";`)
+			fmt.Fprintln(w, `    style="rounded,dashed"; color="gray70"; fontcolor="gray40"; labeljust="l"; fontname="sans-serif";`)
+			for _, id := range ungrouped {
+				fmt.Fprintf(w, "    %s\n", dotNodeStmt(g.nodes[id]))
+			}
+			fmt.Fprintln(w, "  }")
 		}
 	} else {
 		for _, id := range g.sortedNodeIDs() {
@@ -139,8 +145,12 @@ func writeMermaid(w io.Writer, g depGraph, grouped bool) {
 			}
 			fmt.Fprintln(w, "  end")
 		}
-		for _, id := range ungrouped {
-			fmt.Fprintf(w, "  %s\n", node(id))
+		if len(ungrouped) > 0 {
+			fmt.Fprintln(w, `  subgraph sgExt["external"]`)
+			for _, id := range ungrouped {
+				fmt.Fprintf(w, "    %s\n", node(id))
+			}
+			fmt.Fprintln(w, "  end")
 		}
 	} else {
 		for _, id := range ids {

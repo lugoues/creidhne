@@ -147,6 +147,43 @@ func TestCmdGraphGrouped(t *testing.T) {
 	}
 }
 
+// TestCmdGraphExternalGroup: external systemd targets are collected into one
+// "external" cluster when grouped, and left loose under --flat.
+func TestCmdGraphExternalGroup(t *testing.T) {
+	dir := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: #container: {Container: {Image: "docker.io/app"}, Unit: After: ["network-online.target"]}
+}
+`)
+	dot, err := runCmd(t, "--dir", dir, "graph")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"subgraph cluster_external", `label="external"`, `"network-online.target"`} {
+		if !strings.Contains(dot, want) {
+			t.Fatalf("dot missing external group %q:\n%s", want, dot)
+		}
+	}
+
+	mer, err := runCmd(t, "--dir", dir, "graph", "--format", "mermaid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(mer, `subgraph sgExt["external"]`) {
+		t.Fatalf("mermaid missing external subgraph:\n%s", mer)
+	}
+
+	flat, err := runCmd(t, "--dir", dir, "graph", "--flat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(flat, "cluster_external") {
+		t.Fatalf("--flat should not emit an external cluster:\n%s", flat)
+	}
+}
+
 func TestQuadletGroupsPartition(t *testing.T) {
 	g := depGraph{nodes: map[string]graphNode{
 		"web.container":         {ID: "web.container", Kind: "container", Quadlet: "web"},
