@@ -32,10 +32,18 @@ var (
 	flagDiffTool   string
 )
 
+// errSilent makes Execute exit non-zero without printing an "Error:" line, for
+// commands that have already reported their findings (e.g. lint).
+type errSilent struct{}
+
+func (errSilent) Error() string { return "" }
+
 // Execute runs the root command and exits non-zero on error.
 func Execute() {
 	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, red("Error: "+err.Error()))
+		if msg := err.Error(); msg != "" {
+			fmt.Fprintln(os.Stderr, red("Error: "+msg))
+		}
 		os.Exit(1)
 	}
 }
@@ -69,6 +77,7 @@ func newRootCmd() *cobra.Command {
 		newDiffCmd(),
 		newApplyCmd(),
 		newGraphCmd(),
+		newLintCmd(),
 		newInitCmd(),
 		newValidateCmd(),
 		newConfigCmd(),
