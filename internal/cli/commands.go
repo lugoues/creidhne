@@ -16,15 +16,32 @@ import (
 
 func newRenderCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "render",
-		Short: "Render all quadlet files to stdout",
-		Args:  cobra.NoArgs,
+		Use:   "render [quadlet...]",
+		Short: "Render quadlet files to stdout (all quadlets, or only the named ones)",
+		Long: "render prints the generated unit files to stdout. With no arguments it\n" +
+			"renders every quadlet in the project; given one or more quadlet names it\n" +
+			"renders only those (a subset renders identically, since cross-quadlet\n" +
+			"references are resolved at eval time).",
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig()
 			if err != nil {
 				return err
 			}
-			desired, err := generate(cfg.ProjectDir)
+			quads, err := loadQuadlets(cfg.ProjectDir)
+			if err != nil {
+				return err
+			}
+			if len(quads) == 0 {
+				return fmt.Errorf("no quadlets found (no top-level #Quadlet values in %s)", cfg.ProjectDir)
+			}
+			if len(args) > 0 {
+				quads, err = filterQuadlets(quads, args)
+				if err != nil {
+					return err
+				}
+			}
+			desired, err := renderQuadlets(quads)
 			if err != nil {
 				return err
 			}

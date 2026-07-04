@@ -444,7 +444,7 @@ func loadQuadlets(projectDir string) ([]eval.Quadlet, error) {
 	return eval.LoadAndValidate(projectDir, overlay)
 }
 
-// generate evaluates and renders the project into the desired file set.
+// generate evaluates and renders the whole project into the desired file set.
 func generate(projectDir string) (map[string]reconcile.DesiredFile, error) {
 	quads, err := loadQuadlets(projectDir)
 	if err != nil {
@@ -453,6 +453,14 @@ func generate(projectDir string) (map[string]reconcile.DesiredFile, error) {
 	if len(quads) == 0 {
 		return nil, fmt.Errorf("no quadlets found (no top-level #Quadlet values in %s)", projectDir)
 	}
+	return renderQuadlets(quads)
+}
+
+// renderQuadlets renders a set of quadlets into the desired file set. Rendering a
+// subset is valid: cross-quadlet references (e.g. After=app.service) are resolved
+// into each unit's data at eval time, so a unit renders identically whether or
+// not the quadlets it references are in the set.
+func renderQuadlets(quads []eval.Quadlet) (map[string]reconcile.DesiredFile, error) {
 	tplFS, err := fs.Sub(creidhne.TemplatesFS, "templates")
 	if err != nil {
 		return nil, err
@@ -473,6 +481,33 @@ func generate(projectDir string) (map[string]reconcile.DesiredFile, error) {
 		desired[name] = reconcile.DesiredFile{Content: fc.Content, Mode: fc.Mode}
 	}
 	return desired, nil
+}
+
+// filterQuadlets returns the quadlets named in wanted, in the order requested and
+// deduplicated. An unknown name is an error that lists what is available, so a
+// typo fails loudly instead of silently rendering nothing.
+func filterQuadlets(quads []eval.Quadlet, wanted []string) ([]eval.Quadlet, error) {
+	byName := make(map[string]eval.Quadlet, len(quads))
+	available := make([]string, 0, len(quads))
+	for _, q := range quads {
+		byName[q.Name] = q
+		available = append(available, q.Name)
+	}
+	sort.Strings(available)
+	var out []eval.Quadlet
+	seen := make(map[string]bool, len(wanted))
+	for _, name := range wanted {
+		if seen[name] {
+			continue
+		}
+		q, ok := byName[name]
+		if !ok {
+			return nil, fmt.Errorf("no quadlet named %q (available: %s)", name, strings.Join(available, ", "))
+		}
+		seen[name] = true
+		out = append(out, q)
+	}
+	return out, nil
 }
 
 func sortedKeys(m map[string]reconcile.DesiredFile) []string {

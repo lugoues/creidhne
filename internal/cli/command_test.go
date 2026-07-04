@@ -84,6 +84,55 @@ func TestCmdRender(t *testing.T) {
 	}
 }
 
+const twoQuadletMain = `package config
+import q "github.com/lugoues/creidhne@v0"
+web: q.#Quadlet & {
+	name: "web"
+	units: #container: {Container: {Image: "docker.io/nginx:latest", ContainerName: "web"}}
+}
+db: q.#Quadlet & {
+	name: "db"
+	units: #container: {Container: {Image: "docker.io/postgres:16", ContainerName: "db"}}
+}
+`
+
+func TestCmdRenderByQuadletName(t *testing.T) {
+	dir := setupProject(t, twoQuadletMain)
+
+	// No args renders the whole stack.
+	out, err := runCmd(t, "--dir", dir, "render")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "web.container") || !strings.Contains(out, "db.container") {
+		t.Fatalf("expected both quadlets:\n%s", out)
+	}
+
+	// A named quadlet renders only its files.
+	out, err = runCmd(t, "--dir", dir, "render", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "web.container") || strings.Contains(out, "db.container") {
+		t.Fatalf("expected only web:\n%s", out)
+	}
+
+	// Multiple names render just those.
+	out, err = runCmd(t, "--dir", dir, "render", "db", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "web.container") || !strings.Contains(out, "db.container") {
+		t.Fatalf("expected both named:\n%s", out)
+	}
+
+	// An unknown name fails loudly and lists what is available.
+	_, err = runCmd(t, "--dir", dir, "render", "nope")
+	if err == nil || !strings.Contains(err.Error(), "available") {
+		t.Fatalf("expected an error listing available quadlets, got: %v", err)
+	}
+}
+
 func TestCmdValidate(t *testing.T) {
 	dir := setupProject(t, testMain)
 	out, err := runCmd(t, "--dir", dir, "validate")
