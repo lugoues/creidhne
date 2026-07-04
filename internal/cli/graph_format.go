@@ -156,10 +156,11 @@ func mermaidNode(id, label, kind string) string {
 		return fmt.Sprintf("%s[(%q)]", id, label)
 	case "network":
 		// Hexagon, not a circle: mermaid sizes circles to the label width, so a
-		// long node name blows the circle up. (Shares the hexagon with build/image.)
+		// long node name blows the circle up.
 		return fmt.Sprintf("%s{{%q}}", id, label)
 	case "build", "image":
-		return fmt.Sprintf("%s{{%q}}", id, label)
+		// Parallelogram, distinct from the network hexagon.
+		return fmt.Sprintf("%s[/%q/]", id, label)
 	default: // container/kube/artifact/external
 		return fmt.Sprintf("%s[%q]", id, label)
 	}
