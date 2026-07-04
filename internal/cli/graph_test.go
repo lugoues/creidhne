@@ -342,20 +342,6 @@ web: creidhne.#Quadlet & {
 	}
 }
 
-// TestCmdGraphServiceCollision: two units generating the same service would
-// corrupt service->unit resolution, so graph rejects it.
-func TestCmdGraphServiceCollision(t *testing.T) {
-	dir := setupProject(t, `package config
-import "github.com/lugoues/creidhne@v0"
-aaa: creidhne.#Quadlet & {name: "foo-network", units: #container: Container: {Image: "docker.io/x", ContainerName: "ord"}}
-zzz: creidhne.#Quadlet & {name: "foo", units: #network: {}}
-`)
-	_, err := runCmd(t, "--dir", dir, "graph")
-	if err == nil || !strings.Contains(err.Error(), "duplicate systemd service") {
-		t.Fatalf("expected duplicate-service error, got: %v", err)
-	}
-}
-
 // TestCmdGraphMergedLabelDropsResourceToken: when a resource edge merges with
 // hand-written directives, the resource kind is dropped from the label (the
 // node shape conveys it), but a bare resource edge keeps its kind label.

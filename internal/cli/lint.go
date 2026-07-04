@@ -73,12 +73,6 @@ func newLintCmd() *cobra.Command {
 			if len(all) == 0 {
 				return fmt.Errorf("no quadlets found (no top-level #Quadlet values in %s)", cfg.ProjectDir)
 			}
-			if err := checkUniqueFilenames(all); err != nil {
-				return err
-			}
-			if err := checkUniqueServices(all); err != nil {
-				return err
-			}
 			focus := all
 			if len(args) > 0 {
 				focus, err = filterQuadlets(all, args)

@@ -30,51 +30,46 @@ func loadSource(t *testing.T, src string) []eval.Quadlet {
 }
 
 // TestUnitRefAndService locks down #ref (filename) and #service for every kind.
-// All units share the stem "svc" so the per-kind #serviceSuffix differences are
-// the only thing that varies, so a typo in any kind's suffix fails here.
+// Each kind is loaded in its own single-unit project (all stem "svc") so the
+// per-kind suffix differences are the only thing that varies. They cannot share
+// one project: a container and a kube both render "svc.service", which
+// checkUniqueServices rejects — which is exactly the point of the shared suffix.
 func TestUnitRefAndService(t *testing.T) {
-	quads := loadSource(t, `package naming
+	type rs struct{ ref, service string }
+	cases := map[string]struct {
+		unit string
+		want rs
+	}{
+		"container": {`#container: Container: {Image: "img"}`, rs{"svc.container", "svc.service"}},
+		"pod":       {`#pod: {}`, rs{"svc.pod", "svc-pod.service"}},
+		"volume":    {`#volume: {}`, rs{"svc.volume", "svc-volume.service"}},
+		"network":   {`#network: {}`, rs{"svc.network", "svc-network.service"}},
+		"kube":      {`#kube: Kube: Yaml: ["app.yaml"]`, rs{"svc.kube", "svc.service"}},
+		"build":     {`#build: {ContainerFile: "FROM scratch\n", Build: ImageTag: ["localhost/x:latest"]}`, rs{"svc.build", "svc-build.service"}},
+		"image":     {`#image: Image: {Image: "img"}`, rs{"svc.image", "svc-image.service"}},
+		"artifact":  {`#artifact: Artifact: {Artifact: "example.com/a:v1"}`, rs{"svc.artifact", "svc-artifact.service"}},
+	}
+	for kind, c := range cases {
+		t.Run(kind, func(t *testing.T) {
+			quads := loadSource(t, `package naming
 import q "github.com/lugoues/creidhne@v0"
 svc: q.#Quadlet & {
 	name: "svc"
-	units: {
-		#container: Container: {Image: "img"}
-		#pod: {}
-		#volume: {}
-		#network: {}
-		#kube: Kube: Yaml: ["app.yaml"]
-		#build: {ContainerFile: "FROM scratch\n", Build: ImageTag: ["localhost/x:latest"]}
-		#image: Image: {Image: "img"}
-		#artifact: Artifact: {Artifact: "example.com/a:v1"}
-	}
+	units: {`+c.unit+`}
 }
 `)
-	if len(quads) != 1 {
-		t.Fatalf("want 1 quadlet, got %d", len(quads))
-	}
-	type rs struct{ ref, service string }
-	got := map[string]rs{}
-	for _, u := range quads[0].Units {
-		got[u.Kind] = rs{u.Filename, u.Service}
-	}
-	want := map[string]rs{
-		"container": {"svc.container", "svc.service"},
-		"pod":       {"svc.pod", "svc-pod.service"},
-		"volume":    {"svc.volume", "svc-volume.service"},
-		"network":   {"svc.network", "svc-network.service"},
-		"kube":      {"svc.kube", "svc.service"},
-		"build":     {"svc.build", "svc-build.service"},
-		"image":     {"svc.image", "svc-image.service"},
-		"artifact":  {"svc.artifact", "svc-artifact.service"},
-	}
-	if len(got) != len(want) {
-		t.Fatalf("got %d kinds, want %d: %+v", len(got), len(want), got)
-	}
-	for kind, w := range want {
-		if got[kind] != w {
-			t.Errorf("%s: ref=%q service=%q; want ref=%q service=%q",
-				kind, got[kind].ref, got[kind].service, w.ref, w.service)
-		}
+			if len(quads) != 1 || len(quads[0].Units) != 1 {
+				t.Fatalf("want 1 quadlet with 1 unit, got %+v", quads)
+			}
+			u := quads[0].Units[0]
+			if u.Kind != kind {
+				t.Fatalf("kind = %q, want %q", u.Kind, kind)
+			}
+			if (rs{u.Filename, u.Service}) != c.want {
+				t.Errorf("%s: ref=%q service=%q; want ref=%q service=%q",
+					kind, u.Filename, u.Service, c.want.ref, c.want.service)
+			}
+		})
 	}
 }
 
