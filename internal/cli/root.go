@@ -68,6 +68,7 @@ func newRootCmd() *cobra.Command {
 		newPlanCmd(),
 		newDiffCmd(),
 		newApplyCmd(),
+		newGraphCmd(),
 		newInitCmd(),
 		newValidateCmd(),
 		newConfigCmd(),
