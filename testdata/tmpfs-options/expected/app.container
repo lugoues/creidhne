@@ -1,0 +1,6 @@
+
+[Container]
+Image=docker.io/app:latest
+Tmpfs=/run:rw,size=64m
+Tmpfs=/tmp
+Tmpfs=/var/cache:rw,nosuid,nodev,noexec,size=128m,mode=1777

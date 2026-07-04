@@ -54,7 +54,7 @@
 {{ end -}}
 {{ range .mountStrings -}}Mount={{ . }}
 {{ end -}}
-{{ range .Container.Tmpfs -}}Tmpfs={{ . }}
+{{ range .tmpfsStrings -}}Tmpfs={{ . }}
 {{ end -}}
 {{ range .Container.AddCapability -}}AddCapability={{ . }}
 {{ end -}}

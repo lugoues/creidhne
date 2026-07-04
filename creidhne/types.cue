@@ -254,11 +254,40 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 #Ulimit: "host" |
 	=~"^(as|core|cpu|data|fsize|locks|memlock|msgqueue|nice|nofile|nproc|rss|rtprio|rttime|sigpending|stack)=(-1|[0-9]+)(:(-1|[0-9]+))?$"
 
-// #TmpfsMount is a Tmpfs= entry: an absolute container path with optional mount
-// options ("/run:rw,size=64m,mode=1777"). podman passes the options straight to
-// the kernel as standard mount flags (open-ended per podman-run(1)), so only the
-// path is validated, not the option set.
-#TmpfsMount: =~"^/[^:]+(:.+)?$"
+// #TmpfsOption is one mount option for a typed #TmpfsSpec: a known kernel/podman
+// tmpfs flag, or a key=value (size=, mode=, uid=, gid=, nr_blocks=, nr_inodes=,
+// huge=). Not exhaustive (mpol= and exotic flags fall back to the raw-string form
+// of #TmpfsMount); every token here is one the kernel actually accepts at mount.
+// Verified against mm/shmem.c and tmpfs(5): huge= takes only never/always/
+// within_size/advise at mount (deny/force are sysfs-only), and size=/nr_blocks=/
+// nr_inodes= take memparse k/m/g/t/p/e suffixes (only size= also takes "%").
+#TmpfsOption: "ro" | "rw" | "nosuid" | "suid" | "nodev" | "dev" |
+	"noexec" | "exec" | "sync" | "async" | "dirsync" |
+	"noatime" | "atime" | "nodiratime" | "diratime" |
+	"relatime" | "norelatime" | "strictatime" | "nostrictatime" |
+	"lazytime" | "nolazytime" | "nosymfollow" |
+	"noswap" | "inode32" | "inode64" | "tmpcopyup" | "notmpcopyup" |
+	=~"^size=[0-9]+([kKmMgGtTpPeE]|%)?$" |
+	=~"^(nr_blocks|nr_inodes)=[0-9]+[kKmMgGtTpPeE]?$" |
+	=~"^mode=[0-7]{1,4}$" |
+	=~"^(uid|gid)=[0-9]+$" |
+	=~"^huge=(never|always|within_size|advise)$"
+
+// #TmpfsSpec is the typed form of a Tmpfs= entry: a container path plus a
+// validated #TmpfsOption list, rendering to "path[:opt,opt,...]".
+#TmpfsSpec: {
+	path: =~"^/[^:]+$"
+	options?: [...#TmpfsOption]
+	_optStr: strings.Join([ if options != _|_ for o in options {o}], ",")
+	_rendered: strings.Join(list.Concat([
+		[path],
+		[ if _optStr != "" {_optStr}],
+	]), ":")
+}
+
+// #TmpfsMount is a Tmpfs= entry: either a raw string ("/run:rw,size=64m,mode=1777",
+// the escape hatch for options #TmpfsOption does not model), or a typed #TmpfsSpec.
+#TmpfsMount: =~"^/[^:]+(:.+)?$" | #TmpfsSpec
 
 // systemd job mode for OnSuccessJobMode/OnFailureJobMode.
 // See systemd.unit(5).

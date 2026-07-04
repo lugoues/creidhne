@@ -84,9 +84,9 @@ package creidhne
 		// "tmpfs"|..., source?, destination, options?}) or a #MountRef referencing a
 		// managed volume/image #self. (Strict: the raw type= string is now typed.)
 		Mount?: [...(#MountSpec | #MountRef)]
-		// Mount a tmpfs in the container: an absolute path with optional mount
-		// options (e.g. "/run:rw,size=64m"). Options are open-ended (kernel mount
-		// flags), so only the path is validated.
+		// Mount a tmpfs in the container. Either a raw string ("/run:rw,size=64m")
+		// or a typed #TmpfsSpec ({path, options}); #TmpfsOption is the typed option
+		// set, with the raw-string form as the escape hatch for the rest.
 		Tmpfs?: [...#TmpfsMount]
 
 		// Add these capabilities, in addition to the default Podman capability set, to the container.
@@ -267,6 +267,14 @@ package creidhne
 	mountStrings: [
 		if Container.Mount != _|_ for m in Container.Mount {
 			(m & string) | (m & {_rendered: _})._rendered
+		},
+	]
+
+	// Resolved tmpfs: flattens typed #TmpfsSpec structs to "path:opt,opt" strings;
+	// raw string mounts pass through unchanged.
+	tmpfsStrings: [
+		if Container.Tmpfs != _|_ for t in Container.Tmpfs {
+			(t & string) | (t & {_rendered: _})._rendered
 		},
 	]
 }
