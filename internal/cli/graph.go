@@ -308,3 +308,38 @@ func (g depGraph) sortedEdges() []graphEdge {
 	}
 	return out
 }
+
+// mergedEdge collapses every edge between the same ordered pair of nodes into
+// one edge carrying all its relationship labels, so the common requirement+
+// ordering pairings (Requires+After, Wants+After, ...) draw as a single line.
+type mergedEdge struct {
+	From string
+	To   string
+	Rels []string // sorted, distinct
+}
+
+// mergedEdges groups sortedEdges by (from, to). Deterministic: sortedEdges is
+// already sorted and deduped, and the result is re-sorted by (from, to).
+func (g depGraph) mergedEdges() []mergedEdge {
+	var out []mergedEdge
+	at := map[[2]string]int{}
+	for _, e := range g.sortedEdges() {
+		key := [2]string{e.From, e.To}
+		if i, ok := at[key]; ok {
+			out[i].Rels = append(out[i].Rels, e.Rel)
+			continue
+		}
+		at[key] = len(out)
+		out = append(out, mergedEdge{From: e.From, To: e.To, Rels: []string{e.Rel}})
+	}
+	for i := range out {
+		sort.Strings(out[i].Rels)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].From != out[j].From {
+			return out[i].From < out[j].From
+		}
+		return out[i].To < out[j].To
+	})
+	return out
+}

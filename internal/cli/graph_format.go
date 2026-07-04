@@ -19,6 +19,27 @@ func relResource(rel string) bool {
 	return false
 }
 
+// edgeCategory picks a merged edge's style class: any requirement/failure
+// relationship dominates (solid), else resource coupling (dotted), else an
+// ordering-only edge (dashed).
+func edgeCategory(rels []string) string {
+	resource := false
+	for _, r := range rels {
+		switch {
+		case relResource(r):
+			resource = true
+		case relOrdering(r):
+			// ordering-only unless a resource/requirement rel is also present
+		default:
+			return "requirement"
+		}
+	}
+	if resource {
+		return "resource"
+	}
+	return "ordering"
+}
+
 // --- dot (Graphviz) ---
 
 func dotShape(kind string) string {
@@ -83,15 +104,15 @@ func writeDot(w io.Writer, g depGraph, grouped bool) {
 			fmt.Fprintf(w, "  %s\n", dotNodeStmt(g.nodes[id]))
 		}
 	}
-	for _, e := range g.sortedEdges() {
+	for _, e := range g.mergedEdges() {
 		var style string
-		switch {
-		case relOrdering(e.Rel):
+		switch edgeCategory(e.Rels) {
+		case "ordering":
 			style = ` style=dashed color="gray50"`
-		case relResource(e.Rel):
+		case "resource":
 			style = ` style=dotted color="#3572A5"`
 		}
-		fmt.Fprintf(w, "  %q -> %q [label=%q%s];\n", e.From, e.To, e.Rel, style)
+		fmt.Fprintf(w, "  %q -> %q [label=%q%s];\n", e.From, e.To, strings.Join(e.Rels, "+"), style)
 	}
 	fmt.Fprintln(w, "}")
 }
@@ -164,12 +185,12 @@ func writeMermaid(w io.Writer, g depGraph, grouped bool) {
 			external = true
 		}
 	}
-	for _, e := range g.sortedEdges() {
+	for _, e := range g.mergedEdges() {
 		arrow := "-->"
-		if relOrdering(e.Rel) {
+		if edgeCategory(e.Rels) == "ordering" {
 			arrow = "-.->"
 		}
-		fmt.Fprintf(w, "  %s %s|%s| %s\n", mid[e.From], arrow, e.Rel, mid[e.To])
+		fmt.Fprintf(w, "  %s %s|%s| %s\n", mid[e.From], arrow, strings.Join(e.Rels, "+"), mid[e.To])
 	}
 	if external {
 		fmt.Fprintln(w, "  classDef external stroke-dasharray:4,color:gray;")

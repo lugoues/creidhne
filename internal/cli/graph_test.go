@@ -289,6 +289,59 @@ web: creidhne.#Quadlet & {
 	}
 }
 
+// TestCmdGraphMergesPairedEdges: Requires+After (and the like) between the same
+// pair collapse to a single labeled edge in dot/mermaid, while JSON stays
+// granular (one object per relationship).
+func TestCmdGraphMergesPairedEdges(t *testing.T) {
+	src := `package config
+import "github.com/lugoues/creidhne@v0"
+db: creidhne.#Quadlet & {name: "db", units: #container: Container: {Image: "docker.io/pg", ContainerName: "db"}}
+web: creidhne.#Quadlet & {
+	name: "web"
+	units: #container: {
+		Container: {Image: "docker.io/nginx"}
+		Unit: {After: ["db.service"], Requires: ["db.service"]}
+	}
+}
+`
+	dir := setupProject(t, src)
+
+	dot, err := runCmd(t, "--dir", dir, "graph", "--flat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(dot, `"web.container" -> "db.container" [label="After+Requires"`) {
+		t.Fatalf("dot did not merge the paired edge:\n%s", dot)
+	}
+	// Merged edge with a requirement rel must render solid, not dashed.
+	if strings.Contains(dot, `[label="After+Requires" style=dashed`) {
+		t.Fatalf("merged requirement edge should be solid, not dashed:\n%s", dot)
+	}
+
+	mer, err := runCmd(t, "--dir", dir, "graph", "--format", "mermaid", "--flat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(mer, `-->|After+Requires|`) {
+		t.Fatalf("mermaid did not merge the paired edge:\n%s", mer)
+	}
+
+	js, err := runCmd(t, "--dir", dir, "graph", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var after, requires bool
+	for _, e := range graphEdges(t, js) {
+		if e.From == "web.container" && e.To == "db.container" {
+			after = after || e.Rel == "After"
+			requires = requires || e.Rel == "Requires"
+		}
+	}
+	if !after || !requires {
+		t.Fatalf("json should keep After and Requires as separate edges (after=%v requires=%v):\n%s", after, requires, js)
+	}
+}
+
 // TestCmdGraphDuplicateFilename: two units colliding on one filename must error
 // (matching render), not silently misrender.
 func TestCmdGraphDuplicateFilename(t *testing.T) {
