@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // relOrdering is true for [Unit] ordering directives, drawn as dashed edges.
@@ -41,18 +42,40 @@ func dotShape(kind string) string {
 	}
 }
 
-func writeDot(w io.Writer, g depGraph) {
+// dotNodeStmt renders a single node statement (without indentation).
+func dotNodeStmt(n graphNode) string {
+	attrs := fmt.Sprintf("shape=%s", dotShape(n.Kind))
+	if n.External {
+		attrs += ` style="rounded,dashed" fontcolor="gray40" color="gray60"`
+	}
+	return fmt.Sprintf("%q [%s];", n.ID, attrs)
+}
+
+func writeDot(w io.Writer, g depGraph, grouped bool) {
 	fmt.Fprintln(w, "digraph creidhne {")
 	fmt.Fprintln(w, "  rankdir=LR;")
+	fmt.Fprintln(w, "  compound=true;")
 	fmt.Fprintln(w, `  node [fontname="sans-serif" style="rounded,filled" fillcolor="white"];`)
 	fmt.Fprintln(w, `  edge [fontname="sans-serif" fontsize=10];`)
-	for _, id := range g.sortedNodeIDs() {
-		n := g.nodes[id]
-		attrs := fmt.Sprintf("shape=%s", dotShape(n.Kind))
-		if n.External {
-			attrs += ` style="rounded,dashed" fontcolor="gray40" color="gray60"`
+	if grouped {
+		order, byQuadlet, ungrouped := g.quadletGroups()
+		for i, q := range order {
+			// The name must start with "cluster" for graphviz to box it.
+			fmt.Fprintf(w, "  subgraph cluster_%d {\n", i)
+			fmt.Fprintf(w, "    label=%q;\n", q)
+			fmt.Fprintln(w, `    style="rounded"; color="gray70"; labeljust="l"; fontname="sans-serif";`)
+			for _, id := range byQuadlet[q] {
+				fmt.Fprintf(w, "    %s\n", dotNodeStmt(g.nodes[id]))
+			}
+			fmt.Fprintln(w, "  }")
 		}
-		fmt.Fprintf(w, "  %q [%s];\n", n.ID, attrs)
+		for _, id := range ungrouped {
+			fmt.Fprintf(w, "  %s\n", dotNodeStmt(g.nodes[id]))
+		}
+	} else {
+		for _, id := range g.sortedNodeIDs() {
+			fmt.Fprintf(w, "  %s\n", dotNodeStmt(g.nodes[id]))
+		}
 	}
 	for _, e := range g.sortedEdges() {
 		var style string
@@ -69,9 +92,19 @@ func writeDot(w io.Writer, g depGraph) {
 
 // --- mermaid ---
 
+// mermaidLabel makes a label safe to place inside Mermaid's ["..."] quoting.
+// Mermaid ignores backslash escapes there, so a literal double quote would close
+// the string and break the whole render. Managed unit filenames are validated to
+// contain none, but an external node's id is a raw [Unit] target that a loose
+// #ServiceName regex can admit with a quote, so neutralize it defensively.
+func mermaidLabel(s string) string {
+	return strings.ReplaceAll(s, `"`, "'")
+}
+
 // mermaidNode declares a node with the shape for its kind: id is the synthetic
 // mermaid id, label is the unit filename shown to the reader.
 func mermaidNode(id, label, kind string) string {
+	label = mermaidLabel(label)
 	switch kind {
 	case "pod":
 		return fmt.Sprintf("%s[[%q]]", id, label)
@@ -86,7 +119,7 @@ func mermaidNode(id, label, kind string) string {
 	}
 }
 
-func writeMermaid(w io.Writer, g depGraph) {
+func writeMermaid(w io.Writer, g depGraph, grouped bool) {
 	// Mermaid node ids can't contain dots/dashes, so assign stable synthetic ids
 	// (n0, n1, ...) and carry the filename as the label.
 	ids := g.sortedNodeIDs()
@@ -94,10 +127,25 @@ func writeMermaid(w io.Writer, g depGraph) {
 	for i, id := range ids {
 		mid[id] = fmt.Sprintf("n%d", i)
 	}
+	node := func(id string) string { return mermaidNode(mid[id], id, g.nodes[id].Kind) }
 
 	fmt.Fprintln(w, "graph LR")
-	for _, id := range ids {
-		fmt.Fprintf(w, "  %s\n", mermaidNode(mid[id], id, g.nodes[id].Kind))
+	if grouped {
+		order, byQuadlet, ungrouped := g.quadletGroups()
+		for i, q := range order {
+			fmt.Fprintf(w, "  subgraph sg%d[%q]\n", i, mermaidLabel(q))
+			for _, id := range byQuadlet[q] {
+				fmt.Fprintf(w, "    %s\n", node(id))
+			}
+			fmt.Fprintln(w, "  end")
+		}
+		for _, id := range ungrouped {
+			fmt.Fprintf(w, "  %s\n", node(id))
+		}
+	} else {
+		for _, id := range ids {
+			fmt.Fprintf(w, "  %s\n", node(id))
+		}
 	}
 	external := false
 	for _, id := range ids {
