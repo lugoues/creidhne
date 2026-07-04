@@ -342,6 +342,41 @@ web: creidhne.#Quadlet & {
 	}
 }
 
+// TestCmdGraphMergedLabelDropsResourceToken: when a resource edge merges with
+// hand-written directives, the resource kind is dropped from the label (the
+// node shape conveys it), but a bare resource edge keeps its kind label.
+func TestCmdGraphMergedLabelDropsResourceToken(t *testing.T) {
+	dir := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+infra: creidhne.#Quadlet & {name: "infra", units: {#volume: {}, #network: {}}}
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: #container: {
+		Container: {
+			Image: "docker.io/app"
+			Volume: [infra.units.#volume.#self & {target: "/data"}]
+			Network: [infra.units.#network.#self]
+		}
+		Unit: {After: [infra.units.#volume.#service], Requires: [infra.units.#volume.#service]}
+	}
+}
+`)
+	dot, err := runCmd(t, "--dir", dir, "graph", "--flat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(dot, `"app.container" -> "infra.volume" [label="After+Requires"]`) {
+		t.Fatalf("mixed edge should drop the resource token from the label:\n%s", dot)
+	}
+	if strings.Contains(dot, "After+Requires+volume") {
+		t.Fatalf("resource token was not dropped:\n%s", dot)
+	}
+	// The bare Network= edge (no hand-written directive) keeps its kind label.
+	if !strings.Contains(dot, `"app.container" -> "infra.network" [label="network"`) {
+		t.Fatalf("bare resource edge should keep its kind label:\n%s", dot)
+	}
+}
+
 // TestCmdGraphDuplicateFilename: two units colliding on one filename must error
 // (matching render), not silently misrender.
 func TestCmdGraphDuplicateFilename(t *testing.T) {

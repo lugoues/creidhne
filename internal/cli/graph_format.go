@@ -19,6 +19,23 @@ func relResource(rel string) bool {
 	return false
 }
 
+// labelRels chooses what a merged edge's label shows: the [Unit] directives
+// when any are present (the resource kind is already conveyed by the target
+// node's shape, so "After+Requires+volume" collapses to "After+Requires"),
+// otherwise the resource relationship itself for a bare resource edge.
+func labelRels(rels []string) []string {
+	var directives []string
+	for _, r := range rels {
+		if !relResource(r) {
+			directives = append(directives, r)
+		}
+	}
+	if len(directives) > 0 {
+		return directives
+	}
+	return rels
+}
+
 // edgeCategory picks a merged edge's style class: any requirement/failure
 // relationship dominates (solid), else resource coupling (dotted), else an
 // ordering-only edge (dashed).
@@ -112,7 +129,7 @@ func writeDot(w io.Writer, g depGraph, grouped bool) {
 		case "resource":
 			style = ` style=dotted color="#3572A5"`
 		}
-		fmt.Fprintf(w, "  %q -> %q [label=%q%s];\n", e.From, e.To, strings.Join(e.Rels, "+"), style)
+		fmt.Fprintf(w, "  %q -> %q [label=%q%s];\n", e.From, e.To, strings.Join(labelRels(e.Rels), "+"), style)
 	}
 	fmt.Fprintln(w, "}")
 }
@@ -190,7 +207,7 @@ func writeMermaid(w io.Writer, g depGraph, grouped bool) {
 		if edgeCategory(e.Rels) == "ordering" {
 			arrow = "-.->"
 		}
-		fmt.Fprintf(w, "  %s %s|%s| %s\n", mid[e.From], arrow, strings.Join(e.Rels, "+"), mid[e.To])
+		fmt.Fprintf(w, "  %s %s|%s| %s\n", mid[e.From], arrow, strings.Join(labelRels(e.Rels), "+"), mid[e.To])
 	}
 	if external {
 		fmt.Fprintln(w, "  classDef external stroke-dasharray:4,color:gray;")
