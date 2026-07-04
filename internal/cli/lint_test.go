@@ -88,16 +88,23 @@ app: creidhne.#Quadlet & {
 }
 
 // Two units generating the same systemd service must be rejected (distinct
-// filenames slip past checkUniqueFilenames but the services collide).
-func TestCmdLintServiceCollision(t *testing.T) {
-	dir := setupProject(t, `package config
+// filenames slip past checkUniqueFilenames but the services collide). The check
+// lives in eval.LoadAndValidate, so every loading command catches it — probe a
+// few, including validate, which bypasses the CLI's loadQuadlets helper.
+func TestServiceCollisionRejectedEverywhere(t *testing.T) {
+	src := `package config
 import "github.com/lugoues/creidhne@v0"
 aaa: creidhne.#Quadlet & {name: "foo-network", units: #container: Container: {Image: "docker.io/x", ContainerName: "ord"}}
 zzz: creidhne.#Quadlet & {name: "foo", units: #network: {}}
-`)
-	_, err := runCmd(t, "--dir", dir, "lint")
-	if err == nil || !strings.Contains(err.Error(), "duplicate systemd service") {
-		t.Fatalf("expected duplicate-service error, got: %v", err)
+`
+	for _, sub := range []string{"lint", "graph", "validate", "render", "plan"} {
+		t.Run(sub, func(t *testing.T) {
+			dir := setupProject(t, src)
+			_, err := runCmd(t, "--dir", dir, sub)
+			if err == nil || !strings.Contains(err.Error(), "duplicate systemd service") {
+				t.Fatalf("%s: expected duplicate-service error, got: %v", sub, err)
+			}
+		})
 	}
 }
 
