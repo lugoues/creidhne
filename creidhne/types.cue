@@ -42,7 +42,10 @@ import (
 #JSONLabel: #Rendered & {
 	key: string
 	value: {...}
-	_rendered: "\(key)=" + json.Marshal(value)
+	// Single-quote the whole key=value: quadlet word-splits Label= values
+	// (systemd syntax), so the JSON's double quotes would otherwise break the
+	// parse. Single quotes keep the payload literal.
+	_rendered: "'\(key)=\(json.Marshal(value))'"
 }
 
 // CIDR notation
