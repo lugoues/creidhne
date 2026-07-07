@@ -1,0 +1,5 @@
+
+[Container]
+Image=docker.io/app:latest
+Label=plain=1
+Label=app.spec={"kind":"container"}

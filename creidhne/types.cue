@@ -1,6 +1,7 @@
 package creidhne
 
 import (
+	"encoding/json"
 	"list"
 	"strings"
 )
@@ -20,6 +21,29 @@ import (
 
 // Key=Value pair for labels, annotations, environment variables
 #KeyValue: =~"^[^=]+=.*$"
+
+// #Rendered carries a pre-computed #KeyValue string in its hidden _rendered
+// field, so it can stand in wherever a #KeyValue is accepted (e.g. Label=). The
+// flatteners that read _rendered live in this package; because hidden fields are
+// package-scoped, _rendered MUST be produced by a helper defined here (like
+// #JSONLabel) — a consumer package that hand-writes _rendered would find it
+// silently ignored, since its _rendered is a different field. Open (...) so a
+// helper carrying extra fields (like #JSONLabel's key/value) still satisfies it.
+#Rendered: {_rendered: #KeyValue, ...}
+
+// #LabelValue accepts a raw "key=value" string or a #Rendered helper.
+#LabelValue: #KeyValue | #Rendered
+
+// #JSONLabel renders "key=<json(value)>": a structured payload encoded as the
+// label's value, so callers stop hand-rolling json.Marshal in an interpolation.
+// value is an open struct (marshaling it, not the whole helper, keeps _rendered
+// out of the payload — no self-reference). An empty value marshals to "{}", so
+// the schema type-checks without a concrete payload.
+#JSONLabel: #Rendered & {
+	key: string
+	value: {...}
+	_rendered: "\(key)=" + json.Marshal(value)
+}
 
 // CIDR notation
 #CIDR: =~"^[0-9a-fA-F:.]+/[0-9]+$"
@@ -80,11 +104,11 @@ import (
 	source:  string
 	target?: string
 	options?: [...#VolumeMountOption]
-	_optStr: strings.Join([ if options != _|_ for o in options {o}], ",")
+	_optStr: strings.Join([if options != _|_ for o in options {o}], ",")
 	_rendered: strings.Join(list.Concat([
 		[source],
-		[ if target != _|_ {target}],
-		[ if _optStr != "" {_optStr}],
+		[if target != _|_ {target}],
+		[if _optStr != "" {_optStr}],
 	]), ":")
 }
 
@@ -102,8 +126,8 @@ import (
 // carries any not modeled here as raw key=value. Renders to "key=value,..."
 // via _connStr (empty when nothing is set).
 #NetConnOptions: {
-	_prefix:              string      // what the options decorate: "bridge" or a .network ref
-	alias?:               [...string] // repeatable -> alias=web,alias=app
+	_prefix: string // what the options decorate: "bridge" or a .network ref
+	alias?: [...string]   // repeatable -> alias=web,alias=app
 	ip?:                  #IPv4
 	ip6?:                 #IPv6
 	mac?:                 #MAC
@@ -111,17 +135,17 @@ import (
 	host_interface_name?: string
 	passthrough?: [...#KeyValue] // netavark options not modeled above
 	_connStr: strings.Join(list.Concat([
-		[ if alias != _|_ for a in alias {"alias=\(a)"}],
-		[ if ip != _|_ {"ip=\(ip)"}],
-		[ if ip6 != _|_ {"ip6=\(ip6)"}],
-		[ if mac != _|_ {"mac=\(mac)"}],
-		[ if interface_name != _|_ {"interface_name=\(interface_name)"}],
-		[ if host_interface_name != _|_ {"host_interface_name=\(host_interface_name)"}],
-		[ if passthrough != _|_ for kv in passthrough {kv}],
+		[if alias != _|_ for a in alias {"alias=\(a)"}],
+		[if ip != _|_ {"ip=\(ip)"}],
+		[if ip6 != _|_ {"ip6=\(ip6)"}],
+		[if mac != _|_ {"mac=\(mac)"}],
+		[if interface_name != _|_ {"interface_name=\(interface_name)"}],
+		[if host_interface_name != _|_ {"host_interface_name=\(host_interface_name)"}],
+		[if passthrough != _|_ for kv in passthrough {kv}],
 	]), ",")
 	// _rendered = "_prefix[:opt,opt,...]"; defined here (not in the embedding
 	// struct) so the _connStr/_prefix references stay in #NetConnOptions's scope.
-	_rendered: strings.Join(list.Concat([[_prefix], [ if _connStr != "" {_connStr}]]), ":")
+	_rendered: strings.Join(list.Concat([[_prefix], [if _connStr != "" {_connStr}]]), ":")
 }
 
 // Network= destination forms. A Network= field accepts a network's #self
@@ -278,10 +302,10 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 #TmpfsSpec: {
 	path: =~"^/[^:]+$"
 	options?: [...#TmpfsOption]
-	_optStr: strings.Join([ if options != _|_ for o in options {o}], ",")
+	_optStr: strings.Join([if options != _|_ for o in options {o}], ",")
 	_rendered: strings.Join(list.Concat([
 		[path],
-		[ if _optStr != "" {_optStr}],
+		[if _optStr != "" {_optStr}],
 	]), ":")
 }
 
@@ -305,9 +329,10 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 #CollectMode: "inactive" | "inactive-or-failed"
 
 // [Service] enums (values from systemd v257 string tables). See systemd.service(5).
-#ServiceType: "simple" | "exec" | "forking" | "oneshot" | "dbus" | "notify" | "notify-reload" | "idle"
+#ServiceType:    "simple" | "exec" | "forking" | "oneshot" | "dbus" | "notify" | "notify-reload" | "idle"
 #ServiceRestart: "no" | "on-success" | "on-failure" | "on-abnormal" | "on-watchdog" | "on-abort" | "always"
-#KillMode: "control-group" | "mixed" | "process" | "none"
+#KillMode:       "control-group" | "mixed" | "process" | "none"
+
 #NotifyAccess: "none" | "main" | "exec" | "all"
 
 // --- Podman value types ---
@@ -363,11 +388,11 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 
 	_rendered: strings.Join(list.Concat([
 		[name],
-		[ if type != _|_ {"type=\(type)"}],
-		[ if target != _|_ {"target=\(target)"}],
-		[ if uid != _|_ {"uid=\(uid)"}],
-		[ if gid != _|_ {"gid=\(gid)"}],
-		[ if mode != _|_ {"mode=\(mode)"}],
+		[if type != _|_ {"type=\(type)"}],
+		[if target != _|_ {"target=\(target)"}],
+		[if uid != _|_ {"uid=\(uid)"}],
+		[if gid != _|_ {"gid=\(gid)"}],
+		[if mode != _|_ {"mode=\(mode)"}],
 	]), ",")
 }
 
@@ -405,7 +430,7 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	options?: [...#MountOption]
 	_rendered: strings.Join(list.Concat([
 		["type=\(ref._kind)", "source=\(ref.source)", "destination=\(destination)"],
-		[ if options != _|_ for o in options {o}],
+		[if options != _|_ for o in options {o}],
 	]), ",")
 }
 
@@ -422,10 +447,10 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	passthrough?: [...#KeyValue]
 	_rendered: strings.Join(list.Concat([
 		["type=\(type)"],
-		[ if source != _|_ {"source=\(source)"}],
+		[if source != _|_ {"source=\(source)"}],
 		["destination=\(destination)"],
-		[ if options != _|_ for o in options {o}],
-		[ if passthrough != _|_ for kv in passthrough {kv}],
+		[if options != _|_ for o in options {o}],
+		[if passthrough != _|_ for kv in passthrough {kv}],
 	]), ",")
 }
 

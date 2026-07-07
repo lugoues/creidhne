@@ -94,7 +94,7 @@
 {{ end -}}
 {{ if .Container.ShmSize -}}ShmSize={{ .Container.ShmSize }}
 {{ end -}}
-{{ range .Container.Label -}}Label={{ . }}
+{{ range .labelStrings -}}Label={{ . }}
 {{ end -}}
 {{ range .Container.Annotation -}}Annotation={{ . }}
 {{ end -}}

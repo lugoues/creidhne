@@ -1,11 +1,12 @@
 package creidhne
 
 #Container: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).container"
 	#service: "\(_stem).service"
+
 	// #self: reference handle (e.g. for Network=container:... reuse via .container).
 	#self: #RefSelf & {_kind: "container", source: #ref}
 
@@ -131,8 +132,9 @@ package creidhne
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
-		// Set one or more OCI labels on the container. Format: key=value.
-		Label?: [...#KeyValue]
+		// Set one or more OCI labels on the container. A raw "key=value" string,
+		// or a #Rendered helper (e.g. #JSONLabel) that computes one.
+		Label?: [...#LabelValue]
 		// Set one or more OCI annotations on the container. Format: key=value.
 		Annotation?: [...#KeyValue]
 
@@ -275,6 +277,14 @@ package creidhne
 	tmpfsStrings: [
 		if Container.Tmpfs != _|_ for t in Container.Tmpfs {
 			(t & string) | (t & {_rendered: _})._rendered
+		},
+	]
+
+	// Resolved labels: raw "key=value" strings pass through; #Rendered helpers
+	// flatten via their computed _rendered.
+	labelStrings: [
+		if Container.Label != _|_ for l in Container.Label {
+			(l & string) | (l & {_rendered: _})._rendered
 		},
 	]
 }

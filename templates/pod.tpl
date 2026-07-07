@@ -29,7 +29,7 @@
 {{ end -}}
 {{ if .Pod.ShmSize -}}ShmSize={{ .Pod.ShmSize }}
 {{ end -}}
-{{ range .Pod.Label -}}Label={{ . }}
+{{ range .labelStrings -}}Label={{ . }}
 {{ end -}}
 {{ if .Pod.UserNS -}}UserNS={{ .Pod.UserNS }}
 {{ end -}}

@@ -1,11 +1,12 @@
 package creidhne
 
 #Pod: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).pod"
 	#service: "\(_stem)-pod.service"
+
 	// #self: reference handle for a Pod= field.
 	#self: #RefSelf & {_kind: "pod", source: #ref}
 
@@ -51,8 +52,9 @@ package creidhne
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
-		// Set one or more OCI labels on the pod. Format: key=value.
-		Label?: [...#KeyValue]
+		// Set one or more OCI labels on the pod. A raw "key=value" string, or a
+		// #Rendered helper (e.g. #JSONLabel) that computes one.
+		Label?: [...#LabelValue]
 
 		// Set the user namespace mode for the pod.
 		UserNS?: #UserNS
@@ -90,6 +92,13 @@ package creidhne
 	networkStrings: [
 		if Pod.Network != _|_ for n in Pod.Network {
 			(n & string) | (n & {_rendered: _})._rendered
+		},
+	]
+
+	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
+	labelStrings: [
+		if Pod.Label != _|_ for l in Pod.Label {
+			(l & string) | (l & {_rendered: _})._rendered
 		},
 	]
 }

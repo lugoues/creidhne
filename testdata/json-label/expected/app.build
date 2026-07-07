@@ -1,0 +1,7 @@
+
+[Build]
+ImageTag=quadlets.localhost/app:latest
+SetWorkingDirectory=unit
+File=images/app.Containerfile
+Label=plain=1
+Label=app.spec={"kind":"build"}

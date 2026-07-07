@@ -1,11 +1,12 @@
 package creidhne
 
 #Volume: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).volume"
 	#service: "\(_stem)-volume.service"
+
 	// #self: reference handle for a Volume= field, e.g.
 	//   Volume: [units.volumes.data.#self & {target: "/data", options: "U"}]
 	#self: #VolumeSelf & {source: #ref}
@@ -43,8 +44,9 @@ package creidhne
 		UID?: int & >=0
 		// The host numeric GID to use as the group for the volume.
 		GID?: int & >=0
-		// Set one or more OCI labels on the volume. Format: key=value.
-		Label?: [...#KeyValue]
+		// Set one or more OCI labels on the volume. A raw "key=value" string, or a
+		// #Rendered helper (e.g. #JSONLabel) that computes one.
+		Label?: [...#LabelValue]
 		// Arguments passed directly between "podman" and "volume" for unsupported features.
 		GlobalArgs?: [...string]
 		// Arguments passed directly to the end of the podman volume create command.
@@ -52,4 +54,11 @@ package creidhne
 		// Load the specified containers.conf(5) module.
 		ContainersConfModule?: [...string]
 	}
+
+	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
+	labelStrings: [
+		if Volume.Label != _|_ for l in Volume.Label {
+			(l & string) | (l & {_rendered: _})._rendered
+		},
+	]
 }

@@ -37,7 +37,7 @@ File={{ .containerfilePath }}
 {{ end -}}
 {{ range .Build.DNSSearch -}}DNSSearch={{ . }}
 {{ end -}}
-{{ range .Build.Label -}}Label={{ . }}
+{{ range .Build.labelStrings -}}Label={{ . }}
 {{ end -}}
 {{ range .Build.Annotation -}}Annotation={{ . }}
 {{ end -}}

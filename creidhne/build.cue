@@ -1,11 +1,12 @@
 package creidhne
 
 #Build: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).build"
 	#service: "\(_stem)-build.service"
+
 	// #self: reference handle (e.g. Image= built by this .build).
 	#self: #RefSelf & {_kind: "build", source: #ref}
 
@@ -38,7 +39,7 @@ package creidhne
 	}) & {
 		Build: {
 			// Specifies the name(s) assigned to the resulting image if the build completes successfully. (optional: default "quadlets.localhost/\(_stem):latest")
-			ImageTag:  *["quadlets.localhost/\(_stem):latest"] | [ ...string]
+			ImageTag: *["quadlets.localhost/\(_stem):latest"] | [...string]
 			// Override the default systemd service unit name.
 			ServiceName?: string
 			// Path to an alternate .containerignore file to use when building the image.
@@ -64,8 +65,9 @@ package creidhne
 			DNSOption?: [...string]
 			// Set custom DNS search domains. Use DNSSearch=. to remove the search domain.
 			DNSSearch?: [...string]
-			// Add an image label (e.g. label=value) to the image metadata.
-			Label?: [...#KeyValue]
+			// Add an image label (e.g. label=value) to the image metadata. A raw
+			// "key=value" string, or a #Rendered helper (e.g. #JSONLabel).
+			Label?: [...#LabelValue]
 			// Add an image annotation (e.g. annotation=value) to the image metadata.
 			Annotation?: [...#KeyValue]
 			// Always remove intermediate containers after a build, even if the build fails.
@@ -101,6 +103,11 @@ package creidhne
 			volumeStrings: [
 				if Volume != _|_ for v in Volume {
 					(v & string) | (v & {_rendered: _})._rendered
+				},
+			]
+			labelStrings: [
+				if Label != _|_ for l in Label {
+					(l & string) | (l & {_rendered: _})._rendered
 				},
 			]
 		}

@@ -24,7 +24,7 @@ Copy={{ .Volume.Copy }}
 {{ end -}}
 {{ if isset .Volume "GID" -}}GID={{ printf "%d" .Volume.GID }}
 {{ end -}}
-{{ range .Volume.Label -}}Label={{ . }}
+{{ range .labelStrings -}}Label={{ . }}
 {{ end -}}
 {{ range .Volume.GlobalArgs -}}GlobalArgs={{ . }}
 {{ end -}}

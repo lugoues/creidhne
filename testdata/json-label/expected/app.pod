@@ -1,0 +1,4 @@
+
+[Pod]
+Label=plain=1
+Label=app.spec={"kind":"pod"}
