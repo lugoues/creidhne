@@ -43,9 +43,11 @@ import (
 	key: string
 	value: {...}
 	// Single-quote the whole key=value: quadlet word-splits Label= values
-	// (systemd syntax), so the JSON's double quotes would otherwise break the
-	// parse. Single quotes keep the payload literal.
-	_rendered: "'\(key)=\(json.Marshal(value))'"
+	// (systemd syntax), so the raw JSON would break the parse. HTMLEscape turns
+	// <, >, & into \uXXXX; a literal ' would still terminate the single-quoting,
+	// so replace it with its \uXXXX escape as well. Both keep the value valid
+	// JSON that the consumer decodes back.
+	_rendered: "'\(key)=\(strings.Replace(json.HTMLEscape(json.Marshal(value)), "'", "\\u0027", -1))'"
 }
 
 // CIDR notation

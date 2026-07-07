@@ -10,7 +10,7 @@ import "github.com/lugoues/creidhne"
 app: creidhne.#Quadlet & {
 	name: "app"
 	units: {
-		#container: Container: {Image: "docker.io/app:latest", Label: ["plain=1", #Spec & {value: {kind: "container"}}]}
+		#container: Container: {Image: "docker.io/app:latest", Label: ["plain=1", #Spec & {value: {kind: "container", note: "it's <b> & safe"}}]}
 		#pod: Pod: Label: ["plain=1", #Spec & {value: {kind: "pod"}}]
 		#volume: Volume: Label: ["plain=1", #Spec & {value: {kind: "volume"}}]
 		#build: {ContainerFile: "FROM alpine\n", Build: Label: ["plain=1", #Spec & {value: {kind: "build"}}]}

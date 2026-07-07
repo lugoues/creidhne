@@ -2,4 +2,4 @@
 [Container]
 Image=docker.io/app:latest
 Label=plain=1
-Label='app.spec={"kind":"container"}'
+Label='app.spec={"kind":"container","note":"it\u0027s \u003cb\u003e \u0026 safe"}'
