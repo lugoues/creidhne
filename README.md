@@ -9,7 +9,6 @@
 <p></p>
 
 [![release](https://img.shields.io/github/v/release/lugoues/creidhne?color=7A5490)](https://github.com/lugoues/creidhne/releases)
-[![go report](https://goreportcard.com/badge/github.com/lugoues/creidhne)](https://goreportcard.com/report/github.com/lugoues/creidhne)
 [![license](https://img.shields.io/badge/license-MIT-7A5490)](LICENSE)
 [![podman](https://img.shields.io/badge/podman-4.4%2B-7A5490)](https://podman.io)
 
