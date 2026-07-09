@@ -27,10 +27,23 @@ The binary **embeds the CUE evaluator and schema**, so you don't need `cue` (or 
 Creidhne runs on **Linux** with **systemd** and **Podman 4.4+** (Quadlet's minimum).
 
 ### Release binary
-
 Pick your architecture from the [latest release](https://github.com/lugoues/creidhne/releases/latest):
 
-### Script (recommended)
+### Mise (recommended)
+This is by far the easiest way and it verifies the cosign signatures automatically. Folow the instructions at https://mise.jdx.dev/getting-started.html to get setup. Then create the file below and run `mise install` to install.
+```toml
+# my-quadlets/.mise/config.toml
+[env]
+QUADLET_DIR = "/etc/containers/systemd"
+# DIFF_TOOL = "delta"
+
+[tools]
+deno = "latest"
+"aqua:cue-lang/cue" = "0.16.0"
+"github:lugoues/creidhne" = "1.9.0"
+```
+
+### Script
 This script will download the latest binary, verify it's signatures, and install crei into `/usr/local/bin`.
 ```sh
 ver=1.0.1
@@ -60,9 +73,9 @@ go install github.com/lugoues/creidhne/cmd/crei@latest   # Go 1.25+
 ## Quick start
 
 ```sh
-mkdir myapp && cd myapp
+mkdir my-quadlets && cd my-quadlets
 crei init                 # scaffolds cue.mod, main.cue, .crei/config.toml
-$EDITOR main.cue              # define your quadlets
+$EDITOR main.cue          # define your quadlets
 crei plan                 # preview changes against the quadlet dir
 crei apply                # write the unit files
 ```
