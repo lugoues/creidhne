@@ -307,11 +307,38 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei plan` | Show what `apply` would add/update/remove, as an inline diff (`--no-diff` for the compact list). |
 | `crei diff` | Show detailed diffs against the live files. |
 | `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
+| `crei status [quadlet...]` | One table of desired vs recorded vs disk vs runtime state per unit; name quadlets to drill in. `--problems` shows only rows needing attention, `--format json` for scripts, `--check` for cron/CI exit codes. Read-only. |
 | `crei validate` | Type-check the CUE without rendering. |
 | `crei config` | Show the resolved configuration and where each value came from. |
 | `crei secrets list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
 | `crei secrets create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
 | `crei version` | Print version info. |
+
+### Recorded state and `crei status`
+
+`apply` records what it wrote in a `crei.state` file next to the quadlet files
+(the `kubectl` last-applied analogue): the evaluated manifest plus a hash of
+every file. `crei status` compares four layers per unit and prints one table:
+
+```
+QUADLET  UNIT           DISK      LOADED         RUNTIME
+app      app.container  synced    ok             ● running 2d4h
+app      app.volume     pending   reload needed  -
+db       db.container   tampered  ok             ✗ failed
+```
+
+- **DISK**: `synced`, `pending` (your CUE edit, run apply), `tampered` (the
+  deployed file changed outside crei), `missing`, `orphan`, or `foreign` (a
+  file crei never wrote; never touched).
+- **LOADED**: whether systemd's generator has picked the file up (`ok`,
+  `reload needed`, `not loaded`).
+- **RUNTIME**: the service's state and uptime; `(stale)` marks a process
+  started before the file's last apply, i.e. running the old config.
+
+Every layer degrades independently (broken eval falls back to recorded state;
+no systemd just blanks the runtime columns), and `--check` exits non-zero
+unless everything is synced, loaded, and healthy. Reconciliation itself never
+consults runtime state: files are the substrate, systemd is observability.
 
 Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
 

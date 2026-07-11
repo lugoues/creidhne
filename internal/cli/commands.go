@@ -132,7 +132,14 @@ func newApplyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			desired, err := generate(cfg.ProjectDir)
+			quads, err := loadQuadlets(cfg.ProjectDir)
+			if err != nil {
+				return err
+			}
+			if len(quads) == 0 {
+				return fmt.Errorf("no quadlets found (no top-level #Quadlet values in %s)", cfg.ProjectDir)
+			}
+			desired, err := renderQuadlets(quads)
 			if err != nil {
 				return err
 			}
@@ -148,6 +155,13 @@ func newApplyCmd() *cobra.Command {
 			}
 			printSummary(out, s, "to add", "to update", "to remove")
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
+				// Adopt/refresh recorded state even when the files are already
+				// current, so deployments from before crei.state gain one on
+				// their next apply. Best-effort: no file writes were needed, so
+				// a read-only dir must not turn a no-op into a failure.
+				if err := recordState(out, dir, quads, false); err != nil {
+					return err
+				}
 				fmt.Fprintln(out, "Nothing to do.")
 				return nil
 			}
@@ -204,6 +218,11 @@ func newApplyCmd() *cobra.Command {
 				return err
 			}
 			if err := reconcile.PruneEmptyDirs(filepath.Join(dir, "images")); err != nil {
+				return err
+			}
+			// Record what was just applied (manifest + per-file hashes). We
+			// could write the files, so failing to record them is a real error.
+			if err := recordState(out, dir, quads, true); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "\nApplied: %d added, %d updated, %d removed\n", s.Added, s.Changed, s.Removed)
