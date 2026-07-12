@@ -31,13 +31,13 @@ package creidhne
 		// Set the log-driver Podman uses when running the container.
 		LogDriver?: #LogDriver
 		// Set the logging options used by Podman when running the container.
-		LogOpt?: [...(string | [...string])]
+		LogOpt?: [...(#KeyValue | [...#KeyValue])]
 		// Specify a custom network for the container. Supports .network Quadlet file references.
 		Network?: [...(string | [...string])]
 		// Exposes a port, or a range of ports, from the container to the host.
 		PublishPort?: [...(#PortMapping | [...#PortMapping])]
 		// Set the user namespace mode for the container.
-		UserNS?: string
+		UserNS?: #UserNSEntry
 		// Set the WorkingDirectory field to "yaml" or "unit" file location for relative path resolution.
 		SetWorkingDirectory?: "yaml" | "unit"
 		// Arguments passed directly between "podman" and "kube" for unsupported features.
@@ -46,5 +46,10 @@ package creidhne
 		PodmanArgs?: [...(string | [...string])]
 		// Load the specified containers.conf(5) module.
 		ContainersConfModule?: [...(string | [...string])]
+	}
+
+	// Resolved user namespace (scalar); present only when set.
+	if Kube.UserNS != _|_ {
+		userNSString: (Kube.UserNS & string) | (Kube.UserNS & {#rendered: _}).#rendered
 	}
 }

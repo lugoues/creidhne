@@ -59,7 +59,7 @@ import "list"
 		Label?: [...(#LabelValue | [...#LabelValue])]
 
 		// Set the user namespace mode for the pod.
-		UserNS?: #UserNS
+		UserNS?: #UserNSEntry
 		// Create the pod in a new user namespace using the supplied UID mapping.
 		UIDMap?: [...(#IDMap | [...#IDMap])]
 		// Create the pod in a new user namespace using the supplied GID mapping.
@@ -113,4 +113,9 @@ import "list"
 			])
 		},
 	])
+
+	// Resolved user namespace (scalar); present only when set.
+	if Pod.UserNS != _|_ {
+		userNSString: (Pod.UserNS & string) | (Pod.UserNS & {#rendered: _}).#rendered
+	}
 }

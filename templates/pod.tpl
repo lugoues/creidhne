@@ -31,7 +31,7 @@
 {{ end -}}
 {{ range .labelStrings -}}Label={{ . }}
 {{ end -}}
-{{ if .Pod.UserNS -}}UserNS={{ .Pod.UserNS }}
+{{ if .userNSString -}}UserNS={{ .userNSString }}
 {{ end -}}
 {{ range .Pod.UIDMap -}}UIDMap={{ . }}
 {{ end -}}

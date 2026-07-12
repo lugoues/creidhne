@@ -130,7 +130,7 @@ import "list"
 		PidsLimit?: -1 | (int & >0)
 		// Ulimit options ("name=soft[:hard]", or "host"). Sets the ulimit values
 		// inside the container.
-		Ulimit?: [...(#Ulimit | [...#Ulimit])]
+		Ulimit?: [...(#UlimitEntry | [...#UlimitEntry])]
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
@@ -172,7 +172,7 @@ import "list"
 		// Set the log-driver used by Podman when running the container.
 		LogDriver?: #LogDriver
 		// Set the logging options used by Podman when running the container.
-		LogOpt?: [...(string | [...string])]
+		LogOpt?: [...(#KeyValue | [...#KeyValue])]
 
 		// Signal to stop a container. Default is SIGTERM.
 		StopSignal?: #Signal
@@ -184,7 +184,7 @@ import "list"
 		CgroupsMode?: #CgroupsMode
 
 		// Set the user namespace mode for the container.
-		UserNS?: #UserNS
+		UserNS?: #UserNSEntry
 		// Run the container in a new user namespace using the supplied UID mapping.
 		UIDMap?: [...(#IDMap | [...#IDMap])]
 		// Run the container in a new user namespace using the supplied GID mapping.
@@ -307,4 +307,21 @@ import "list"
 			])
 		},
 	])
+
+	// Resolved ulimits: typed #UlimitSpec flattens to "name=soft[:hard]"; raw
+	// strings pass through.
+	ulimitStrings: list.Concat([
+		if Container.Ulimit != _|_ for e in Container.Ulimit {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for u in (e & [...]) {(u & string) | (u & {#rendered: _}).#rendered},
+			]
+		},
+	])
+
+	// Resolved user namespace (scalar): a typed #UserNSSpec flattens to
+	// "mode:opt,..."; raw mode strings pass through. Present only when set.
+	if Container.UserNS != _|_ {
+		userNSString: (Container.UserNS & string) | (Container.UserNS & {#rendered: _}).#rendered
+	}
 }

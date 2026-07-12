@@ -20,7 +20,7 @@
 {{ end -}}
 {{ range .Kube.PublishPort -}}PublishPort={{ . }}
 {{ end -}}
-{{ if .Kube.UserNS -}}UserNS={{ .Kube.UserNS }}
+{{ if .userNSString -}}UserNS={{ .userNSString }}
 {{ end -}}
 {{ if .Kube.SetWorkingDirectory -}}SetWorkingDirectory={{ .Kube.SetWorkingDirectory }}
 {{ end -}}

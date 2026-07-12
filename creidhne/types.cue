@@ -308,6 +308,25 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 #Ulimit: "host" |
 	=~"^(as|core|cpu|data|fsize|locks|memlock|msgqueue|nice|nofile|nproc|rss|rtprio|rttime|sigpending|stack)=(-1|[0-9]+)(:(-1|[0-9]+))?$"
 
+// #UlimitSpec is the typed Ulimit= form: a resource name plus numeric soft
+// (and optional hard) limit, rendering "name=soft[:hard]". -1 means unlimited.
+#UlimitResource: "as" | "core" | "cpu" | "data" | "fsize" | "locks" |
+	"memlock" | "msgqueue" | "nice" | "nofile" | "nproc" | "rss" |
+	"rtprio" | "rttime" | "sigpending" | "stack"
+#UlimitSpec: {
+	name:  #UlimitResource
+	soft:  int & >=-1
+	hard?: int & >=-1
+	#rendered: strings.Join(list.Concat([
+		["\(name)=\(soft)"],
+		[if hard != _|_ {":\(hard)"}],
+	]), "")
+}
+
+// #UlimitEntry accepts the raw "name=soft:hard" string (or "host") or a
+// typed #UlimitSpec.
+#UlimitEntry: #Ulimit | #UlimitSpec
+
 // #TmpfsOption is one mount option for a typed #TmpfsSpec: a known kernel/podman
 // tmpfs flag, or a key=value (size=, mode=, uid=, gid=, nr_blocks=, nr_inodes=,
 // huge=). Not exhaustive (mpol= and exotic flags fall back to the raw-string form
@@ -392,6 +411,34 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 
 // User namespace mode.  See podman-run(1) --userns.
 #UserNS: "host" | "private" | "nomap" | =~"^keep-id(:.+)?$" | =~"^auto(:.+)?$" | =~"^ns:.+$" | =~"^container:.+$"
+
+// #UserNSSpec types the option-carrying --userns modes, so the option payload
+// is validated ("keep-id:uidd=1000" no longer sails through as a raw string).
+// Plain modes and the ns:/container: forms stay raw strings via #UserNSEntry.
+#UserNSSpec: {
+	mode: "keep-id"
+	uid?: int & >=0
+	gid?: int & >=0
+	_opts: strings.Join(list.Concat([
+		[if uid != _|_ {"uid=\(uid)"}],
+		[if gid != _|_ {"gid=\(gid)"}],
+	]), ",")
+	#rendered: strings.Join(list.Concat([[mode], [if _opts != "" {_opts}]]), ":")
+} | {
+	mode:  "auto"
+	size?: int & >0
+	uidmapping?: [...#IDMap]
+	gidmapping?: [...#IDMap]
+	_opts: strings.Join(list.Concat([
+		[if size != _|_ {"size=\(size)"}],
+		[if uidmapping != _|_ for m in uidmapping {"uidmapping=\(m)"}],
+		[if gidmapping != _|_ for m in gidmapping {"gidmapping=\(m)"}],
+	]), ",")
+	#rendered: strings.Join(list.Concat([[mode], [if _opts != "" {_opts}]]), ":")
+}
+
+// #UserNSEntry accepts a raw mode string or a typed #UserNSSpec.
+#UserNSEntry: #UserNS | #UserNSSpec
 
 // --- Common types ---
 

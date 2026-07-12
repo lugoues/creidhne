@@ -1,0 +1,3 @@
+
+[Pod]
+UserNS=auto:size=500,uidmapping=0:100:10

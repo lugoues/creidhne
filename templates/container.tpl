@@ -90,7 +90,7 @@
 {{ end -}}
 {{ if .Container.PidsLimit -}}PidsLimit={{ .Container.PidsLimit }}
 {{ end -}}
-{{ range .Container.Ulimit -}}Ulimit={{ . }}
+{{ range .ulimitStrings -}}Ulimit={{ . }}
 {{ end -}}
 {{ if .Container.ShmSize -}}ShmSize={{ .Container.ShmSize }}
 {{ end -}}
@@ -138,7 +138,7 @@
 {{ end -}}
 {{ if .Container.CgroupsMode -}}CgroupsMode={{ .Container.CgroupsMode }}
 {{ end -}}
-{{ if .Container.UserNS -}}UserNS={{ .Container.UserNS }}
+{{ if .userNSString -}}UserNS={{ .userNSString }}
 {{ end -}}
 {{ range .Container.UIDMap -}}UIDMap={{ . }}
 {{ end -}}

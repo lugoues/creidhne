@@ -37,6 +37,7 @@ edge: creidhne.#Quadlet & {
 					]
 					NoNewPrivileges: true
 					SeccompProfile:  "./sc.json"
+					UserNS:          "keep-id:uid=1000,gid=1000"
 					ReadOnly:        true
 					AddDevice: [
 						"/dev/ttyUSB0:/dev/ttyUSB0:rwm",
@@ -46,8 +47,8 @@ edge: creidhne.#Quadlet & {
 					]
 					ShmSize: "67108864"
 					Ulimit: [
-						"nofile=1024:2048",
-						"nproc=65535",
+						{name: "nofile", soft: 1024, hard: 2048},
+						{name: "nproc", soft: 65535},
 					]
 					StopSignal:  "SIGQUIT"
 					StopTimeout: 90
@@ -112,6 +113,7 @@ edge: creidhne.#Quadlet & {
 //     logging: {driver: journald, options: {tag: edge}}
 //     pull_policy: never
 //     user: "1000:1000"
+//     userns_mode: "keep-id:uid=1000,gid=1000"
 //     entrypoint: ["/entry.sh", "--flag"]
 //     deploy:
 //       resources:

@@ -24,6 +24,7 @@ services:
     logging: {driver: journald, options: {tag: edge}}
     pull_policy: never
     user: "1000:1000"
+    userns_mode: "keep-id:uid=1000,gid=1000"
     entrypoint: ["/entry.sh", "--flag"]
     deploy:
       resources:

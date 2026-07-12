@@ -677,6 +677,20 @@ func mapServiceRuntimeKnobs(m *model, u *unitDef, name string, svc types.Service
 			m.warnf("service %s: security_opt %q not supported; dropped", name, so)
 		}
 	}
+	if svc.UserNSMode != "" {
+		// podman --userns modes pass through; anything else is docker-specific.
+		switch {
+		case svc.UserNSMode == "host" || svc.UserNSMode == "private" || svc.UserNSMode == "nomap",
+			strings.HasPrefix(svc.UserNSMode, "keep-id"),
+			strings.HasPrefix(svc.UserNSMode, "auto"),
+			strings.HasPrefix(svc.UserNSMode, "ns:"),
+			strings.HasPrefix(svc.UserNSMode, "container:"):
+			u.add("Container", "UserNS", strconv.Quote(svc.UserNSMode))
+		default:
+			m.warnf("service %s: userns_mode %q is not a podman --userns mode; dropped", name, svc.UserNSMode)
+			u.dropComment("userns_mode", svc.UserNSMode)
+		}
+	}
 	if svc.Privileged {
 		u.addList("Container", "PodmanArgs", `"--privileged"`)
 		m.warnf("service %s: privileged mapped to PodmanArgs=--privileged; consider explicit capabilities instead", name)
@@ -714,9 +728,9 @@ func mapServiceRuntimeKnobs(m *model, u *unitDef, name string, svc types.Service
 		for _, k := range sortedKeys(svc.Ulimits) {
 			ul := svc.Ulimits[k]
 			if ul.Single != 0 {
-				uls = append(uls, strconv.Quote(fmt.Sprintf("%s=%d", k, ul.Single)))
+				uls = append(uls, fmt.Sprintf("{name: %q, soft: %d}", k, ul.Single))
 			} else {
-				uls = append(uls, strconv.Quote(fmt.Sprintf("%s=%d:%d", k, ul.Soft, ul.Hard)))
+				uls = append(uls, fmt.Sprintf("{name: %q, soft: %d, hard: %d}", k, ul.Soft, ul.Hard))
 			}
 		}
 		u.addList("Container", "Ulimit", uls...)
@@ -1008,7 +1022,6 @@ func warnUnsupported(m *model, u *unitDef, name string, svc types.ServiceConfig)
 		{svc.Pid != "", "pid", svc.Pid, ""},
 		{svc.Ipc != "", "ipc", svc.Ipc, ""},
 		{svc.Uts != "", "uts", svc.Uts, ""},
-		{svc.UserNSMode != "", "userns_mode", svc.UserNSMode, "set UserNS explicitly if needed"},
 		{svc.CgroupParent != "", "cgroup_parent", svc.CgroupParent, "systemd owns the cgroup"},
 		{svc.Runtime != "", "runtime", svc.Runtime, ""},
 		{svc.Platform != "", "platform", svc.Platform, ""},
