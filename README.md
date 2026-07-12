@@ -139,6 +139,22 @@ Mix both freely; a primary `#container` plus additional `volumes: data: {...}` i
     └── volumes: {...}            # additional → traefik-<key>.volume
 ```
 
+### Helper modules
+
+Shared helpers (your own app specs, community modules) can live in their own
+CUE module and be vendored for offline use, exactly like the embedded schema:
+
+```sh
+crei vendor github.com/you/quadlet-helpers@v0.2.0
+crei vendor --check     # offline drift check against cue.mod/crei-vendor.json
+```
+
+The module path doubles as the git URL (`--source` for private remotes or
+local paths); the resolved commit and a tree hash are pinned in
+`cue.mod/crei-vendor.json`. A vendored module may import only the CUE
+standard library, itself, and the creidhne schema: transitive module
+dependencies are refused.
+
 ### List nesting
 
 Every list field accepts one level of nesting and flattens it, so a helper
@@ -322,6 +338,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei status [quadlet...]` | One table of desired vs recorded vs disk vs runtime state per unit; name quadlets to drill in. `--problems` shows only rows needing attention, `--format json` for scripts, `--check` for cron/CI exit codes. Read-only. |
 | `crei validate` | Type-check the CUE without rendering. |
 | `crei import compose [file...]` | Convert a docker-compose project into a creidhne CUE file (see below). |
+| `crei vendor [module[@ref]]` | Vendor a git-hosted CUE helper module into `cue.mod/usr` for offline use (`--check` verifies against the lock). |
 | `crei config` | Show the resolved configuration and where each value came from. |
 | `crei secrets list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
 | `crei secrets create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |

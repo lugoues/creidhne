@@ -1,6 +1,7 @@
 # Reverse-proxy pair networks, helper ecosystem, and list flattening
 
-Status: list flattening in progress; helpers and extras repo planned.
+Status: list flattening shipped; crei vendor shipped (generic); extras repo
+and the proxy helpers are next.
 
 ## Problem
 
@@ -90,9 +91,13 @@ module. Blocker to solve first: crei's offline story only covers the
 embedded `creidhne@v0` (binary embeds it, vendors to `cue.mod/usr/`). A
 second module needs a vendoring mechanism. Options:
 
-1. `crei vendor <module>`: fetch a git-hosted CUE module into
-   `cue.mod/usr/`; offline after vendor. (Preferred; decide generic vs
-   extras-only.)
+1. `crei vendor <module>[@ref]` (SHIPPED, generic): fetch a git-hosted CUE
+   module into `cue.mod/usr/`; offline after vendor. Pin (ref + commit +
+   tree hash) recorded in `cue.mod/crei-vendor.json` (a lockfile, not
+   crei.toml: TOML surgery would clobber comments and the pin is project
+   structure, not preference). Transitive module imports refused (stdlib +
+   creidhne + self only). `--source` covers private remotes and local paths;
+   `--check` verifies trees offline; no-arg re-fetches every pin.
 2. Embed extras in the binary: rejected, ties extras to core release cadence.
 3. Copy-in snippets: zero infra, no versioning.
 

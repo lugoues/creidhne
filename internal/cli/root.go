@@ -79,6 +79,7 @@ func newRootCmd() *cobra.Command {
 		newStatusCmd(),
 		newGraphCmd(),
 		newLintCmd(),
+		newVendorCmd(),
 		newImportCmd(),
 		newInitCmd(),
 		newValidateCmd(),
@@ -522,7 +523,7 @@ func filterQuadlets(quads []eval.Quadlet, wanted []string) ([]eval.Quadlet, erro
 	return out, nil
 }
 
-func sortedKeys(m map[string]reconcile.DesiredFile) []string {
+func sortedKeys[V any](m map[string]V) []string {
 	s := make([]string, 0, len(m))
 	for k := range m {
 		s = append(s, k)
