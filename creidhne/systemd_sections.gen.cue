@@ -11,7 +11,7 @@ package creidhne
 	// A space-separated list of URIs referencing documentation for this unit or its configuration. Accepted are only URIs of the types http://, https://, file:, info:, man:. For more information about the syntax of these URIs, see uri(7). The URIs should be listed in order of relevance, starting with the most relevant. It is a good idea to first reference documentation that explains what the unit's purpose is, followed by how it is configured, followed by any other related documentation. This option may be specified more than once, in which case the specified list of URIs is merged. If the empty string is assigned to this option, the list is reset and all prior assignments will have no effect.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Documentation=
-	Documentation?: [...string]
+	Documentation?: [...(string | [...string])]
 
 	// A path to a configuration file this unit has been generated from. This is primarily useful for implementation of generator tools that convert configuration from an external configuration file format into native unit files. This functionality should not be used in normal units.
 	//
@@ -27,14 +27,14 @@ package creidhne
 	// Note that this dependency type does not imply that the other unit always has to be in active state when this unit is running. Specifically: failing condition checks (such as ConditionPathExists=, ConditionPathIsSymbolicLink=, … — see below) do not cause the start job of a unit with a Requires= dependency on it to fail. Also, some unit types may deactivate on their own (for example, a service process may decide to exit cleanly, or a device may be unplugged by the user), which is not propagated to units having a Requires= dependency. Use the BindsTo= dependency type together with After= to ensure that a unit may never be in active state without a specific other unit also in active state (see below).
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Requires=
-	Requires?: [...string]
+	Requires?: [...(string | [...string])]
 
 	// Similar to Requires=. However, if the units listed here are not started already, they will not be started and the starting of this unit will fail immediately. Requisite= does not imply an ordering dependency, even if both units are started in the same transaction. Hence this setting should usually be combined with After=, to ensure this unit is not started before the other unit.
 	//
 	// When Requisite=b.service is used on a.service, this dependency will show as RequisiteOf=a.service in property listing of b.service. RequisiteOf= dependency cannot be specified directly.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Requisite=
-	Requisite?: [...string]
+	Requisite?: [...(string | [...string])]
 
 	// Configures (weak) requirement dependencies on other units. This option may be specified more than once or multiple space-separated units may be specified in one option in which case dependencies for all listed names will be created. Dependencies of this type may also be configured outside of the unit configuration file by adding a symlink to a .wants/ directory accompanying the unit file. For details, see above.
 	//
@@ -43,7 +43,7 @@ package creidhne
 	// Note that requirement dependencies do not influence the order in which services are started or stopped. This has to be configured independently with the After= or Before= options. If unit foo.service pulls in unit bar.service as configured with Wants= and no ordering is configured with After= or Before=, then both units will be started simultaneously and without any delay between them if foo.service is activated.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Wants=
-	Wants?: [...string]
+	Wants?: [...(string | [...string])]
 
 	// Configures requirement dependencies, very similar in style to Requires=. However, this dependency type is stronger: in addition to the effect of Requires= it declares that if the unit bound to is stopped, this unit will be stopped too. This means a unit bound to another unit that suddenly enters inactive state will be stopped too. Units can suddenly, unexpectedly enter inactive state for different reasons: the main process of a service unit might terminate on its own choice, the backing device of a device unit might be unplugged or the mount point of a mount unit might be unmounted without involvement of the system and service manager.
 	//
@@ -52,14 +52,14 @@ package creidhne
 	// When BindsTo=b.service is used on a.service, this dependency will show as BoundBy=a.service in property listing of b.service. BoundBy= dependency cannot be specified directly.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#BindsTo=
-	BindsTo?: [...string]
+	BindsTo?: [...(string | [...string])]
 
 	// Configures dependencies similar to Wants=, but as long as this unit is up, all units listed in Upholds= are started whenever found to be inactive or failed, and no job is queued for them. While a Wants= dependency on another unit has a one-time effect when this units started, a Upholds= dependency on it has a continuous effect, constantly restarting the unit if necessary. This is an alternative to the Restart= setting of service units, to ensure they are kept running whatever happens. The restart happens without delay, and usual per-unit rate-limit applies.
 	//
 	// When Upholds=b.service is used on a.service, this dependency will show as UpheldBy=a.service in the property listing of b.service.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Upholds=
-	Upholds?: [...string]
+	Upholds?: [...(string | [...string])]
 
 	// A space-separated list of unit names. Configures negative requirement dependencies. If a unit has a Conflicts= setting on another unit, starting the former will stop the latter and vice versa.
 	//
@@ -68,7 +68,7 @@ package creidhne
 	// If unit A that conflicts with unit B is scheduled to be started at the same time as B, the transaction will either fail (in case both are required parts of the transaction) or be modified to be fixed (in case one or both jobs are not a required part of the transaction). In the latter case, the job that is not required will be removed, or in case both are not required, the unit that conflicts will be started and the unit that is conflicted is stopped.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Conflicts=
-	Conflicts?: [...string]
+	Conflicts?: [...(string | [...string])]
 
 	// These two settings expect a space-separated list of unit names. They may be specified more than once, in which case dependencies for all listed names are created.
 	//
@@ -81,7 +81,7 @@ package creidhne
 	// Note that Before= dependencies on device units have no effect and are not supported. Devices generally become available as a result of an external hotplug event, and systemd creates the corresponding device unit without delay.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Before=
-	Before?: [...string]
+	Before?: [...(string | [...string])]
 
 	// These two settings expect a space-separated list of unit names. They may be specified more than once, in which case dependencies for all listed names are created.
 	//
@@ -94,61 +94,61 @@ package creidhne
 	// Note that Before= dependencies on device units have no effect and are not supported. Devices generally become available as a result of an external hotplug event, and systemd creates the corresponding device unit without delay.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Before=
-	After?: [...string]
+	After?: [...(string | [...string])]
 
 	// A space-separated list of one or more units that are activated when this unit enters the inactive state.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#OnSuccess=
-	OnSuccess?: [...string]
+	OnSuccess?: [...(string | [...string])]
 
 	// A space-separated list of one or more units that are activated when this unit enters the failed state.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#OnFailure=
-	OnFailure?: [...string]
+	OnFailure?: [...(string | [...string])]
 
 	// A space-separated list of one or more units to which reload requests from this unit shall be propagated to, or units from which reload requests shall be propagated to this unit, respectively. Issuing a reload request on a unit will automatically also enqueue reload requests on all units that are linked to it using these two settings.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#PropagatesReloadTo=
-	PropagatesReloadTo?: [...string]
+	PropagatesReloadTo?: [...(string | [...string])]
 
 	// A space-separated list of one or more units to which reload requests from this unit shall be propagated to, or units from which reload requests shall be propagated to this unit, respectively. Issuing a reload request on a unit will automatically also enqueue reload requests on all units that are linked to it using these two settings.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#PropagatesReloadTo=
-	ReloadPropagatedFrom?: [...string]
+	ReloadPropagatedFrom?: [...(string | [...string])]
 
 	// A space-separated list of one or more units to which stop requests from this unit shall be propagated to, or units from which stop requests shall be propagated to this unit, respectively. Issuing a stop request on a unit will automatically also enqueue stop requests on all units that are linked to it using these two settings.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#PropagatesStopTo=
-	PropagatesStopTo?: [...string]
+	PropagatesStopTo?: [...(string | [...string])]
 
 	// A space-separated list of one or more units to which stop requests from this unit shall be propagated to, or units from which stop requests shall be propagated to this unit, respectively. Issuing a stop request on a unit will automatically also enqueue stop requests on all units that are linked to it using these two settings.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#PropagatesStopTo=
-	StopPropagatedFrom?: [...string]
+	StopPropagatedFrom?: [...(string | [...string])]
 
 	// Configures dependencies similar to Requires=, but limited to stopping and restarting of units. When systemd stops or restarts the units listed here, the action is propagated to this unit. Note that this is a one-way dependency — changes to this unit do not affect the listed units.
 	//
 	// When PartOf=b.service is used on a.service, this dependency will show as ConsistsOf=a.service in property listing of b.service. ConsistsOf= dependency cannot be specified directly.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#PartOf=
-	PartOf?: [...string]
+	PartOf?: [...(string | [...string])]
 
 	// For units that start processes (such as service units), lists one or more other units whose network and/or temporary file namespace to join. If this is specified on a unit (say, a.service has JoinsNamespaceOf=b.service), then the inverse dependency (JoinsNamespaceOf=a.service for b.service) is implied. This only applies to unit types which support the PrivateNetwork=, NetworkNamespacePath=, PrivateIPC=, IPCNamespacePath=, and PrivateTmp= directives (see systemd.exec(5) for details). If a unit that has this setting set is started, its processes will see the same /tmp/, /var/tmp/, IPC namespace and network namespace as one listed unit that is started. If multiple listed units are already started and these do not share their namespace, then it is not defined which namespace is joined. Note that this setting only has an effect if PrivateNetwork=/NetworkNamespacePath=, PrivateIPC=/IPCNamespacePath= and/or PrivateTmp= is enabled for both the unit that joins the namespace and the unit whose namespace is joined.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#JoinsNamespaceOf=
-	JoinsNamespaceOf?: [...string]
+	JoinsNamespaceOf?: [...(string | [...string])]
 
 	// Takes a space-separated list of absolute paths. Automatically adds dependencies of type Requires= and After= for all mount units required to access the specified path.
 	//
 	// Mount points marked with noauto are not mounted automatically through local-fs.target, but are still honored for the purposes of this option, i.e. they will be pulled in by this unit.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#RequiresMountsFor=
-	RequiresMountsFor?: [...string]
+	RequiresMountsFor?: [...(string | [...string])]
 
 	// Same as RequiresMountsFor=, but adds dependencies of type Wants= instead of Requires=.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#WantsMountsFor=
-	WantsMountsFor?: [...string]
+	WantsMountsFor?: [...(string | [...string])]
 
 	// Takes a boolean argument. If true, this unit will be stopped when it is no longer used. Note that, in order to minimize the work to be executed, systemd will not stop units by default unless they are conflicting with other units, or the user explicitly requested their shut down. If this option is set, a unit will be automatically cleaned up if no other active unit requires it. Defaults to false.
 	//
@@ -303,7 +303,7 @@ package creidhne
 	// Check whether the system has AC power, or is exclusively battery powered at the time of activation of the unit. This takes a boolean argument. If set to true, the condition will hold only if at least one AC connector of the system is connected to a power source, or if no AC connectors are known. Conversely, if set to false, the condition will hold only if there is at least one AC connector known and all AC connectors are disconnected from a power source.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionACPower=
-	ConditionACPower?: [...string]
+	ConditionACPower?: [...(string | [...string])]
 
 	// Check whether the system is running on a specific architecture. Takes one of x86, x86-64, ppc, ppc-le, ppc64, ppc64-le, ia64, parisc, parisc64, s390, s390x, sparc, sparc64, mips, mips-le, mips64, mips64-le, alpha, arm, arm-be, arm64, arm64-be, sh, sh64, m68k, tilegx, cris, arc, arc-be, or native.
 	//
@@ -312,29 +312,29 @@ package creidhne
 	// The architecture is determined from the information returned by uname(2) and is thus subject to personality(2). Note that a Personality= setting in the same unit file has no effect on this condition. A special architecture name native is mapped to the architecture the system manager itself is compiled for. The test may be negated by prepending an exclamation mark.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionArchitecture=
-	ConditionArchitecture?: [...string]
+	ConditionArchitecture?: [...(string | [...string])]
 
 	// Verify that a given CPU feature is available via the CPUID instruction. This condition only does something on i386 and x86-64 processors. On other processors it is assumed that the CPU does not support the given feature. It checks the leaves 1, 7, 0x80000001, and 0x80000007. Valid values are: fpu, vme, de, pse, tsc, msr, pae, mce, cx8, apic, sep, mtrr, pge, mca, cmov, pat, pse36, clflush, mmx, fxsr, sse, sse2, ht, pni, pclmul, monitor, ssse3, fma3, cx16, sse4_1, sse4_2, movbe, popcnt, aes, xsave, osxsave, avx, f16c, rdrand, bmi1, avx2, bmi2, rdseed, adx, sha_ni, syscall, rdtscp, lm, lahf_lm, abm, constant_tsc.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionCPUFeature=
-	ConditionCPUFeature?: [...string]
+	ConditionCPUFeature?: [...(string | [...string])]
 
 	// Verify that the overall system (memory, CPU or IO) pressure is below or equal to a threshold. This setting takes a threshold value as argument. It can be specified as a simple percentage value, suffixed with %, in which case the pressure will be measured as an average over the last five minutes before the attempt to start the unit is performed. Alternatively, the average timespan can also be specified using / as a separator, for example: 10%/1min. The supported timespans match what the kernel provides, and are limited to 10sec, 1min and 5min. The full PSI will be checked first, and if not found some will be checked. For more details, see the documentation on PSI (Pressure Stall Information) .
 	//
 	// Optionally, the threshold value can be prefixed with the slice unit under which the pressure will be checked, followed by a :. If the slice unit is not specified, the overall system pressure will be measured, instead of a particular cgroup's.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionMemoryPressure=
-	ConditionCPUPressure?: [...string]
+	ConditionCPUPressure?: [...(string | [...string])]
 
 	// Verify that the specified number of CPUs is available to the current system. Takes a number of CPUs as argument, optionally prefixed with a comparison operator <, <=, = (or ==), != (or <>), >=, >. Compares the number of CPUs in the CPU affinity mask configured of the service manager itself with the specified number, adhering to the specified comparison operator. On physical systems the number of CPUs in the affinity mask of the service manager usually matches the number of physical CPUs, but in special and virtual environments might differ. In particular, in containers the affinity mask usually matches the number of CPUs assigned to the container and not the physically available ones.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionCPUs=
-	ConditionCPUs?: [...string]
+	ConditionCPUs?: [...(string | [...string])]
 
 	// Check whether the given capability exists in the capability bounding set of the service manager (i.e. this does not check whether capability is actually available in the permitted or effective sets, see capabilities(7) for details). Pass a capability name such as CAP_MKNOD, possibly prefixed with an exclamation mark to negate the check.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionCapability=
-	ConditionCapability?: [...string]
+	ConditionCapability?: [...(string | [...string])]
 
 	// Check whether given cgroup controllers (e.g. cpu) are available for use on the system or whether the legacy v1 cgroup or the modern v2 cgroup hierarchy is used.
 	//
@@ -343,37 +343,37 @@ package creidhne
 	// Alternatively, two special strings v1 and v2 may be specified (without any controller names). v2 will pass if the unified v2 cgroup hierarchy is used, and v1 will pass if the legacy v1 hierarchy or the hybrid hierarchy are used. Note that legacy or hybrid hierarchies have been deprecated. See systemd(1) for more information.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionControlGroupController=
-	ConditionControlGroupController?: [...string]
+	ConditionControlGroupController?: [...(string | [...string])]
 
 	// ConditionCredential= may be used to check whether a credential by the specified name was passed into the service manager. See System and Service Credentials for details about credentials. If used in services for the system service manager this may be used to conditionalize services based on system credentials passed in. If used in services for the per-user service manager this may be used to conditionalize services based on credentials passed into the unit@.service service instance belonging to the user. The argument must be a valid credential name.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionCredential=
-	ConditionCredential?: [...string]
+	ConditionCredential?: [...(string | [...string])]
 
 	// ConditionDirectoryNotEmpty= is similar to ConditionPathExists= but verifies that a certain path exists and is a non-empty directory.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionDirectoryNotEmpty=
-	ConditionDirectoryNotEmpty?: [...string]
+	ConditionDirectoryNotEmpty?: [...(string | [...string])]
 
 	// ConditionEnvironment= may be used to check whether a specific environment variable is set (or if prefixed with the exclamation mark — unset) in the service manager's environment block. The argument may be a single word, to check if the variable with this name is defined in the environment block, or an assignment (name=value), to check if the variable with this exact value is defined. Note that the environment block of the service manager itself is checked, i.e. not any variables defined with Environment= or EnvironmentFile=, as described above. This is particularly useful when the service manager runs inside a containerized environment or as per-user service manager, in order to check for variables passed in by the enclosing container manager or PAM.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionEnvironment=
-	ConditionEnvironment?: [...string]
+	ConditionEnvironment?: [...(string | [...string])]
 
 	// ConditionFileIsExecutable= is similar to ConditionPathExists= but verifies that a certain path exists, is a regular file, and marked executable.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionFileIsExecutable=
-	ConditionFileIsExecutable?: [...string]
+	ConditionFileIsExecutable?: [...(string | [...string])]
 
 	// ConditionFileNotEmpty= is similar to ConditionPathExists= but verifies that a certain path exists and refers to a regular file with a non-zero size.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionFileNotEmpty=
-	ConditionFileNotEmpty?: [...string]
+	ConditionFileNotEmpty?: [...(string | [...string])]
 
 	// Check whether the system's firmware is of a certain type. The following values are possible:
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionFirmware=
-	ConditionFirmware?: [...string]
+	ConditionFirmware?: [...(string | [...string])]
 
 	// Takes a boolean argument. This condition may be used to conditionalize units on whether the system is booting up for the first time. This roughly means that /etc/ was unpopulated when the system started booting (for details, see "First Boot Semantics" in machine-id(5)). First Boot is considered finished (this condition will evaluate as false) after the manager has finished the startup phase.
 	//
@@ -386,48 +386,48 @@ package creidhne
 	// If the systemd.condition_first_boot= option is specified on the kernel command line (taking a boolean), it will override the result of this condition check, taking precedence over /etc/machine-id existence checks.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionFirstBoot=
-	ConditionFirstBoot?: [...string]
+	ConditionFirstBoot?: [...(string | [...string])]
 
 	// ConditionGroup= is similar to ConditionUser= but verifies that the service manager's real or effective group, or any of its auxiliary groups, match the specified group or GID. This setting does not support the special value @system.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionGroup=
-	ConditionGroup?: [...string]
+	ConditionGroup?: [...(string | [...string])]
 
 	// ConditionHost= may be used to match against the hostname or machine ID of the host. This either takes a hostname string (optionally with shell style globs) which is tested against the locally set hostname as returned by gethostname(2), or a machine ID formatted as string (see machine-id(5)). The test may be negated by prepending an exclamation mark.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionHost=
-	ConditionHost?: [...string]
+	ConditionHost?: [...(string | [...string])]
 
 	// Verify that the overall system (memory, CPU or IO) pressure is below or equal to a threshold. This setting takes a threshold value as argument. It can be specified as a simple percentage value, suffixed with %, in which case the pressure will be measured as an average over the last five minutes before the attempt to start the unit is performed. Alternatively, the average timespan can also be specified using / as a separator, for example: 10%/1min. The supported timespans match what the kernel provides, and are limited to 10sec, 1min and 5min. The full PSI will be checked first, and if not found some will be checked. For more details, see the documentation on PSI (Pressure Stall Information) .
 	//
 	// Optionally, the threshold value can be prefixed with the slice unit under which the pressure will be checked, followed by a :. If the slice unit is not specified, the overall system pressure will be measured, instead of a particular cgroup's.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionMemoryPressure=
-	ConditionIOPressure?: [...string]
+	ConditionIOPressure?: [...(string | [...string])]
 
 	// ConditionKernelCommandLine= may be used to check whether a specific kernel command line option is set (or if prefixed with the exclamation mark — unset). The argument must either be a single word, or an assignment (i.e. two words, separated by =). In the former case the kernel command line is searched for the word appearing as is, or as left hand side of an assignment. In the latter case, the exact assignment is looked for with right and left hand side matching. This operates on the kernel command line communicated to userspace via /proc/cmdline, except when the service manager is invoked as payload of a container manager, in which case the command line of PID 1 is used instead (i.e. /proc/1/cmdline).
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionKernelCommandLine=
-	ConditionKernelCommandLine?: [...string]
+	ConditionKernelCommandLine?: [...(string | [...string])]
 
 	// ConditionKernelVersion= may be used to check whether the kernel version (as reported by uname -r) matches a certain expression, or if prefixed with the exclamation mark, does not match. The argument must be a list of (potentially quoted) expressions. Each expression starts with one of = or != for string comparisons, <, <=, ==, <>, >=, > for version comparisons, or $=, !$= for a shell-style glob match. If no operator is specified, $= is implied.
 	//
 	// Note that using the kernel version string is an unreliable way to determine which features are supported by a kernel, because of the widespread practice of backporting drivers, features, and fixes from newer upstream kernels into older versions provided by distributions. Hence, this check is inherently unportable and should not be used for units which may be used on different distributions.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionKernelVersion=
-	ConditionKernelVersion?: [...string]
+	ConditionKernelVersion?: [...(string | [...string])]
 
 	// Verify that the specified amount of system memory is available to the current system. Takes a memory size in bytes as argument, optionally prefixed with a comparison operator <, <=, = (or ==), != (or <>), >=, >. On bare-metal systems compares the amount of physical memory in the system with the specified size, adhering to the specified comparison operator. In containers compares the amount of memory assigned to the container instead.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionMemory=
-	ConditionMemory?: [...string]
+	ConditionMemory?: [...(string | [...string])]
 
 	// Verify that the overall system (memory, CPU or IO) pressure is below or equal to a threshold. This setting takes a threshold value as argument. It can be specified as a simple percentage value, suffixed with %, in which case the pressure will be measured as an average over the last five minutes before the attempt to start the unit is performed. Alternatively, the average timespan can also be specified using / as a separator, for example: 10%/1min. The supported timespans match what the kernel provides, and are limited to 10sec, 1min and 5min. The full PSI will be checked first, and if not found some will be checked. For more details, see the documentation on PSI (Pressure Stall Information) .
 	//
 	// Optionally, the threshold value can be prefixed with the slice unit under which the pressure will be checked, followed by a :. If the slice unit is not specified, the overall system pressure will be measured, instead of a particular cgroup's.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionMemoryPressure=
-	ConditionMemoryPressure?: [...string]
+	ConditionMemoryPressure?: [...(string | [...string])]
 
 	// Takes one of /var/ or /etc/ as argument, possibly prefixed with a ! (to invert the condition). This condition may be used to conditionalize units on whether the specified directory requires an update because /usr/'s modification time is newer than the stamp file .updated in the specified directory. This is useful to implement offline updates of the vendor operating system resources in /usr/ that require updating of /etc/ or /var/ on the next following boot. Units making use of this condition should order themselves before systemd-update-done.service(8), to make sure they run before the stamp file's modification time gets reset indicating a completed update.
 	//
@@ -438,228 +438,228 @@ package creidhne
 	// Also note that if the update method includes a call to execute appropriate post-update steps itself, it should not touch the timestamp of /usr/. In a typical distribution packaging scheme, packages will do any required update steps as part of the installation or upgrade, to make package contents immediately usable. ConditionNeedsUpdate= should be used with other update mechanisms where such an immediate update does not happen.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionNeedsUpdate=
-	ConditionNeedsUpdate?: [...string]
+	ConditionNeedsUpdate?: [...(string | [...string])]
 
 	// Verify that a specific key=value pair is set in the host's os-release(5).
 	//
 	// Other than exact string matching (with = and !=), relative comparisons are supported for versioned parameters (e.g. VERSION_ID; with <, <=, ==, <>, >=, >), and shell-style wildcard comparisons (*, ?, []) are supported with the $= (match) and !$= (non-match).
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionOSRelease=
-	ConditionOSRelease?: [...string]
+	ConditionOSRelease?: [...(string | [...string])]
 
 	// Check for the existence of a file. If the specified absolute path name does not exist, the condition will fail. If the absolute path name passed to ConditionPathExists= is prefixed with an exclamation mark (!), the test is negated, and the unit is only started if the path does not exist.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathExists=
-	ConditionPathExists?: [...string]
+	ConditionPathExists?: [...(string | [...string])]
 
 	// ConditionPathExistsGlob= is similar to ConditionPathExists=, but checks for the existence of at least one file or directory matching the specified globbing pattern.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathExistsGlob=
-	ConditionPathExistsGlob?: [...string]
+	ConditionPathExistsGlob?: [...(string | [...string])]
 
 	// ConditionPathIsDirectory= is similar to ConditionPathExists= but verifies that a certain path exists and is a directory.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathIsDirectory=
-	ConditionPathIsDirectory?: [...string]
+	ConditionPathIsDirectory?: [...(string | [...string])]
 
 	// ConditionPathIsEncrypted= is similar to ConditionPathExists= but verifies that the underlying file system's backing block device is encrypted using dm-crypt/LUKS. Note that this check does not cover ext4 per-directory encryption, and only detects block level encryption. Moreover, if the specified path resides on a file system on top of a loopback block device, only encryption above the loopback device is detected. It is not detected whether the file system backing the loopback block device is encrypted.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathIsEncrypted=
-	ConditionPathIsEncrypted?: [...string]
+	ConditionPathIsEncrypted?: [...(string | [...string])]
 
 	// ConditionPathIsMountPoint= is similar to ConditionPathExists= but verifies that a certain path exists and is a mount point.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathIsMountPoint=
-	ConditionPathIsMountPoint?: [...string]
+	ConditionPathIsMountPoint?: [...(string | [...string])]
 
 	// ConditionPathIsReadWrite= is similar to ConditionPathExists= but verifies that the underlying file system is readable and writable (i.e. not mounted read-only).
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathIsReadWrite=
-	ConditionPathIsReadWrite?: [...string]
+	ConditionPathIsReadWrite?: [...(string | [...string])]
 
 	// ConditionPathIsSymbolicLink= is similar to ConditionPathExists= but verifies that a certain path exists and is a symbolic link.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionPathIsSymbolicLink=
-	ConditionPathIsSymbolicLink?: [...string]
+	ConditionPathIsSymbolicLink?: [...(string | [...string])]
 
 	// ConditionSecurity= may be used to check whether the given security technology is enabled on the system. Currently, the following values are recognized:
 	//
 	// The test may be negated by prepending an exclamation mark.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionSecurity=
-	ConditionSecurity?: [...string]
+	ConditionSecurity?: [...(string | [...string])]
 
 	// ConditionUser= takes a numeric UID, a UNIX user name, or the special value @system. This condition may be used to check whether the service manager is running as the given user. The special value @system can be used to check if the user id is within the system user range. This option is not useful for system services, as the system manager exclusively runs as the root user, and thus the test result is constant.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionUser=
-	ConditionUser?: [...string]
+	ConditionUser?: [...(string | [...string])]
 
 	// Check whether the system is executed in a virtualized environment and optionally test whether it is a specific implementation. Takes either boolean value to check if being executed in any virtualized environment, or one of vm and container to test against a generic type of virtualization solution, or one of qemu, kvm, amazon, zvm, vmware, microsoft, oracle, powervm, xen, bochs, uml, bhyve, qnx, apple, sre, openvz, lxc, lxc-libvirt, systemd-nspawn, docker, podman, rkt, wsl, proot, pouch, acrn to test against a specific implementation, or private-users to check whether we are running in a user namespace. See systemd-detect-virt(1) for a full list of known virtualization technologies and their identifiers. If multiple virtualization technologies are nested, only the innermost is considered. The test may be negated by prepending an exclamation mark.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#ConditionVirtualization=
-	ConditionVirtualization?: [...string]
+	ConditionVirtualization?: [...(string | [...string])]
 
 	// Assert* (systemd.unit(5))
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertACPower?: [...string]
+	AssertACPower?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertArchitecture?: [...string]
+	AssertArchitecture?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertCPUFeature?: [...string]
+	AssertCPUFeature?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertCPUPressure?: [...string]
+	AssertCPUPressure?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertCPUs?: [...string]
+	AssertCPUs?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertCapability?: [...string]
+	AssertCapability?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertControlGroupController?: [...string]
+	AssertControlGroupController?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertCredential?: [...string]
+	AssertCredential?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertDirectoryNotEmpty?: [...string]
+	AssertDirectoryNotEmpty?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertEnvironment?: [...string]
+	AssertEnvironment?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertFileIsExecutable?: [...string]
+	AssertFileIsExecutable?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertFileNotEmpty?: [...string]
+	AssertFileNotEmpty?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertFirstBoot?: [...string]
+	AssertFirstBoot?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertGroup?: [...string]
+	AssertGroup?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertHost?: [...string]
+	AssertHost?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertIOPressure?: [...string]
+	AssertIOPressure?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertKernelCommandLine?: [...string]
+	AssertKernelCommandLine?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertKernelVersion?: [...string]
+	AssertKernelVersion?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertMemory?: [...string]
+	AssertMemory?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertMemoryPressure?: [...string]
+	AssertMemoryPressure?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertNeedsUpdate?: [...string]
+	AssertNeedsUpdate?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertOSRelease?: [...string]
+	AssertOSRelease?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathExists?: [...string]
+	AssertPathExists?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathExistsGlob?: [...string]
+	AssertPathExistsGlob?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathIsDirectory?: [...string]
+	AssertPathIsDirectory?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathIsEncrypted?: [...string]
+	AssertPathIsEncrypted?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathIsMountPoint?: [...string]
+	AssertPathIsMountPoint?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathIsReadWrite?: [...string]
+	AssertPathIsReadWrite?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertPathIsSymbolicLink?: [...string]
+	AssertPathIsSymbolicLink?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertSecurity?: [...string]
+	AssertSecurity?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertUser?: [...string]
+	AssertUser?: [...(string | [...string])]
 
 	// Similar to the ConditionArchitecture=, ConditionVirtualization=, …, condition settings described above, these settings add assertion checks to the start-up of the unit. However, unlike the conditions settings, any assertion setting that is not met results in failure of the start job (which means this is logged loudly). Note that hitting a configured assertion does not cause the unit to enter the failed state (or in fact result in any state change of the unit), it affects only the job queued for it. Use assertion expressions for units that cannot operate when specific requirements are not met, and when this is something the administrator or user should look into.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#AssertArchitecture=
-	AssertVirtualization?: [...string]
+	AssertVirtualization?: [...(string | [...string])]
 }
 
 #ServiceSection: {
@@ -677,7 +677,7 @@ package creidhne
 	// The same recommendations about not running long-running processes in ExecStartPre= also applies to ExecCondition=. ExecCondition= will also run the commands in ExecStopPost=, as part of stopping the service, in the case of any non-zero or abnormal exits, like the ones described above.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecCondition=
-	ExecCondition?: [...string]
+	ExecCondition?: [...(string | [...string])]
 
 	// Additional commands that are executed before or after the command in ExecStart=, respectively. Syntax is the same as for ExecStart=. Multiple command lines are allowed, regardless of the service type (i.e. Type=), and the commands are executed one after the other, serially.
 	//
@@ -694,7 +694,7 @@ package creidhne
 	// Note that the execution of ExecStartPost= is taken into account for the purpose of Before=/After= ordering constraints.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecStartPre=
-	ExecStartPre?: [...string]
+	ExecStartPre?: [...(string | [...string])]
 
 	// Commands that are executed when this service is started.
 	//
@@ -705,7 +705,7 @@ package creidhne
 	// Unless Type=forking is set, the process started via this command line will be considered the main process of the daemon.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecStart=
-	ExecStart?: [...string]
+	ExecStart?: [...(string | [...string])]
 
 	// Commands to execute to trigger a configuration reload in the service. This argument takes multiple command lines, following the same scheme as described for ExecStart= above. Use of this setting is optional. Specifier and environment variable substitution is supported here following the same scheme as for ExecStart=.
 	//
@@ -714,7 +714,7 @@ package creidhne
 	// Note however that reloading a daemon by enqueuing a signal (as with the example line above) is usually not a good choice, because this is an asynchronous operation and hence not suitable when ordering reloads of multiple services against each other. It is thus strongly recommended to either use Type=notify-reload in place of ExecReload=, or to set ExecReload= to a command that not only triggers a configuration reload of the daemon, but also synchronously waits for it to complete. For example, dbus-broker(1) uses the following:
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecReload=
-	ExecReload?: [...string]
+	ExecReload?: [...(string | [...string])]
 
 	// Additional commands that are executed before or after the command in ExecStart=, respectively. Syntax is the same as for ExecStart=. Multiple command lines are allowed, regardless of the service type (i.e. Type=), and the commands are executed one after the other, serially.
 	//
@@ -731,7 +731,7 @@ package creidhne
 	// Note that the execution of ExecStartPost= is taken into account for the purpose of Before=/After= ordering constraints.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecStartPre=
-	ExecStartPost?: [...string]
+	ExecStartPost?: [...(string | [...string])]
 
 	// Commands to execute to stop the service started via ExecStart=. This argument takes multiple command lines, following the same scheme as described for ExecStart= above. Use of this setting is optional. After the commands configured in this option are run, it is implied that the service is stopped, and any processes remaining for it are terminated according to the KillMode= setting (see systemd.kill(5)). If this option is not specified, the process is terminated by sending the signal specified in KillSignal= or RestartKillSignal= when service stop is requested. Specifier and environment variable substitution is supported (including $MAINPID, see above).
 	//
@@ -744,7 +744,7 @@ package creidhne
 	// It is recommended to use this setting for commands that communicate with the service requesting clean termination. For post-mortem clean-up steps use ExecStopPost= instead.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecStop=
-	ExecStop?: [...string]
+	ExecStop?: [...(string | [...string])]
 
 	// Additional commands that are executed after the service is stopped. This includes cases where the commands configured in ExecStop= were used, where the service does not have any ExecStop= defined, or where the service exited unexpectedly. This argument takes multiple command lines, following the same scheme as described for ExecStart=. Use of these settings is optional. Specifier and environment variable substitution is supported. Note that – unlike ExecStop= – commands specified with this setting are invoked when a service failed to start up correctly and is shut down again.
 	//
@@ -755,7 +755,7 @@ package creidhne
 	// Note that the execution of ExecStopPost= is taken into account for the purpose of Before=/After= ordering constraints.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#ExecStopPost=
-	ExecStopPost?: [...string]
+	ExecStopPost?: [...(string | [...string])]
 
 	// Configures the time to sleep before restarting a service (as configured with Restart=). Takes a unit-less value in seconds, or a time span value such as "5min 20s". Defaults to 100ms.
 	//
@@ -893,14 +893,14 @@ package creidhne
 	// Note that this setting has no effect on processes configured via ExecStartPre=, ExecStartPost=, ExecStop=, ExecStopPost= or ExecReload=, but only on the main service process, i.e. either the one invoked by ExecStart= or (depending on Type=, PIDFile=, …) the otherwise configured main process.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#RestartPreventExitStatus=
-	RestartPreventExitStatus?: [...string]
+	RestartPreventExitStatus?: [...(string | [...string])]
 
 	// Takes a list of exit status definitions that, when returned by the main service process, will force automatic service restarts, regardless of the restart setting configured with Restart=. The argument format is similar to RestartPreventExitStatus=.
 	//
 	// Note that for Type=oneshot services, a success exit status will prevent them from auto-restarting, no matter whether the corresponding exit statuses are listed in this option or not.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#RestartForceExitStatus=
-	RestartForceExitStatus?: [...string]
+	RestartForceExitStatus?: [...(string | [...string])]
 
 	// Takes a list of exit status definitions that, when returned by the main service process, will be considered successful termination, in addition to the normal successful exit status 0 and, except for Type=oneshot, the signals SIGHUP, SIGINT, SIGTERM, and SIGPIPE. Exit status definitions can be numeric termination statuses, termination status names, or termination signal names, separated by spaces. See the Process Exit Codes section in systemd.exec(5) for a list of termination status names (for this setting only the part without the EXIT_ or EX_ prefix should be used). See signal(7) for a list of signal names.
 	//
@@ -911,7 +911,7 @@ package creidhne
 	// Note: systemd-analyze exit-status may be used to list exit statuses and translate between numerical status values and names.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#SuccessExitStatus=
-	SuccessExitStatus?: [...string]
+	SuccessExitStatus?: [...(string | [...string])]
 
 	// Set the O_NONBLOCK flag for all file descriptors passed via socket-based activation. If true, all file descriptors >= 3 (i.e. all except stdin, stdout, stderr), excluding those passed in via the file descriptor storage logic (see FileDescriptorStoreMax= for details), will have the O_NONBLOCK flag set and hence are in non-blocking mode. This option is only useful in conjunction with a socket unit, as described in systemd.socket(5) and has no effect on file descriptors which were previously saved in the file-descriptor store for example. Defaults to false.
 	//
@@ -961,7 +961,7 @@ package creidhne
 	// This option may appear more than once, in which case the list of socket units is merged. Note that once set, clearing the list of sockets again (for example, by assigning the empty string to this option) is not supported.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#Sockets=
-	Sockets?: [...string]
+	Sockets?: [...(string | [...string])]
 
 	// Configure the location of a file containing USB FunctionFS descriptors, for implementation of USB gadget functions. This is used only in conjunction with a socket unit with ListenUSBFunction= configured. The contents of this file are written to the ep0 file after it is opened.
 	//
@@ -993,7 +993,7 @@ package creidhne
 	// This setting can be specified multiple times, in which case all the specified paths are opened and the file descriptors passed to the service. If the empty string is assigned, the entire list of open files defined prior to this is reset.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.service.html#OpenFile=
-	OpenFile?: [...string]
+	OpenFile?: [...(string | [...string])]
 
 	// Configures the UNIX process signal to send to the service's main process when asked to reload the service's configuration. Defaults to SIGHUP. This option has no effect unless Type=notify-reload is used, see above.
 	//
@@ -1084,7 +1084,7 @@ package creidhne
 	// Note that usage from user units requires overlayfs support in unprivileged user namespaces, which was first introduced in kernel v5.11.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ExtensionDirectories=
-	ExtensionDirectories?: [...string]
+	ExtensionDirectories?: [...(string | [...string])]
 
 	// This setting is similar to MountImages= in that it mounts a file system hierarchy from a block device node or loopback file, but instead of providing a destination path, an overlay will be set up. This option expects a whitespace separated list of mount definitions. Each definition consists of a source path, optionally followed by a colon and a list of mount options.
 	//
@@ -1101,7 +1101,7 @@ package creidhne
 	// When DevicePolicy= is set to closed or strict, or set to auto and DeviceAllow= is set, then this setting adds /dev/loop-control with rw mode, block-loop and block-blkext with rwm mode to DeviceAllow=. See systemd.resource-control(5) for the details about DevicePolicy= or DeviceAllow=. Also, see PrivateDevices= below, as it may change the setting of DevicePolicy=.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ExtensionImages=
-	ExtensionImages?: [...string]
+	ExtensionImages?: [...(string | [...string])]
 
 	// Takes an image policy string as per systemd.image-policy(7) to use when mounting the disk images (DDI) specified in RootImage=, MountImage=, ExtensionImage=, respectively. If not specified the following policy string is the default for RootImagePolicy= and MountImagePolicy:
 	//
@@ -1123,7 +1123,7 @@ package creidhne
 	// When DevicePolicy= is set to closed or strict, or set to auto and DeviceAllow= is set, then this setting adds /dev/loop-control with rw mode, block-loop and block-blkext with rwm mode to DeviceAllow=. See systemd.resource-control(5) for the details about DevicePolicy= or DeviceAllow=. Also, see PrivateDevices= below, as it may change the setting of DevicePolicy=.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#MountImages=
-	MountImages?: [...string]
+	MountImages?: [...(string | [...string])]
 
 	// Takes an image policy string as per systemd.image-policy(7) to use when mounting the disk images (DDI) specified in RootImage=, MountImage=, ExtensionImage=, respectively. If not specified the following policy string is the default for RootImagePolicy= and MountImagePolicy:
 	//
@@ -1157,7 +1157,7 @@ package creidhne
 	// Sets the supplementary Unix groups the processes are executed as. This takes a space-separated list of group names or IDs. This option may be specified more than once, in which case all listed groups are set as supplementary groups. When the empty string is assigned, the list of supplementary groups is reset, and all assignments prior to this one will have no effect. In any way, this option does not override, but extends the list of supplementary groups configured in the system group database for the user. This does not affect commands prefixed with +.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SupplementaryGroups=
-	SupplementaryGroups?: [...string]
+	SupplementaryGroups?: [...(string | [...string])]
 
 	// Takes a boolean parameter that controls whether to set the $HOME, $LOGNAME, and $SHELL environment variables. If not set, this defaults to true if User=, DynamicUser= or PAMName= are set, false otherwise. If set to true, the variables will always be set for system services, i.e. even when the default user root is used. If set to false, the mentioned variables are not set by the service manager, no matter whether User=, DynamicUser=, or PAMName= are used or not. This option normally has no effect on services of the per-user service manager, since in that case these variables are typically inherited from user manager's own environment anyway.
 	//
@@ -1239,7 +1239,7 @@ package creidhne
 	// Note that environment variables are not suitable for passing secrets (such as passwords, key material, …) to service processes. Environment variables set for a unit are exposed to unprivileged clients via D-Bus IPC, and generally not understood as being data that requires protection. Moreover, environment variables are propagated down the process tree, including across security boundaries (such as setuid/setgid executables), and hence might leak to processes that should not have access to the secret data. Use LoadCredential=, LoadCredentialEncrypted= or SetCredentialEncrypted= (see below) to pass data to unit processes securely.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#Environment=
-	Environment?: [...string]
+	Environment?: [...(string | [...string])]
 
 	// Similar to Environment=, but reads the environment variables from a text file. The text file should contain newline-separated variable assignments. Empty lines, lines without an = separator, or lines starting with ; or # will be ignored, which may be used for commenting. The file must be encoded with UTF-8. Valid characters are unicode scalar values other than unicode noncharacters, U+0000 NUL, and U+FEFF unicode byte order mark. Control codes other than NUL are allowed.
 	//
@@ -1256,7 +1256,7 @@ package creidhne
 	// Settings from these files override settings made with Environment=. If the same variable is set twice from these files, the files will be read in the order they are specified and the later setting will override the earlier setting.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#EnvironmentFile=
-	EnvironmentFile?: [...string]
+	EnvironmentFile?: [...(string | [...string])]
 
 	// Pass environment variables set for the system service manager to executed processes. Takes a space-separated list of variable names. This option may be specified more than once, in which case all listed variables will be passed. If the empty string is assigned to this option, the list of environment variables to pass is reset, all prior assignments have no effect. Variables specified that are not set for the system manager will not be passed and will be silently ignored. Note that this option is only relevant for the system service manager, as system services by default do not automatically inherit any environment variables set for the service manager itself. However, in case of the user service manager all environment variables are passed to the executed processes anyway, hence this option is without effect for the user service manager.
 	//
@@ -1267,14 +1267,14 @@ package creidhne
 	// See environ(7) for details about environment variables.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#PassEnvironment=
-	PassEnvironment?: [...string]
+	PassEnvironment?: [...(string | [...string])]
 
 	// Explicitly unset environment variable assignments that would normally be passed from the service manager to invoked processes of this unit. Takes a space-separated list of variable names or variable assignments. This option may be specified more than once, in which case all listed variables/assignments will be unset. If the empty string is assigned to this option, the list of environment variables/assignments to unset is reset. If a variable assignment is specified (that is: a variable name, followed by =, followed by its value), then any environment variable matching this precise assignment is removed. If a variable name is specified (that is a variable name without any following = or value), then any assignment matching the variable name, regardless of its value is removed. Note that the effect of UnsetEnvironment= is applied as final step when the environment list passed to executed processes is compiled. That means it may undo assignments from any configuration source, including assignments made through Environment= or EnvironmentFile=, inherited from the system manager's global set of environment variables, inherited via PassEnvironment=, set by the service manager itself (such as $NOTIFY_SOCKET and such), or set by a PAM module (in case PAMName= is used).
 	//
 	// See "Environment Variables in Spawned Processes" below for a description of how those settings combine to form the inherited environment. See environ(7) for general information about environment variables.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#UnsetEnvironment=
-	UnsetEnvironment?: [...string]
+	UnsetEnvironment?: [...(string | [...string])]
 
 	// Takes a boolean parameter. If set, a UNIX user and group pair is allocated dynamically when the unit is started, and released as soon as it is stopped. The user and group will not be added to /etc/passwd or /etc/group, but are managed transiently during runtime. The nss-systemd(8) glibc NSS module provides integration of these dynamic users/groups into the system's user and group databases. The user and group name to use may be configured via User= and Group= (see above). If these options are not used and dynamic user/group allocation is enabled for a unit, the name of the dynamic user/group is implicitly derived from the unit name. If the unit name without the type suffix qualifies as valid user name it is used directly, otherwise a name incorporating a hash of it is used. If a statically allocated user or group of the configured name already exists, it is used and no dynamic user/group is allocated. Note that if User= is specified and the static group with the name exists, then it is required that the static user with the name already exists. Similarly, if Group= is specified and the static user with the name exists, then it is required that the static group with the name already exists. Dynamic users/groups are allocated from the UID/GID range 61184…65519. It is recommended to avoid this range for regular system or login users. At any point in time each UID/GID from this range is only assigned to zero or one dynamically allocated users/groups in use. However, UID/GIDs are recycled after a unit is terminated. Care should be taken that any processes running as part of a unit for which dynamic users/groups are enabled do not leave files or directories owned by these users/groups around, as a different unit might get the same UID/GID assigned later on, and thus gain access to these files or directories. If DynamicUser= is enabled, RemoveIPC= is implied (and cannot be turned off). This ensures that the lifetime of IPC objects and temporary files created by the executed processes is bound to the runtime of the service, and hence the lifetime of the dynamic user/group. Since /tmp/ and /var/tmp/ are usually the only world-writable directories on a system, unless PrivateTmp= is manually set to true, disconnected would be implied. This ensures that a unit making use of dynamic user/group allocation cannot leave files around after unit termination. Furthermore NoNewPrivileges= and RestrictSUIDSGID= are implicitly enabled (and cannot be disabled), to ensure that processes invoked cannot take benefit or create SUID/SGID files or directories. Moreover ProtectSystem=strict and ProtectHome=read-only are implied, thus prohibiting the service to write to arbitrary file system locations. In order to allow the service to write to certain directories, they have to be allow-listed using ReadWritePaths=, but care must be taken so that UID/GID recycling doesn't create security issues involving files created by the service. Use RuntimeDirectory= (see below) in order to assign a writable runtime directory to a service, owned by the dynamic user/group and removed automatically when the unit is terminated. Use StateDirectory=, CacheDirectory= and LogsDirectory= in order to assign a set of writable directories for specific purposes to the service in a way that they are protected from vulnerabilities due to UID reuse (see below). If this option is enabled, care should be taken that the unit's processes do not get access to directories outside of these explicitly configured and managed ones. Specifically, do not use BindPaths= and be careful with AF_UNIX file descriptor passing for directory file descriptors, as this would permit processes to create files or directories owned by the dynamic user/group that are not subject to the lifecycle and access guarantees of the service. Note that this option is currently incompatible with D-Bus policies, thus a service using this option may currently not allocate a D-Bus service name (note that this does not affect calling into other D-Bus services). Defaults to off.
 	//
@@ -1445,7 +1445,7 @@ package creidhne
 	// Note that this functionality is currently only available in system services, not in per-user services.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#LogExtraFields=
-	LogExtraFields?: [...string]
+	LogExtraFields?: [...(string | [...string])]
 
 	// Define an extended regular expression to filter log messages based on the MESSAGE= field of the structured message. If the first character of the pattern is ~, log entries matching the pattern should be discarded. This option takes a single pattern as an argument but can be used multiple times to create a list of allowed and denied patterns. If the empty string is assigned, the filter is reset, and all prior assignments will have no effect.
 	//
@@ -1458,12 +1458,12 @@ package creidhne
 	// Note that this functionality is currently only available in system services, not in per-user services.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#LogFilterPatterns=
-	LogFilterPatterns?: [...string]
+	LogFilterPatterns?: [...(string | [...string])]
 
 	// Controls the secure bits set for the executed process. Takes a space-separated combination of options from the following list: keep-caps, keep-caps-locked, no-setuid-fixup, no-setuid-fixup-locked, noroot, and noroot-locked. This option may appear more than once, in which case the secure bits are ORed. If the empty string is assigned to this option, the bits are reset to 0. This does not affect commands prefixed with +. See capabilities(7) for details.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SecureBits=
-	SecureBits?: [...string]
+	SecureBits?: [...(string | [...string])]
 
 	// Controls which capabilities to include in the capability bounding set for the executed process. See capabilities(7) for details. Takes a whitespace-separated list of capability names, e.g. CAP_SYS_ADMIN, CAP_DAC_OVERRIDE, CAP_SYS_PTRACE. Capabilities listed will be included in the bounding set, all others are removed. If the list of capabilities is prefixed with ~, all but the listed capabilities will be included, the effect of the assignment inverted. Note that this option also affects the respective capabilities in the effective, permitted and inheritable capability sets. If this option is not used, the capability bounding set is not modified on process execution, hence no limits on the capabilities of the process are enforced. This option may appear more than once, in which case the bounding sets are merged by OR, or by AND if the lines are prefixed with ~ (see below). If the empty string is assigned to this option, the bounding set is reset to the empty capability set, and all prior settings have no effect. If set to ~ (without any further argument), the bounding set is reset to the full set of available capabilities, also undoing any previous settings. This does not affect commands prefixed with +.
 	//
@@ -1472,14 +1472,14 @@ package creidhne
 	// Example: if a unit has the following, CapabilityBoundingSet=CAP_A CAP_B CapabilityBoundingSet=CAP_B CAP_C then CAP_A, CAP_B, and CAP_C are set. If the second line is prefixed with ~, e.g., CapabilityBoundingSet=CAP_A CAP_B CapabilityBoundingSet=~CAP_B CAP_C then, only CAP_A is set.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#CapabilityBoundingSet=
-	CapabilityBoundingSet?: [...string]
+	CapabilityBoundingSet?: [...(string | [...string])]
 
 	// Controls which capabilities to include in the ambient capability set for the executed process. Takes a whitespace-separated list of capability names, e.g. CAP_SYS_ADMIN, CAP_DAC_OVERRIDE, CAP_SYS_PTRACE. This option may appear more than once, in which case the ambient capability sets are merged (see the above examples in CapabilityBoundingSet=). If the list of capabilities is prefixed with ~, all but the listed capabilities will be included, the effect of the assignment inverted. If the empty string is assigned to this option, the ambient capability set is reset to the empty capability set, and all prior settings have no effect. If set to ~ (without any further argument), the ambient capability set is reset to the full set of available capabilities, also undoing any previous settings. Note that adding capabilities to the ambient capability set adds them to the process's inherited capability set.
 	//
 	// Ambient capability sets are useful if you want to execute a process as a non-privileged user but still want to give it some capabilities. Note that in this case option keep-caps is automatically added to SecureBits= to retain the capabilities over the user change. AmbientCapabilities= does not affect commands prefixed with +.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#AmbientCapabilities=
-	AmbientCapabilities?: [...string]
+	AmbientCapabilities?: [...(string | [...string])]
 
 	// Sets the timer slack in nanoseconds for the executed processes. The timer slack controls the accuracy of wake-ups triggered by timers. See prctl(2) for more information. Note that in contrast to most other time span definitions this parameter takes an integer value in nano-seconds if no unit is specified. The usual time units are understood too.
 	//
@@ -1531,7 +1531,7 @@ package creidhne
 	// It is recommended to combine the file system namespacing related options with SystemCallFilter=~@mount, in order to prohibit the unit's processes to undo the mappings. Specifically these are the options PrivateTmp=, PrivateDevices=, ProtectSystem=, ProtectHome=, ProtectKernelTunables=, ProtectControlGroups=, ProtectKernelLogs=, ProtectClock=, ReadOnlyPaths=, InaccessiblePaths= and ReadWritePaths=.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SystemCallFilter=
-	SystemCallFilter?: [...string]
+	SystemCallFilter?: [...(string | [...string])]
 
 	// Takes a space-separated list of architecture identifiers to include in the system call filter. The known architecture identifiers are the same as for ConditionArchitecture= described in systemd.unit(5), as well as x32, mips64-n32, mips64-le-n32, and the special identifier native. The special identifier native implicitly maps to the native architecture of the system (or more precisely: to the architecture the system manager is compiled for). By default, this option is set to the empty list, i.e. no filtering is applied.
 	//
@@ -1542,7 +1542,7 @@ package creidhne
 	// System call architectures may also be restricted system-wide via the SystemCallArchitectures= option in the global configuration. See systemd-system.conf(5) for details.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SystemCallArchitectures=
-	SystemCallArchitectures?: [...string]
+	SystemCallArchitectures?: [...(string | [...string])]
 
 	// Takes an errno error number (between 1 and 4095) or errno name such as EPERM, EACCES or EUCLEAN, to return when the system call filter configured with SystemCallFilter= is triggered, instead of terminating the process immediately. See errno(3) for a full list of error codes. When this setting is not used, or when the empty string or the special setting kill is assigned, the process will be terminated immediately when the filter is triggered.
 	//
@@ -1552,7 +1552,7 @@ package creidhne
 	// Takes a space-separated list of system call names. If this setting is used, all system calls executed by the unit processes for the listed ones will be logged. If the first character of the list is ~, the effect is inverted: all system calls except the listed system calls will be logged. This feature makes use of the Secure Computing Mode 2 interfaces of the kernel ('seccomp filtering') and is useful for auditing or setting up a minimal sandboxing environment. This option may be specified more than once, in which case the filter masks are merged. If the empty string is assigned, the filter is reset, all prior assignments will have no effect. This does not affect commands prefixed with +.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SystemCallLog=
-	SystemCallLog?: [...string]
+	SystemCallLog?: [...(string | [...string])]
 
 	// Takes a boolean argument. If set, attempts to create memory mappings that are writable and executable at the same time, or to change existing memory mappings to become executable, or mapping shared memory segments as executable, are prohibited. Specifically, a system call filter is added (or preferably, an equivalent kernel check is enabled with prctl(2)) that rejects mmap(2) system calls with both PROT_EXEC and PROT_WRITE set, mprotect(2) or pkey_mprotect(2) system calls with PROT_EXEC set and shmat(2) system calls with SHM_EXEC set. Note that this option is incompatible with programs and libraries that generate program code dynamically at runtime, including JIT execution engines, executable stacks, and code "trampoline" feature of various C compilers. This option improves service security, as it makes harder for software exploits to change running code dynamically. However, the protection can be circumvented, if the service can write to a filesystem, which is not mounted with noexec (such as /dev/shm), or it can use memfd_create(). This can be prevented by making such file systems inaccessible to the service (e.g. InaccessiblePaths=/dev/shm) and installing further system call filters (SystemCallFilter=~memfd_create). Note that this feature is fully available on x86-64, and partially on x86. Specifically, the shmat() protection is not available on x86. Note that on systems supporting multiple ABIs (such as x86/x86-64) it is recommended to turn off alternative ABIs for services, so that they cannot be used to circumvent the restrictions of this option. Specifically, it is recommended to combine this option with SystemCallArchitectures=native or similar.
 	//
@@ -1564,7 +1564,7 @@ package creidhne
 	// Example: if a unit has the following, RestrictNamespaces=cgroup ipc RestrictNamespaces=cgroup net then cgroup, ipc, and net are set. If the second line is prefixed with ~, e.g., RestrictNamespaces=cgroup ipc RestrictNamespaces=~cgroup net then, only ipc is set.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RestrictNamespaces=
-	RestrictNamespaces?: [...string]
+	RestrictNamespaces?: [...(string | [...string])]
 
 	// Takes a boolean argument. If set, any attempts to enable realtime scheduling in a process of the unit are refused. This restricts access to realtime task scheduling policies such as SCHED_FIFO, SCHED_RR or SCHED_DEADLINE. See sched(7) for details about these scheduling policies. Realtime scheduling policies may be used to monopolize CPU time for longer periods of time, and may hence be used to lock up or otherwise trigger Denial-of-Service situations on the system. It is hence recommended to restrict access to realtime scheduling to the few programs that actually require them. Defaults to off.
 	//
@@ -1581,7 +1581,7 @@ package creidhne
 	// Use this option to limit exposure of processes to remote access, in particular via exotic and sensitive network protocols, such as AF_PACKET. Note that in most cases, the local AF_UNIX address family should be included in the configured allow list as it is frequently used for local communication, including for syslog(2) logging.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RestrictAddressFamilies=
-	RestrictAddressFamilies?: [...string]
+	RestrictAddressFamilies?: [...(string | [...string])]
 
 	// Takes a boolean argument. If set, locks down the personality(2) system call so that the kernel execution domain may not be changed from the default or the personality selected with Personality= directive. This may be useful to improve security, because odd personality emulations may be poorly tested and source of vulnerabilities.
 	//
@@ -1605,7 +1605,7 @@ package creidhne
 	// Note that this setting might not be supported on some systems (for example if the LSM eBPF hook is not enabled in the underlying kernel or if not using the unified control group hierarchy). In that case this setting has no effect.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RestrictFileSystems=
-	RestrictFileSystems?: [...string]
+	RestrictFileSystems?: [...(string | [...string])]
 
 	// Set soft and hard limits on various resources for executed processes. See setrlimit(2) for details on the process resource limit concept. Process resource limits may be specified in two formats: either as single value to set a specific soft and hard limit to the same value, or as colon-separated pair soft:hard to set both limits individually (e.g. LimitAS=4G:16G). Use the string infinity to configure no limit on a specific resource. The multiplicative suffixes K, M, G, T, P and E (to the base 1024) may be used for resource limits measured in bytes (e.g. LimitAS=16G). For the limits referring to time values, the usual time units ms, s, min, h and so on may be used (see systemd.time(7) for details). Note that if no time unit is specified for LimitCPU= the default unit of seconds is implied, while for LimitRTTIME= the default unit of microseconds is implied. Also, note that the effective granularity of the limits might influence their enforcement. For example, time limits specified for LimitCPU= will be rounded up implicitly to multiples of 1s. For LimitNICE= the value may be specified in two syntaxes: if prefixed with + or -, the value is understood as regular Linux nice value in the range -20…19. If not prefixed like this the value is understood as raw resource limit parameter in the range 0…40 (with 0 being equivalent to 1).
 	//
@@ -1836,7 +1836,7 @@ package creidhne
 	// Simple allow-list example using these directives: [Service] ReadOnlyPaths=/ ReadWritePaths=/var /run InaccessiblePaths=-/lost+found NoExecPaths=/ ExecPaths=/usr/sbin/my_daemon /usr/lib /usr/lib64
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ReadWritePaths=
-	ReadWritePaths?: [...string]
+	ReadWritePaths?: [...(string | [...string])]
 
 	// Sets up a new file system namespace for executed processes. These options may be used to limit access a process has to the file system. Each setting takes a space-separated list of paths relative to the host's root directory (i.e. the system running the service manager). Note that if paths contain symlinks, they are resolved relative to the root directory set with RootDirectory=/RootImage=.
 	//
@@ -1859,7 +1859,7 @@ package creidhne
 	// Simple allow-list example using these directives: [Service] ReadOnlyPaths=/ ReadWritePaths=/var /run InaccessiblePaths=-/lost+found NoExecPaths=/ ExecPaths=/usr/sbin/my_daemon /usr/lib /usr/lib64
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ReadWritePaths=
-	ReadOnlyPaths?: [...string]
+	ReadOnlyPaths?: [...(string | [...string])]
 
 	// Sets up a new file system namespace for executed processes. These options may be used to limit access a process has to the file system. Each setting takes a space-separated list of paths relative to the host's root directory (i.e. the system running the service manager). Note that if paths contain symlinks, they are resolved relative to the root directory set with RootDirectory=/RootImage=.
 	//
@@ -1882,7 +1882,7 @@ package creidhne
 	// Simple allow-list example using these directives: [Service] ReadOnlyPaths=/ ReadWritePaths=/var /run InaccessiblePaths=-/lost+found NoExecPaths=/ ExecPaths=/usr/sbin/my_daemon /usr/lib /usr/lib64
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ReadWritePaths=
-	InaccessiblePaths?: [...string]
+	InaccessiblePaths?: [...(string | [...string])]
 
 	// Sets up a new file system namespace for executed processes. These options may be used to limit access a process has to the file system. Each setting takes a space-separated list of paths relative to the host's root directory (i.e. the system running the service manager). Note that if paths contain symlinks, they are resolved relative to the root directory set with RootDirectory=/RootImage=.
 	//
@@ -1905,7 +1905,7 @@ package creidhne
 	// Simple allow-list example using these directives: [Service] ReadOnlyPaths=/ ReadWritePaths=/var /run InaccessiblePaths=-/lost+found NoExecPaths=/ ExecPaths=/usr/sbin/my_daemon /usr/lib /usr/lib64
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ReadWritePaths=
-	ExecPaths?: [...string]
+	ExecPaths?: [...(string | [...string])]
 
 	// Sets up a new file system namespace for executed processes. These options may be used to limit access a process has to the file system. Each setting takes a space-separated list of paths relative to the host's root directory (i.e. the system running the service manager). Note that if paths contain symlinks, they are resolved relative to the root directory set with RootDirectory=/RootImage=.
 	//
@@ -1928,7 +1928,7 @@ package creidhne
 	// Simple allow-list example using these directives: [Service] ReadOnlyPaths=/ ReadWritePaths=/var /run InaccessiblePaths=-/lost+found NoExecPaths=/ ExecPaths=/usr/sbin/my_daemon /usr/lib /usr/lib64
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ReadWritePaths=
-	NoExecPaths?: [...string]
+	NoExecPaths?: [...(string | [...string])]
 
 	// Takes a colon separated list of absolute paths relative to which the executable used by the Exec*= (e.g. ExecStart=, ExecStop=, etc.) properties can be found. ExecSearchPath= overrides $PATH if $PATH is not supplied by the user through Environment=, EnvironmentFile= or PassEnvironment=. Assigning an empty string removes previous assignments and setting ExecSearchPath= to a value multiple times will append to the previous setting.
 	//
@@ -1946,7 +1946,7 @@ package creidhne
 	// Note that the destination directory must exist or systemd must be able to create it. Thus, it is not possible to use those options for mount points nested underneath paths specified in InaccessiblePaths=, or under /home/ and other protected directories if ProtectHome=yes is specified. TemporaryFileSystem= with :ro or ProtectHome=tmpfs should be used instead.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#BindPaths=
-	BindPaths?: [...string]
+	BindPaths?: [...(string | [...string])]
 
 	// Configures unit-specific bind mounts. A bind mount makes a particular file or directory available at an additional place in the unit's view of the file system. Any bind mounts created with this option are specific to the unit, and are not visible in the host's mount table. This option expects a whitespace separated list of bind mount definitions. Each definition consists of a colon-separated triple of source path, destination path and option string, where the latter two are optional. If only a source path is specified the source and destination is taken to be the same. The option string may be either rbind or norbind for configuring a recursive or non-recursive bind mount. If the destination path is omitted, the option string must be omitted too. Each bind mount definition may be prefixed with -, in which case it will be ignored when its source path does not exist.
 	//
@@ -1959,7 +1959,7 @@ package creidhne
 	// Note that the destination directory must exist or systemd must be able to create it. Thus, it is not possible to use those options for mount points nested underneath paths specified in InaccessiblePaths=, or under /home/ and other protected directories if ProtectHome=yes is specified. TemporaryFileSystem= with :ro or ProtectHome=tmpfs should be used instead.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#BindPaths=
-	BindReadOnlyPaths?: [...string]
+	BindReadOnlyPaths?: [...(string | [...string])]
 
 	// Takes a space-separated list of mount points for temporary file systems (tmpfs). If set, a new file system namespace is set up for executed processes, and a temporary file system is mounted on each mount point. This option may be specified more than once, in which case temporary file systems are mounted on all listed mount points. If the empty string is assigned to this option, the list is reset, and all prior assignments have no effect. Each mount point may optionally be suffixed with a colon (:) and mount options such as size=10% or ro. By default, each temporary file system is mounted with nodev,strictatime,mode=0755. These can be disabled by explicitly specifying the corresponding mount options, e.g., dev or nostrictatime.
 	//
@@ -1968,7 +1968,7 @@ package creidhne
 	// Example: if a unit has the following, TemporaryFileSystem=/var:ro BindReadOnlyPaths=/var/lib/systemd then the invoked processes by the unit cannot see any files or directories under /var/ except for /var/lib/systemd or its contents.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#TemporaryFileSystem=
-	TemporaryFileSystem?: [...string]
+	TemporaryFileSystem?: [...(string | [...string])]
 
 	// Takes a boolean argument, or disconnected. If enabled, a new file system namespace will be set up for the executed processes, and /tmp/ and /var/tmp/ directories inside it are not shared with processes outside of the namespace, plus all temporary files created by a service in these directories will be removed after the service is stopped. If true, the backing storage of the private temporary directories will remain on the host's /tmp/ and /var/tmp/ directories. If disconnected, the directories will be backed by a completely new tmpfs instance, meaning that the storage is fully disconnected from the host namespace. Defaults to false.
 	//
@@ -2186,7 +2186,7 @@ package creidhne
 	// Example: if a system service unit has the following, RuntimeDirectory=foo:bar foo:baz the service manager creates /run/foo (if it does not exist), and /run/bar plus /run/baz as symlinks to /run/foo.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RuntimeDirectory=
-	RuntimeDirectory?: [...string]
+	RuntimeDirectory?: [...(string | [...string])]
 
 	// Specifies the access mode of the directories specified in RuntimeDirectory=, StateDirectory=, CacheDirectory=, LogsDirectory=, or ConfigurationDirectory=, respectively, as an octal number. Defaults to 0755. See "Permissions" in path_resolution(7) for a discussion of the meaning of permission bits.
 	//
@@ -2222,7 +2222,7 @@ package creidhne
 	// Example: if a system service unit has the following, RuntimeDirectory=foo:bar foo:baz the service manager creates /run/foo (if it does not exist), and /run/bar plus /run/baz as symlinks to /run/foo.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RuntimeDirectory=
-	StateDirectory?: [...string]
+	StateDirectory?: [...(string | [...string])]
 
 	// Specifies the access mode of the directories specified in RuntimeDirectory=, StateDirectory=, CacheDirectory=, LogsDirectory=, or ConfigurationDirectory=, respectively, as an octal number. Defaults to 0755. See "Permissions" in path_resolution(7) for a discussion of the meaning of permission bits.
 	//
@@ -2258,7 +2258,7 @@ package creidhne
 	// Example: if a system service unit has the following, RuntimeDirectory=foo:bar foo:baz the service manager creates /run/foo (if it does not exist), and /run/bar plus /run/baz as symlinks to /run/foo.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RuntimeDirectory=
-	CacheDirectory?: [...string]
+	CacheDirectory?: [...(string | [...string])]
 
 	// Specifies the access mode of the directories specified in RuntimeDirectory=, StateDirectory=, CacheDirectory=, LogsDirectory=, or ConfigurationDirectory=, respectively, as an octal number. Defaults to 0755. See "Permissions" in path_resolution(7) for a discussion of the meaning of permission bits.
 	//
@@ -2294,7 +2294,7 @@ package creidhne
 	// Example: if a system service unit has the following, RuntimeDirectory=foo:bar foo:baz the service manager creates /run/foo (if it does not exist), and /run/bar plus /run/baz as symlinks to /run/foo.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RuntimeDirectory=
-	LogsDirectory?: [...string]
+	LogsDirectory?: [...(string | [...string])]
 
 	// Specifies the access mode of the directories specified in RuntimeDirectory=, StateDirectory=, CacheDirectory=, LogsDirectory=, or ConfigurationDirectory=, respectively, as an octal number. Defaults to 0755. See "Permissions" in path_resolution(7) for a discussion of the meaning of permission bits.
 	//
@@ -2330,7 +2330,7 @@ package creidhne
 	// Example: if a system service unit has the following, RuntimeDirectory=foo:bar foo:baz the service manager creates /run/foo (if it does not exist), and /run/bar plus /run/baz as symlinks to /run/foo.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#RuntimeDirectory=
-	ConfigurationDirectory?: [...string]
+	ConfigurationDirectory?: [...(string | [...string])]
 
 	// The SetCredential= setting is similar to LoadCredential= but accepts a literal value to use as data for the credential, instead of a file system path to read the data from. Do not use this option for data that is supposed to be secret, as it is accessible to unprivileged processes via IPC. It's only safe to use this for user IDs, public key material and similar non-sensitive data. For everything else use LoadCredential=. In order to embed binary data into the credential data use C-style escaping (i.e. \n to embed a newline, or \x00 to embed a NUL byte).
 	//
@@ -2339,7 +2339,7 @@ package creidhne
 	// When multiple credentials of the same name are found, credentials found by LoadCredential=, LoadCredentialEncrypted= and ImportCredential= take priority over credentials found by SetCredential=. As such, SetCredential= will act as default if no credentials are found by any of the former. In this case not being able to retrieve the credential from the path specified in LoadCredential= or LoadCredentialEncrypted= is not considered fatal.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SetCredential=
-	SetCredential?: [...string]
+	SetCredential?: [...(string | [...string])]
 
 	// The SetCredential= setting is similar to LoadCredential= but accepts a literal value to use as data for the credential, instead of a file system path to read the data from. Do not use this option for data that is supposed to be secret, as it is accessible to unprivileged processes via IPC. It's only safe to use this for user IDs, public key material and similar non-sensitive data. For everything else use LoadCredential=. In order to embed binary data into the credential data use C-style escaping (i.e. \n to embed a newline, or \x00 to embed a NUL byte).
 	//
@@ -2348,7 +2348,7 @@ package creidhne
 	// When multiple credentials of the same name are found, credentials found by LoadCredential=, LoadCredentialEncrypted= and ImportCredential= take priority over credentials found by SetCredential=. As such, SetCredential= will act as default if no credentials are found by any of the former. In this case not being able to retrieve the credential from the path specified in LoadCredential= or LoadCredentialEncrypted= is not considered fatal.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#SetCredential=
-	SetCredentialEncrypted?: [...string]
+	SetCredentialEncrypted?: [...(string | [...string])]
 
 	// Pass a credential to the unit. Credentials are limited-size binary or textual objects that may be passed to unit processes. They are primarily used for passing cryptographic keys (both public and private) or certificates, user account information or identity information from host to services. The data is accessible from the unit's processes via the file system, at a read-only location that (if possible and permitted) is backed by non-swappable memory. The data is only accessible to the user associated with the unit, via the User=/DynamicUser= settings (as well as the superuser). When available, the location of credentials is exported as the $CREDENTIALS_DIRECTORY environment variable to the unit's processes.
 	//
@@ -2381,7 +2381,7 @@ package creidhne
 	// For further information see System and Service Credentials documentation.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#LoadCredential=
-	LoadCredential?: [...string]
+	LoadCredential?: [...(string | [...string])]
 
 	// Pass a credential to the unit. Credentials are limited-size binary or textual objects that may be passed to unit processes. They are primarily used for passing cryptographic keys (both public and private) or certificates, user account information or identity information from host to services. The data is accessible from the unit's processes via the file system, at a read-only location that (if possible and permitted) is backed by non-swappable memory. The data is only accessible to the user associated with the unit, via the User=/DynamicUser= settings (as well as the superuser). When available, the location of credentials is exported as the $CREDENTIALS_DIRECTORY environment variable to the unit's processes.
 	//
@@ -2414,7 +2414,7 @@ package creidhne
 	// For further information see System and Service Credentials documentation.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#LoadCredential=
-	LoadCredentialEncrypted?: [...string]
+	LoadCredentialEncrypted?: [...(string | [...string])]
 
 	// Pass one or more credentials to the unit. Takes a credential name for which we'll attempt to find a credential that the service manager itself received under the specified name — which may be used to propagate credentials from an invoking environment (e.g. a container manager that invoked the service manager) into a service. If the credential name is a glob, all credentials matching the glob are passed to the unit. Matching credentials are searched for in the system credentials, the encrypted system credentials, and under /etc/credstore/, /run/credstore/, /usr/lib/credstore/, /run/credstore.encrypted/, /etc/credstore.encrypted/, and /usr/lib/credstore.encrypted/ in that order. When multiple credentials of the same name are found, the first one found is used.
 	//
@@ -2427,7 +2427,7 @@ package creidhne
 	// When multiple credentials of the same name are found, credentials found by LoadCredential= and LoadCredentialEncrypted= take priority over credentials found by ImportCredential=.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#ImportCredential=
-	ImportCredential?: [...string]
+	ImportCredential?: [...(string | [...string])]
 
 	// Configures a timeout on the clean-up operation requested through systemctl clean …, see systemctl(1) for details. Takes the usual time values and defaults to infinity, i.e. by default no timeout is applied. If a timeout is configured the clean operation will be aborted forcibly when the timeout is reached, potentially leaving resources on disk.
 	//
@@ -2786,7 +2786,7 @@ package creidhne
 	// Note that allow lists defined this way should only reference device groups which are resolvable at the time the unit is started. Any device groups not resolvable then are not added to the device allow list. In order to work around this limitation, consider extending service units with a pair of After=modprobe@xyz.service and Wants=modprobe@xyz.service lines that load the necessary kernel module implementing the device group if missing. Example: … [Unit] Wants=modprobe@loop.service After=modprobe@loop.service [Service] DeviceAllow=block-loop DeviceAllow=/dev/loop-control …
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#DeviceAllow=
-	DeviceAllow?: [...string]
+	DeviceAllow?: [...(string | [...string])]
 
 	DevicePolicy?: string
 
@@ -2822,7 +2822,7 @@ package creidhne
 	// The specified device node should reference a block device that has an I/O scheduler associated, i.e. should not refer to partition or loopback block devices, but to the originating, physical device. When a path to a regular file or directory is specified it is attempted to discover the correct originating device backing the file system of the specified path. This works correctly only for simpler cases, where the file system is directly placed on a partition or physical block device, or where simple 1:1 encryption using dm-crypt/LUKS is used. This discovery does not cover complex storage and in particular RAID and volume management storage devices.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IODeviceWeight=
-	IODeviceWeight?: [...string]
+	IODeviceWeight?: [...(string | [...string])]
 
 	// These settings control the io controller in the unified hierarchy.
 	//
@@ -2831,7 +2831,7 @@ package creidhne
 	// Similar restrictions on block device discovery as for IODeviceWeight= apply, see above.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IOReadBandwidthMax=
-	IOReadBandwidthMax?: [...string]
+	IOReadBandwidthMax?: [...(string | [...string])]
 
 	// These settings control the io controller in the unified hierarchy.
 	//
@@ -2840,7 +2840,7 @@ package creidhne
 	// Similar restrictions on block device discovery as for IODeviceWeight= apply, see above.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IOReadBandwidthMax=
-	IOWriteBandwidthMax?: [...string]
+	IOWriteBandwidthMax?: [...(string | [...string])]
 
 	// These settings control the io controller in the unified hierarchy.
 	//
@@ -2849,7 +2849,7 @@ package creidhne
 	// Similar restrictions on block device discovery as for IODeviceWeight= apply, see above.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IOReadIOPSMax=
-	IOReadIOPSMax?: [...string]
+	IOReadIOPSMax?: [...(string | [...string])]
 
 	// These settings control the io controller in the unified hierarchy.
 	//
@@ -2858,7 +2858,7 @@ package creidhne
 	// Similar restrictions on block device discovery as for IODeviceWeight= apply, see above.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IOReadIOPSMax=
-	IOWriteIOPSMax?: [...string]
+	IOWriteIOPSMax?: [...(string | [...string])]
 
 	// This setting controls the io controller in the unified hierarchy.
 	//
@@ -2871,19 +2871,19 @@ package creidhne
 	// Similar restrictions on block device discovery as for IODeviceWeight= apply, see above.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IODeviceLatencyTargetSec=
-	IODeviceLatencyTargetSec?: [...string]
+	IODeviceLatencyTargetSec?: [...(string | [...string])]
 
 	BlockIOAccounting?: bool
 
-	BlockIOWeight?: [...string]
+	BlockIOWeight?: [...(string | [...string])]
 
-	StartupBlockIOWeight?: [...string]
+	StartupBlockIOWeight?: [...(string | [...string])]
 
-	BlockIODeviceWeight?: [...string]
+	BlockIODeviceWeight?: [...(string | [...string])]
 
-	BlockIOReadBandwidth?: [...string]
+	BlockIOReadBandwidth?: [...(string | [...string])]
 
-	BlockIOWriteBandwidth?: [...string]
+	BlockIOWriteBandwidth?: [...(string | [...string])]
 
 	// This setting controls the pids controller in the unified hierarchy.
 	//
@@ -2932,7 +2932,7 @@ package creidhne
 	// It may not be possible to disable a controller after units have been started, if the unit or any child of the unit in question delegates controllers to its children, as any delegated subtree of the cgroup hierarchy is unmanaged by systemd.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#DisableControllers=
-	DisableControllers?: [...string]
+	DisableControllers?: [...(string | [...string])]
 
 	// Takes a boolean argument. If true, turns on IPv4 and IPv6 network traffic accounting for packets sent or received by the unit. When this option is turned on, all IPv4 and IPv6 sockets created by any process of the unit are accounted for.
 	//
@@ -2960,7 +2960,7 @@ package creidhne
 	// Note that these settings might not be supported on some systems (for example if eBPF control group support is not enabled in the underlying kernel or container manager). These settings will have no effect in that case. If compatibility with such systems is desired it is hence recommended to not exclusively rely on them for IP security.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IPAddressAllow=
-	IPAddressAllow?: [...string]
+	IPAddressAllow?: [...(string | [...string])]
 
 	// Turn on network traffic filtering for IP packets sent and received over AF_INET and AF_INET6 sockets. Both directives take a space separated list of IPv4 or IPv6 addresses, each optionally suffixed with an address prefix length in bits after a / character. If the suffix is omitted, the address is considered a host address, i.e. the filter covers the whole address (32 bits for IPv4, 128 bits for IPv6).
 	//
@@ -2977,7 +2977,7 @@ package creidhne
 	// Note that these settings might not be supported on some systems (for example if eBPF control group support is not enabled in the underlying kernel or container manager). These settings will have no effect in that case. If compatibility with such systems is desired it is hence recommended to not exclusively rely on them for IP security.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IPAddressAllow=
-	IPAddressDeny?: [...string]
+	IPAddressDeny?: [...(string | [...string])]
 
 	// Add custom network traffic filters implemented as BPF programs, applying to all IP packets sent and received over AF_INET and AF_INET6 sockets. Takes an absolute path to a pinned BPF program in the BPF virtual filesystem (/sys/fs/bpf/).
 	//
@@ -2992,7 +2992,7 @@ package creidhne
 	// Note that these settings might not be supported on some systems (for example if eBPF control group support is not enabled in the underlying kernel or container manager). These settings will fail the service in that case. If compatibility with such systems is desired it is hence recommended to attach your filter manually (requires Delegate=yes) instead of using this setting.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IPIngressFilterPath=
-	IPIngressFilterPath?: [...string]
+	IPIngressFilterPath?: [...(string | [...string])]
 
 	// Add custom network traffic filters implemented as BPF programs, applying to all IP packets sent and received over AF_INET and AF_INET6 sockets. Takes an absolute path to a pinned BPF program in the BPF virtual filesystem (/sys/fs/bpf/).
 	//
@@ -3007,7 +3007,7 @@ package creidhne
 	// Note that these settings might not be supported on some systems (for example if eBPF control group support is not enabled in the underlying kernel or container manager). These settings will fail the service in that case. If compatibility with such systems is desired it is hence recommended to attach your filter manually (requires Delegate=yes) instead of using this setting.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#IPIngressFilterPath=
-	IPEgressFilterPath?: [...string]
+	IPEgressFilterPath?: [...(string | [...string])]
 
 	ManagedOOMSwap?: string
 
@@ -3025,7 +3025,7 @@ package creidhne
 
 	ManagedOOMPreference?: string
 
-	BPFProgram?: [...string]
+	BPFProgram?: [...(string | [...string])]
 
 	// Configures restrictions on the ability of unit processes to invoke bind(2) on a socket. Both allow and deny rules to be defined that restrict which addresses a socket may be bound to.
 	//
@@ -3058,7 +3058,7 @@ package creidhne
 	// Examples:… # Allow binding IPv6 socket addresses with a port greater than or equal to 10000. [Service] SocketBindAllow=ipv6:10000-65535 SocketBindDeny=any … # Allow binding IPv4 and IPv6 socket addresses with 1234 and 4321 ports. [Service] SocketBindAllow=1234 SocketBindAllow=4321 SocketBindDeny=any … # Deny binding IPv6 socket addresses. [Service] SocketBindDeny=ipv6 … # Deny binding IPv4 and IPv6 socket addresses. [Service] SocketBindDeny=any … # Allow binding only over TCP [Service] SocketBindAllow=tcp SocketBindDeny=any … # Allow binding only over IPv6/TCP [Service] SocketBindAllow=ipv6:tcp SocketBindDeny=any … # Allow binding ports within 10000-65535 range over IPv4/UDP. [Service] SocketBindAllow=ipv4:udp:10000-65535 SocketBindDeny=any …
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#SocketBindAllow=
-	SocketBindAllow?: [...string]
+	SocketBindAllow?: [...(string | [...string])]
 
 	// Configures restrictions on the ability of unit processes to invoke bind(2) on a socket. Both allow and deny rules to be defined that restrict which addresses a socket may be bound to.
 	//
@@ -3091,7 +3091,7 @@ package creidhne
 	// Examples:… # Allow binding IPv6 socket addresses with a port greater than or equal to 10000. [Service] SocketBindAllow=ipv6:10000-65535 SocketBindDeny=any … # Allow binding IPv4 and IPv6 socket addresses with 1234 and 4321 ports. [Service] SocketBindAllow=1234 SocketBindAllow=4321 SocketBindDeny=any … # Deny binding IPv6 socket addresses. [Service] SocketBindDeny=ipv6 … # Deny binding IPv4 and IPv6 socket addresses. [Service] SocketBindDeny=any … # Allow binding only over TCP [Service] SocketBindAllow=tcp SocketBindDeny=any … # Allow binding only over IPv6/TCP [Service] SocketBindAllow=ipv6:tcp SocketBindDeny=any … # Allow binding ports within 10000-65535 range over IPv4/UDP. [Service] SocketBindAllow=ipv4:udp:10000-65535 SocketBindDeny=any …
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#SocketBindAllow=
-	SocketBindDeny?: [...string]
+	SocketBindDeny?: [...(string | [...string])]
 
 	// Takes a list of space-separated network interface names. This option restricts the network interfaces that processes of this unit can use. By default processes can only use the network interfaces listed (allow-list). If the first character of the rule is ~, the effect is inverted: the processes can only use network interfaces not listed (deny-list).
 	//
@@ -3108,7 +3108,7 @@ package creidhne
 	// Example 3: mixed RestrictNetworkInterfaces=eth1 eth2 RestrictNetworkInterfaces=~eth1 Programs in the unit will be only able to use the eth2 network interface.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#RestrictNetworkInterfaces=
-	RestrictNetworkInterfaces?: [...string]
+	RestrictNetworkInterfaces?: [...(string | [...string])]
 
 	// Sets the memory pressure threshold time for memory pressure monitor as configured via MemoryPressureWatch=. Specifies the maximum allocation latency before a memory pressure event is signalled to the service, per 2s window. If not specified defaults to the DefaultMemoryPressureThresholdSec= setting in systemd-system.conf(5) (which in turn defaults to 200ms). The specified value expects a time unit such as ms or μs, see systemd.time(7) for details on the permitted syntax.
 	//
@@ -3135,7 +3135,7 @@ package creidhne
 	// Example: [Unit] NFTSet=cgroup:inet:filter:my_service user:inet:filter:serviceuser Corresponding NFT rules: table inet filter { set my_service { type cgroupsv2 } set serviceuser { typeof meta skuid } chain x { socket cgroupv2 level 2 @my_service accept drop } chain y { meta skuid @serviceuser accept drop } }
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.resource-control.html#NFTSet=
-	NFTSet?: [...string]
+	NFTSet?: [...(string | [...string])]
 
 	// Takes a boolean argument. This setting is used to enable coredump forwarding for containers that belong to this unit's cgroup. Units with CoredumpReceive=yes must also be configured with Delegate=yes. Defaults to false.
 	//
@@ -3194,35 +3194,35 @@ package creidhne
 	// A space-separated list of additional names this unit shall be installed under. The names listed here must have the same suffix (i.e. type) as the unit filename. This option may be specified more than once, in which case all listed names are used. At installation time, systemctl enable will create symlinks from these names to the unit filename. Note that not all unit types support such alias names, and this setting is not supported for them. Specifically, mount, slice, swap, and automount units do not support aliasing.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Alias=
-	Alias?: [...string]
+	Alias?: [...(string | [...string])]
 
 	// This option may be used more than once, or a space-separated list of unit names may be given. A symbolic link is created in the .wants/, .requires/, or .upholds/ directory of each of the listed units when this unit is installed by systemctl enable. This has the effect of a dependency of type Wants=, Requires=, or Upholds= being added from the listed unit to the current unit. See the description of the mentioned dependency types in the [Unit] section for details.
 	//
 	// In case of template units listing non template units, the listing unit must have DefaultInstance= set, or systemctl enable must be called with an instance name. The instance (default or specified) will be added to the .wants/, .requires/, or .upholds/ list of the listed unit. For example, WantedBy=getty.target in a service getty@.service will result in systemctl enable getty@tty2.service creating a getty.target.wants/getty@tty2.service link to getty@.service. This also applies to listing specific instances of templated units: this specific instance will gain the dependency. A template unit may also list a template unit, in which case a generic dependency will be added where each instance of the listing unit will have a dependency on an instance of the listed template with the same instance value. For example, WantedBy=container@.target in a service monitor@.service will result in systemctl enable monitor@.service creating a container@.target.wants/monitor@.service link to monitor@.service, which applies to all instances of container@.target.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#WantedBy=
-	WantedBy?: [...string]
+	WantedBy?: [...(string | [...string])]
 
 	// This option may be used more than once, or a space-separated list of unit names may be given. A symbolic link is created in the .wants/, .requires/, or .upholds/ directory of each of the listed units when this unit is installed by systemctl enable. This has the effect of a dependency of type Wants=, Requires=, or Upholds= being added from the listed unit to the current unit. See the description of the mentioned dependency types in the [Unit] section for details.
 	//
 	// In case of template units listing non template units, the listing unit must have DefaultInstance= set, or systemctl enable must be called with an instance name. The instance (default or specified) will be added to the .wants/, .requires/, or .upholds/ list of the listed unit. For example, WantedBy=getty.target in a service getty@.service will result in systemctl enable getty@tty2.service creating a getty.target.wants/getty@tty2.service link to getty@.service. This also applies to listing specific instances of templated units: this specific instance will gain the dependency. A template unit may also list a template unit, in which case a generic dependency will be added where each instance of the listing unit will have a dependency on an instance of the listed template with the same instance value. For example, WantedBy=container@.target in a service monitor@.service will result in systemctl enable monitor@.service creating a container@.target.wants/monitor@.service link to monitor@.service, which applies to all instances of container@.target.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#WantedBy=
-	RequiredBy?: [...string]
+	RequiredBy?: [...(string | [...string])]
 
 	// This option may be used more than once, or a space-separated list of unit names may be given. A symbolic link is created in the .wants/, .requires/, or .upholds/ directory of each of the listed units when this unit is installed by systemctl enable. This has the effect of a dependency of type Wants=, Requires=, or Upholds= being added from the listed unit to the current unit. See the description of the mentioned dependency types in the [Unit] section for details.
 	//
 	// In case of template units listing non template units, the listing unit must have DefaultInstance= set, or systemctl enable must be called with an instance name. The instance (default or specified) will be added to the .wants/, .requires/, or .upholds/ list of the listed unit. For example, WantedBy=getty.target in a service getty@.service will result in systemctl enable getty@tty2.service creating a getty.target.wants/getty@tty2.service link to getty@.service. This also applies to listing specific instances of templated units: this specific instance will gain the dependency. A template unit may also list a template unit, in which case a generic dependency will be added where each instance of the listing unit will have a dependency on an instance of the listed template with the same instance value. For example, WantedBy=container@.target in a service monitor@.service will result in systemctl enable monitor@.service creating a container@.target.wants/monitor@.service link to monitor@.service, which applies to all instances of container@.target.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#WantedBy=
-	UpheldBy?: [...string]
+	UpheldBy?: [...(string | [...string])]
 
 	// Additional units to install/deinstall when this unit is installed/deinstalled. If the user requests installation/deinstallation of a unit with this option configured, systemctl enable and systemctl disable will automatically install/uninstall units listed in this option as well.
 	//
 	// This option may be used more than once, or a space-separated list of unit names may be given.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.unit.html#Also=
-	Also?: [...string]
+	Also?: [...(string | [...string])]
 
 	// In template unit files, this specifies for which instance the unit shall be enabled if the template is enabled without any explicitly set instance. This option has no effect in non-template unit files. The specified string must be usable as instance identifier.
 	//

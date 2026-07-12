@@ -1,5 +1,7 @@
 package creidhne
 
+import "list"
+
 #Container: {
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
@@ -43,22 +45,22 @@ package creidhne
 		RunInit?: bool
 
 		// Set an environment variable in the container. Uses the same format as services in systemd.
-		Environment?: [...#KeyValue]
+		Environment?: [...(#KeyValue | [...#KeyValue])]
 		// Use a line-delimited file to set environment variables in the container.
-		EnvironmentFile?: [...string]
+		EnvironmentFile?: [...(string | [...string])]
 		// Use the host environment inside of the container.
 		EnvironmentHost?: bool
 
 		// Specify a custom network for the container. Accepts a raw mode
 		// (#NetworkMode: host/none/bridge/private/pasta/slirp4netns/ns:PATH) or a
 		// network/container #self handle. (Strict: named refs go through #self.)
-		Network?: [...(#NetworkMode | #NetworkSelf | #ContainerSelf)]
+		Network?: [...((#NetworkMode | #NetworkSelf | #ContainerSelf) | [...(#NetworkMode | #NetworkSelf | #ContainerSelf)])]
 		// Add a network-scoped alias for the container. Aliases can group containers in DNS resolution.
-		NetworkAlias?: [...string]
+		NetworkAlias?: [...(string | [...string])]
 		// Exposes a port, or a range of ports, from the container to the host.
-		PublishPort?: [...#PortMapping]
+		PublishPort?: [...(#PortMapping | [...#PortMapping])]
 		// Exposes a port, or a range of ports, from the host to the container.
-		ExposeHostPort?: [...string]
+		ExposeHostPort?: [...(string | [...string])]
 		// Sets the host name that is available inside the container.
 		HostName?: string
 		// Specify a static IPv4 address for the container.
@@ -66,13 +68,13 @@ package creidhne
 		// Specify a static IPv6 address for the container.
 		IP6?: #IPv6
 		// Set network-scoped DNS resolver/nameserver for the container.
-		DNS?: [...#IPAddress]
+		DNS?: [...(#IPAddress | [...#IPAddress])]
 		// Set custom DNS options.
-		DNSOption?: [...string]
+		DNSOption?: [...(string | [...string])]
 		// Set custom DNS search domains. Use DNSSearch=. to remove the search domain.
-		DNSSearch?: [...string]
+		DNSSearch?: [...(string | [...string])]
 		// Add host-to-IP mapping to /etc/hosts. Format: hostname:ip.
-		AddHost?: [...#HostMapping]
+		AddHost?: [...(#HostMapping | [...#HostMapping])]
 		// Controls whether proxy environment variables pass from Podman into the container.
 		HttpProxy?: bool
 
@@ -80,20 +82,20 @@ package creidhne
 		// (#HostMount) or a managed/external volume via its #self handle:
 		// units.volumes.X.#self & {target: "/path"}. (Strict: no bare volume names;
 		// reference managed/external volumes through #self.)
-		Volume?: [...(#HostMount | #VolumeMountRef)]
+		Volume?: [...((#HostMount | #VolumeMountRef) | [...(#HostMount | #VolumeMountRef)])]
 		// Attach a filesystem mount to the container. A #MountSpec ({type: "bind"|
 		// "tmpfs"|..., source?, destination, options?}) or a #MountRef referencing a
 		// managed volume/image #self. (Strict: the raw type= string is now typed.)
-		Mount?: [...(#MountSpec | #MountRef)]
+		Mount?: [...((#MountSpec | #MountRef) | [...(#MountSpec | #MountRef)])]
 		// Mount a tmpfs in the container. Either a raw string ("/run:rw,size=64m")
 		// or a typed #TmpfsSpec ({path, options}); #TmpfsOption is the typed option
 		// set, with the raw-string form as the escape hatch for the rest.
-		Tmpfs?: [...#TmpfsMount]
+		Tmpfs?: [...(#TmpfsMount | [...#TmpfsMount])]
 
 		// Add these capabilities, in addition to the default Podman capability set, to the container.
-		AddCapability?: [...#Capability]
+		AddCapability?: [...(#Capability | [...#Capability])]
 		// Remove capabilities from the default Podman set. Use "ALL" to drop everything.
-		DropCapability?: [...#Capability]
+		DropCapability?: [...(#Capability | [...#Capability])]
 		// If enabled, disables the container processes from gaining additional privileges.
 		NoNewPrivileges?: bool
 		// Set the seccomp profile for the container. Use "unconfined" to disable filters.
@@ -120,7 +122,7 @@ package creidhne
 		ReadOnlyTmpfs?: bool
 
 		// Add device nodes from the host into the container.
-		AddDevice?: [...#DeviceMapping]
+		AddDevice?: [...(#DeviceMapping | [...#DeviceMapping])]
 
 		// Memory limit for the container.
 		Memory?: #PodmanBytes
@@ -128,15 +130,15 @@ package creidhne
 		PidsLimit?: -1 | (int & >0)
 		// Ulimit options ("name=soft[:hard]", or "host"). Sets the ulimit values
 		// inside the container.
-		Ulimit?: [...#Ulimit]
+		Ulimit?: [...(#Ulimit | [...#Ulimit])]
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
 		// Set one or more OCI labels on the container. A raw "key=value" string,
 		// or a #Rendered helper (e.g. #JSONLabel) that computes one.
-		Label?: [...#LabelValue]
+		Label?: [...(#LabelValue | [...#LabelValue])]
 		// Set one or more OCI annotations on the container. Format: key=value.
-		Annotation?: [...#KeyValue]
+		Annotation?: [...(#KeyValue | [...#KeyValue])]
 
 		// Set or alter a healthcheck command for the container. Use "none" to disable.
 		HealthCmd?: string
@@ -170,7 +172,7 @@ package creidhne
 		// Set the log-driver used by Podman when running the container.
 		LogDriver?: #LogDriver
 		// Set the logging options used by Podman when running the container.
-		LogOpt?: [...string]
+		LogOpt?: [...(string | [...string])]
 
 		// Signal to stop a container. Default is SIGTERM.
 		StopSignal?: #Signal
@@ -184,15 +186,15 @@ package creidhne
 		// Set the user namespace mode for the container.
 		UserNS?: #UserNS
 		// Run the container in a new user namespace using the supplied UID mapping.
-		UIDMap?: [...#IDMap]
+		UIDMap?: [...(#IDMap | [...#IDMap])]
 		// Run the container in a new user namespace using the supplied GID mapping.
-		GIDMap?: [...#IDMap]
+		GIDMap?: [...(#IDMap | [...#IDMap])]
 		// Run the container in a new user namespace using the map with name in /etc/subuid.
 		SubUIDMap?: string
 		// Run the container in a new user namespace using the map with name in /etc/subgid.
 		SubGIDMap?: string
 		// Assign additional groups to the primary user running within the container process.
-		GroupAdd?: [...string]
+		GroupAdd?: [...(string | [...string])]
 
 		// Link the container to a Quadlet .pod unit via its #self handle:
 		// Pod: units.#pod.#self. (Strict: Pod= is ref-only, no raw values.)
@@ -211,46 +213,55 @@ package creidhne
 
 		// Use a Podman secret in the container either as a file or an environment variable.
 		// Accepts raw strings or structured #SecretRef objects.
-		Secret?: [...#SecretEntry]
+		Secret?: [...(#SecretEntry | [...#SecretEntry])]
 
 		// Configures namespaced kernel parameters for the container. Format: name=value.
-		Sysctl?: [...string]
+		Sysctl?: [...(string | [...string])]
 
 		// The timezone to run the container in.
 		Timezone?: string
 
 		// Arguments passed directly between "podman" and "run" for unsupported features.
-		GlobalArgs?: [...string]
+		GlobalArgs?: [...(string | [...string])]
 		// Arguments passed directly to the end of the podman run command.
-		PodmanArgs?: [...string]
+		PodmanArgs?: [...(string | [...string])]
 
 		// Load the specified containers.conf(5) module.
-		ContainersConfModule?: [...string]
+		ContainersConfModule?: [...(string | [...string])]
 	}
 
 	// Resolved secrets: flattens #SecretRef structs to strings for template rendering.
-	secretStrings: [
-		if Container.Secret != _|_ for s in Container.Secret {
-			(s & string) | (s & {_rendered: _})._rendered
+	secretStrings: list.Concat([
+		if Container.Secret != _|_ for e in Container.Secret {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for s in (e & [...]) {(s & string) | (s & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved volumes: flattens #self volume refs to "source:target[:options]"
 	// strings; raw string mounts pass through unchanged. Same mechanism as
 	// secretStrings, consumed by the template instead of Container.Volume.
-	volumeStrings: [
-		if Container.Volume != _|_ for v in Container.Volume {
-			(v & string) | (v & {_rendered: _})._rendered
+	volumeStrings: list.Concat([
+		if Container.Volume != _|_ for e in Container.Volume {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved networks: flattens #self network/container refs to their ref
 	// string; raw modes pass through unchanged.
-	networkStrings: [
-		if Container.Network != _|_ for n in Container.Network {
-			(n & string) | (n & {_rendered: _})._rendered
+	networkStrings: list.Concat([
+		if Container.Network != _|_ for e in Container.Network {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved pod (scalar): a #self pod ref flattens to its .pod ref; a raw
 	// string passes through. Only present when Pod is set.
@@ -266,25 +277,34 @@ package creidhne
 
 	// Resolved mounts: flattens #MountRef structs to type=...,source=... strings;
 	// raw mount strings pass through unchanged.
-	mountStrings: [
-		if Container.Mount != _|_ for m in Container.Mount {
-			(m & string) | (m & {_rendered: _})._rendered
+	mountStrings: list.Concat([
+		if Container.Mount != _|_ for e in Container.Mount {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for m in (e & [...]) {(m & string) | (m & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved tmpfs: flattens typed #TmpfsSpec structs to "path:opt,opt" strings;
 	// raw string mounts pass through unchanged.
-	tmpfsStrings: [
-		if Container.Tmpfs != _|_ for t in Container.Tmpfs {
-			(t & string) | (t & {_rendered: _})._rendered
+	tmpfsStrings: list.Concat([
+		if Container.Tmpfs != _|_ for e in Container.Tmpfs {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for t in (e & [...]) {(t & string) | (t & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved labels: raw "key=value" strings pass through; #Rendered helpers
 	// flatten via their computed _rendered.
-	labelStrings: [
-		if Container.Label != _|_ for l in Container.Label {
-			(l & string) | (l & {_rendered: _})._rendered
+	labelStrings: list.Concat([
+		if Container.Label != _|_ for e in Container.Label {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 }

@@ -297,9 +297,11 @@ func incompleteHint(err error) string {
 	return msg
 }
 
-// decodeJSONNumbers unmarshals JSON into map[string]any, converting integral
-// numbers to int64 so templates' {{ printf "%d" }} render integers rather than
-// %!d(float64=N).
+// decodeJSONNumbers unmarshals JSON into map[string]any, normalizing as it
+// walks: integral numbers become int64 so templates' {{ printf "%d" }} render
+// integers rather than %!d(float64=N), and nested lists splice into their
+// parent so helper-composed fields (Label: [#helper.#labels]) reach templates,
+// state, and the graph flat.
 func decodeJSONNumbers(b []byte) (map[string]any, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
@@ -307,7 +309,7 @@ func decodeJSONNumbers(b []byte) (map[string]any, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return nil, err
 	}
-	coerced, err := coerceNumbers(raw)
+	coerced, err := normalizeValue(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -318,11 +320,11 @@ func decodeJSONNumbers(b []byte) (map[string]any, error) {
 	return m, nil
 }
 
-func coerceNumbers(v any) (any, error) {
+func normalizeValue(v any) (any, error) {
 	switch x := v.(type) {
 	case map[string]any:
 		for k, e := range x {
-			c, err := coerceNumbers(e)
+			c, err := normalizeValue(e)
 			if err != nil {
 				return nil, err
 			}
@@ -330,14 +332,23 @@ func coerceNumbers(v any) (any, error) {
 		}
 		return x, nil
 	case []any:
-		for i, e := range x {
-			c, err := coerceNumbers(e)
+		// Splice nested lists into the parent. The schema only admits one
+		// nesting level ((T | [...T]) elements), so this recursion is the
+		// depth gate's executor, not a policy of its own: anything deeper was
+		// already rejected by CUE before decode.
+		out := make([]any, 0, len(x))
+		for _, e := range x {
+			c, err := normalizeValue(e)
 			if err != nil {
 				return nil, err
 			}
-			x[i] = c
+			if inner, ok := c.([]any); ok {
+				out = append(out, inner...)
+				continue
+			}
+			out = append(out, c)
 		}
-		return x, nil
+		return out, nil
 	case json.Number:
 		if i, err := x.Int64(); err == nil {
 			return i, nil

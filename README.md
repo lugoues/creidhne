@@ -139,6 +139,18 @@ Mix both freely; a primary `#container` plus additional `volumes: data: {...}` i
     └── volumes: {...}            # additional → traefik-<key>.volume
 ```
 
+### List nesting
+
+Every list field accepts one level of nesting and flattens it, so a helper
+can hand you a block of values that you splice in place:
+
+```cue
+Label: ["app=web", #mySpec.#labels]   // renders as one flat Label list
+```
+
+Exactly one level: helpers emit flat lists, and deeper nesting stays a type
+error.
+
 ### Cross-references
 
 Every unit has computed `#ref` and `#service` fields for type-safe references. `#ref` is the Quadlet filename (e.g. `proxy.volume`) used in fields like `Volume`; `#service` is the systemd service Quadlet generates (e.g. `proxy-volume.service`) used in `Unit` fields like `After`/`Requires`.

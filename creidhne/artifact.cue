@@ -36,10 +36,10 @@ package creidhne
 		// Delay between retries.
 		RetryDelay?: #GoDuration
 		// Arguments passed directly between "podman" and "artifact" for unsupported features.
-		GlobalArgs?: [...string]
+		GlobalArgs?: [...(string | [...string])]
 		// Arguments passed directly to the end of the podman artifact pull command.
-		PodmanArgs?: [...string]
+		PodmanArgs?: [...(string | [...string])]
 		// Load the specified containers.conf(5) module.
-		ContainersConfModule?: [...string]
+		ContainersConfModule?: [...(string | [...string])]
 	}
 }

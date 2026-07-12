@@ -404,8 +404,21 @@ func emitCUE(b *strings.Builder, title string, ds []directive, docs map[string]d
 		if doc, ok := docs[d.name]; ok {
 			emitDoc(b, doc, numVer)
 		}
-		fmt.Fprintf(b, "\t%s?: %s\n", d.name, d.cueType)
+		fmt.Fprintf(b, "\t%s?: %s\n", d.name, loosenList(d.cueType))
 	}
+}
+
+// loosenList rewrites a list type so each element may itself be a list of the
+// element type ("[...T]" -> "[...(T | [...T])]"): helper-composed values nest
+// one level and the eval decoder splices them flat. Non-list types pass
+// through.
+func loosenList(cueType string) string {
+	elem, ok := strings.CutPrefix(cueType, "[...")
+	if !ok || !strings.HasSuffix(elem, "]") {
+		return cueType
+	}
+	elem = strings.TrimSuffix(elem, "]")
+	return "[...(" + elem + " | [..." + elem + "])]"
 }
 
 // emitDoc writes a directive's documentation as CUE line comments: each

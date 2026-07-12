@@ -1,5 +1,7 @@
 package creidhne
 
+import "list"
+
 #Volume: {
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
@@ -27,11 +29,11 @@ package creidhne
 		// Specify the volume driver name. When set to "image", the Image key must also be set.
 		Driver?: string
 		// The mount options to use for a filesystem, per mount(8) -o option.
-		Options?: [...string]
+		Options?: [...(string | [...string])]
 		// The filesystem type of Device, per mount(8) -t option.
 		Type?: string
 		// The path of a device which is mounted for the volume.
-		Device?: [...string]
+		Device?: [...(string | [...string])]
 		// If enabled, the content of the image at the mountpoint is copied into the volume on first run.
 		Copy: *true | bool
 		// Specifies the image the volume is based on when Driver is set to "image".
@@ -46,19 +48,22 @@ package creidhne
 		GID?: int & >=0
 		// Set one or more OCI labels on the volume. A raw "key=value" string, or a
 		// #Rendered helper (e.g. #JSONLabel) that computes one.
-		Label?: [...#LabelValue]
+		Label?: [...(#LabelValue | [...#LabelValue])]
 		// Arguments passed directly between "podman" and "volume" for unsupported features.
-		GlobalArgs?: [...string]
+		GlobalArgs?: [...(string | [...string])]
 		// Arguments passed directly to the end of the podman volume create command.
-		PodmanArgs?: [...string]
+		PodmanArgs?: [...(string | [...string])]
 		// Load the specified containers.conf(5) module.
-		ContainersConfModule?: [...string]
+		ContainersConfModule?: [...(string | [...string])]
 	}
 
 	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
-	labelStrings: [
-		if Volume.Label != _|_ for l in Volume.Label {
-			(l & string) | (l & {_rendered: _})._rendered
+	labelStrings: list.Concat([
+		if Volume.Label != _|_ for e in Volume.Label {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 }

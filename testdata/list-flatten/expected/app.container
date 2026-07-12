@@ -1,0 +1,15 @@
+[Unit]
+After=a.service
+After=b.service
+After=c.target
+
+[Container]
+Image=docker.io/app:latest
+Environment=X=1
+Environment=Y=2
+Environment=Z=3
+Tmpfs=/run:size=1m
+Tmpfs=/cache
+Label=a=b
+Label=c=d
+Label=e=f

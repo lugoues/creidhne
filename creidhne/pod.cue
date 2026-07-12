@@ -1,5 +1,7 @@
 package creidhne
 
+import "list"
+
 #Pod: {
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
@@ -26,11 +28,11 @@ package creidhne
 
 		// Specify a custom network for the pod. Accepts a raw mode (#NetworkMode)
 		// or a network/container #self handle. (Strict: named refs go through #self.)
-		Network?: [...(#NetworkMode | #NetworkSelf | #ContainerSelf)]
+		Network?: [...((#NetworkMode | #NetworkSelf | #ContainerSelf) | [...(#NetworkMode | #NetworkSelf | #ContainerSelf)])]
 		// Add a network-scoped alias for the pod for DNS resolution grouping.
-		NetworkAlias?: [...string]
+		NetworkAlias?: [...(string | [...string])]
 		// Exposes a port, or a range of ports, from the pod to the host.
-		PublishPort?: [...#PortMapping]
+		PublishPort?: [...(#PortMapping | [...#PortMapping])]
 		// Set the pod's hostname inside all containers.
 		HostName?: string
 		// Specify a static IPv4 address for the pod.
@@ -38,30 +40,30 @@ package creidhne
 		// Specify a static IPv6 address for the pod.
 		IP6?: #IPv6
 		// Set network-scoped DNS resolver/nameserver for containers in this pod.
-		DNS?: [...#IPAddress]
+		DNS?: [...(#IPAddress | [...#IPAddress])]
 		// Set custom DNS options.
-		DNSOption?: [...string]
+		DNSOption?: [...(string | [...string])]
 		// Set custom DNS search domains. Use DNSSearch=. to remove the search domain.
-		DNSSearch?: [...string]
+		DNSSearch?: [...(string | [...string])]
 		// Add host-to-IP mapping to /etc/hosts. Format: hostname:ip.
-		AddHost?: [...#HostMapping]
+		AddHost?: [...(#HostMapping | [...#HostMapping])]
 
 		// Mount a volume in the pod. Accepts a host bind/anonymous mount or a
 		// managed/external volume via its #self handle. (Strict: no bare names.)
-		Volume?: [...(#HostMount | #VolumeMountRef)]
+		Volume?: [...((#HostMount | #VolumeMountRef) | [...(#HostMount | #VolumeMountRef)])]
 		// Size of /dev/shm.
 		ShmSize?: #PodmanBytes
 
 		// Set one or more OCI labels on the pod. A raw "key=value" string, or a
 		// #Rendered helper (e.g. #JSONLabel) that computes one.
-		Label?: [...#LabelValue]
+		Label?: [...(#LabelValue | [...#LabelValue])]
 
 		// Set the user namespace mode for the pod.
 		UserNS?: #UserNS
 		// Create the pod in a new user namespace using the supplied UID mapping.
-		UIDMap?: [...#IDMap]
+		UIDMap?: [...(#IDMap | [...#IDMap])]
 		// Create the pod in a new user namespace using the supplied GID mapping.
-		GIDMap?: [...#IDMap]
+		GIDMap?: [...(#IDMap | [...#IDMap])]
 		// Use the named UID map from /etc/subuid for the pod namespace.
 		SubUIDMap?: string
 		// Use the named GID map from /etc/subgid for the pod namespace.
@@ -73,32 +75,41 @@ package creidhne
 		StopTimeout?: int & >=0
 
 		// Arguments passed directly between "podman" and "pod" for unsupported features.
-		GlobalArgs?: [...string]
+		GlobalArgs?: [...(string | [...string])]
 		// Arguments passed directly to the end of the podman pod create command.
-		PodmanArgs?: [...string]
+		PodmanArgs?: [...(string | [...string])]
 
 		// Load the specified containers.conf(5) module.
-		ContainersConfModule?: [...string]
+		ContainersConfModule?: [...(string | [...string])]
 	}
 
 	// Resolved volumes: flattens #self volume refs to strings for the template.
-	volumeStrings: [
-		if Pod.Volume != _|_ for v in Pod.Volume {
-			(v & string) | (v & {_rendered: _})._rendered
+	volumeStrings: list.Concat([
+		if Pod.Volume != _|_ for e in Pod.Volume {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved networks: flattens #self network/container refs for the template.
-	networkStrings: [
-		if Pod.Network != _|_ for n in Pod.Network {
-			(n & string) | (n & {_rendered: _})._rendered
+	networkStrings: list.Concat([
+		if Pod.Network != _|_ for e in Pod.Network {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 
 	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
-	labelStrings: [
-		if Pod.Label != _|_ for l in Pod.Label {
-			(l & string) | (l & {_rendered: _})._rendered
+	labelStrings: list.Concat([
+		if Pod.Label != _|_ for e in Pod.Label {
+			[
+				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
+			]
 		},
-	]
+	])
 }

@@ -1,5 +1,7 @@
 package creidhne
 
+import "list"
+
 #Build: {
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
@@ -39,7 +41,7 @@ package creidhne
 	}) & {
 		Build: {
 			// Specifies the name(s) assigned to the resulting image if the build completes successfully. (optional: default "quadlets.localhost/\(_stem):latest")
-			ImageTag: *["quadlets.localhost/\(_stem):latest"] | [...string]
+			ImageTag: *["quadlets.localhost/\(_stem):latest"] | [...(string | [...string])]
 			// Override the default systemd service unit name.
 			ServiceName?: string
 			// Path to an alternate .containerignore file to use when building the image.
@@ -47,9 +49,9 @@ package creidhne
 			// Set the target build stage to build. Commands after the target stage are skipped.
 			Target?: string
 			// Specifies build arguments and their values, like environment variables.
-			BuildArg?: [...#KeyValue]
+			BuildArg?: [...(#KeyValue | [...#KeyValue])]
 			// Add a value (e.g. env=value) to the built image using systemd format.
-			Environment?: [...#KeyValue]
+			Environment?: [...(#KeyValue | [...#KeyValue])]
 			// Override the architecture (defaults to host's) of the image to be built.
 			Arch?: string
 			// Override the default architecture variant of the container image to be built.
@@ -58,18 +60,18 @@ package creidhne
 			AuthFile?: string
 			// Configure network namespace for RUN instructions during build.
 			// A raw mode (#NetworkMode) or a network #self. (Strict.)
-			Network?: [...(#NetworkMode | #NetworkSelf)]
+			Network?: [...((#NetworkMode | #NetworkSelf) | [...(#NetworkMode | #NetworkSelf)])]
 			// Set network-scoped DNS resolver/nameserver for the build container.
-			DNS?: [...#IPAddress]
+			DNS?: [...(#IPAddress | [...#IPAddress])]
 			// Set custom DNS options.
-			DNSOption?: [...string]
+			DNSOption?: [...(string | [...string])]
 			// Set custom DNS search domains. Use DNSSearch=. to remove the search domain.
-			DNSSearch?: [...string]
+			DNSSearch?: [...(string | [...string])]
 			// Add an image label (e.g. label=value) to the image metadata. A raw
 			// "key=value" string, or a #Rendered helper (e.g. #JSONLabel).
-			Label?: [...#LabelValue]
+			Label?: [...(#LabelValue | [...#LabelValue])]
 			// Add an image annotation (e.g. annotation=value) to the image metadata.
-			Annotation?: [...#KeyValue]
+			Annotation?: [...(#KeyValue | [...#KeyValue])]
 			// Always remove intermediate containers after a build, even if the build fails.
 			ForceRM?: bool
 			// Set the image pull policy.
@@ -77,39 +79,48 @@ package creidhne
 			// Require HTTPS and verification of certificates when contacting registries.
 			TLSVerify?: bool
 			// Pass secret information used in Containerfile build stages in a safe way.
-			Secret?: [...string]
+			Secret?: [...(string | [...string])]
 			// Mount a volume to containers when executing RUN instructions during the
 			// build. A host mount (#HostMount) or a volume #self. (Strict.)
-			Volume?: [...(#HostMount | #VolumeMountRef)]
+			Volume?: [...((#HostMount | #VolumeMountRef) | [...(#HostMount | #VolumeMountRef)])]
 			// Assign additional groups to the primary user running within the container process.
-			GroupAdd?: [...string]
+			GroupAdd?: [...(string | [...string])]
 			// Number of times to retry the image pull when an HTTP error occurs.
 			Retry?: int & >=0
 			// Delay between retries.
 			RetryDelay?: #GoDuration
 			// Arguments passed directly between "podman" and "build" for unsupported features.
-			GlobalArgs?: [...string]
+			GlobalArgs?: [...(string | [...string])]
 			// Arguments passed directly to the end of the podman build command.
-			PodmanArgs?: [...string]
+			PodmanArgs?: [...(string | [...string])]
 			// Load the specified containers.conf(5) module.
-			ContainersConfModule?: [...string]
+			ContainersConfModule?: [...(string | [...string])]
 
 			// Resolved networks/volumes: flatten #self refs to strings.
-			networkStrings: [
-				if Network != _|_ for n in Network {
-					(n & string) | (n & {_rendered: _})._rendered
+			networkStrings: list.Concat([
+				if Network != _|_ for e in Network {
+					[
+						if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+						if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {_rendered: _})._rendered},
+					]
 				},
-			]
-			volumeStrings: [
-				if Volume != _|_ for v in Volume {
-					(v & string) | (v & {_rendered: _})._rendered
+			])
+			volumeStrings: list.Concat([
+				if Volume != _|_ for e in Volume {
+					[
+						if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+						if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {_rendered: _})._rendered},
+					]
 				},
-			]
-			labelStrings: [
-				if Label != _|_ for l in Label {
-					(l & string) | (l & {_rendered: _})._rendered
+			])
+			labelStrings: list.Concat([
+				if Label != _|_ for e in Label {
+					[
+						if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
+						if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
+					]
 				},
-			]
+			])
 		}
 	}
 }

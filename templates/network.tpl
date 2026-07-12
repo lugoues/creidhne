@@ -29,7 +29,7 @@
 {{ end -}}
 {{ range .Network.DNS -}}DNS={{ . }}
 {{ end -}}
-{{ range .Network.Label -}}Label={{ . }}
+{{ range .labelStrings -}}Label={{ . }}
 {{ end -}}
 {{ range .Network.GlobalArgs -}}GlobalArgs={{ . }}
 {{ end -}}
