@@ -1,0 +1,3 @@
+- secret forge_db_password: load its value from ./db_password.txt (podman secret create forge_db_password ./db_password.txt)
+- secret forge_npm_token: load its value from ./npm_token.txt (podman secret create forge_npm_token ./npm_token.txt)
+- secret prod-tls-cert: external; verify it exists (crei secrets list)

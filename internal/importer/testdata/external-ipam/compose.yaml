@@ -1,0 +1,29 @@
+name: netty
+services:
+  app:
+    image: docker.io/library/nginx:1.27
+    networks:
+      appnet:
+        aliases: [web, www]
+        ipv4_address: 10.89.0.5
+      ext: {}
+    volumes:
+      - extvol:/data
+networks:
+  appnet:
+    driver: bridge
+    internal: true
+    enable_ipv6: true
+    driver_opts: {mtu: "9000"}
+    ipam:
+      config:
+        - subnet: 10.89.0.0/24
+          gateway: 10.89.0.1
+          ip_range: 10.89.0.128/25
+  ext:
+    external: true
+    name: prod-net
+volumes:
+  extvol:
+    external: true
+    name: prod-data

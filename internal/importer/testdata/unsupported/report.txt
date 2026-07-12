@@ -1,0 +1,21 @@
+! configs.app_config: compose configs have no quadlet equivalent; mount the file explicitly or convert it to a secret
+! service app: cgroup_parent (systemd owns the cgroup) not supported; dropped
+! service app: deploy.endpoint_mode is swarm-only; dropped
+! service app: deploy.labels is swarm-only; dropped
+! service app: deploy.mode is swarm-only; dropped
+! service app: deploy.placement is swarm-only; dropped
+! service app: deploy.replicas is swarm-only; dropped
+! service app: deploy.restart_policy (use restart:) is swarm-only; dropped
+! service app: deploy.update_config is swarm-only; dropped
+! service app: domainname not supported; dropped
+! service app: ipc not supported; dropped
+! service app: links (legacy; use networks + service DNS) not supported; dropped
+! service app: oom_kill_disable not supported; dropped
+! service app: oom_score_adj not supported; dropped
+! service app: pid not supported; dropped
+! service app: platform not supported; dropped
+! service app: pre_start/post_start/pre_stop (they run inside the container; systemd Exec* hooks run on the host) not supported; dropped
+! service app: scale (systemd units are single-instance; use a template unit) not supported; dropped
+! service app: stdin_open (services have no interactive stdin under systemd) not supported; dropped
+! service app: tty not supported; dropped
+! service app: volumes_from (mount the named volumes explicitly) not supported; dropped

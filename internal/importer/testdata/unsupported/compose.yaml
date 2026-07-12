@@ -1,0 +1,33 @@
+name: swarmy
+services:
+  app:
+    image: docker.io/library/nginx:1.27
+    links: [db]
+    pid: host
+    ipc: host
+    platform: linux/amd64
+    cgroup_parent: legacy.slice
+    oom_score_adj: 100
+    oom_kill_disable: true
+    stdin_open: true
+    tty: true
+    domainname: corp.example
+    volumes_from: [db]
+    scale: 3
+    post_start:
+      - command: ["/bin/setup.sh"]
+    deploy:
+      mode: global
+      replicas: 3
+      endpoint_mode: vip
+      labels: {swarm.only: "true"}
+      placement:
+        constraints: ["node.role == manager"]
+      update_config: {parallelism: 2}
+      restart_policy: {condition: on-failure}
+  db:
+    image: docker.io/library/postgres:16
+    mac_address: "02:42:ac:11:00:02"
+configs:
+  app_config:
+    file: ./config.json

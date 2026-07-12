@@ -1,0 +1,38 @@
+name: edge
+services:
+  app:
+    image: localhost/edge-app:latest
+    network_mode: none
+    tmpfs: ["/run:size=64m"]
+    volumes:
+      - {type: tmpfs, target: /cache, tmpfs: {size: 104857600, mode: 0777}}
+    devices: ["/dev/ttyUSB0:/dev/ttyUSB0:rwm"]
+    sysctls: {net.core.somaxconn: "1024"}
+    ulimits:
+      nofile: {soft: 1024, hard: 2048}
+      nproc: 65535
+    cap_add: [NET_ADMIN]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true", "seccomp=./sc.json"]
+    init: true
+    read_only: true
+    shm_size: 67108864
+    extra_hosts: {somehost: 10.0.0.1}
+    dns: [1.1.1.1]
+    stop_grace_period: 1m30s
+    stop_signal: SIGQUIT
+    logging: {driver: journald, options: {tag: edge}}
+    pull_policy: never
+    user: "1000:1000"
+    entrypoint: ["/entry.sh", "--flag"]
+    deploy:
+      resources:
+        limits: {memory: 1G, cpus: "0.5", pids: 200}
+        reservations: {memory: 256M}
+  helper:
+    image: docker.io/library/busybox:1.36
+    network_mode: "service:app"
+    mem_limit: 536870912
+    memswap_limit: 2147483648
+    depends_on:
+      app: {condition: service_completed_successfully}

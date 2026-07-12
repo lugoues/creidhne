@@ -1,0 +1,32 @@
+name: paperless
+services:
+  web:
+    image: ghcr.io/paperless/paperless:2.14
+    container_name: paperless
+    ports: ["8000:8000", "127.0.0.1:9000:9001/udp"]
+    environment:
+      PAPERLESS_DBHOST: db
+    env_file: [./app.env]
+    volumes:
+      - data:/usr/src/paperless/data
+      - ./export:/usr/src/paperless/export:ro
+    depends_on:
+      db: {condition: service_healthy}
+      redis-broker: {condition: service_started}
+    restart: unless-stopped
+    labels: {traefik.enable: "true"}
+  db:
+    image: docker.io/library/postgres:16
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperless"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: always
+  redis-broker:
+    image: docker.io/library/redis:7
+    restart: always
+volumes:
+  data:
+  pg-data:

@@ -83,7 +83,7 @@ crei apply                # write the unit files
 A quadlet with a container and a volume:
 
 ```cue
-package config
+package quadlets
 
 import "github.com/lugoues/creidhne@v0"
 
@@ -309,10 +309,54 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
 | `crei status [quadlet...]` | One table of desired vs recorded vs disk vs runtime state per unit; name quadlets to drill in. `--problems` shows only rows needing attention, `--format json` for scripts, `--check` for cron/CI exit codes. Read-only. |
 | `crei validate` | Type-check the CUE without rendering. |
+| `crei import compose [file...]` | Convert a docker-compose project into a creidhne CUE file (see below). |
 | `crei config` | Show the resolved configuration and where each value came from. |
 | `crei secrets list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
 | `crei secrets create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
 | `crei version` | Print version info. |
+
+### Migrating from docker-compose
+
+`crei import compose` converts a compose project into one `#Quadlet`:
+
+```sh
+crei import compose            # discovers compose.yaml like docker compose does
+crei import compose -o - ...   # print to stdout instead of <project>.cue
+crei import compose https://github.com/docker/awesome-compose/blob/master/nginx-golang/compose.yaml
+```
+
+URLs are fetched (GitHub/GitLab browser links are rewritten to their raw
+form), and the project name derives from the URL directory (here:
+`nginx-golang`) unless the file sets `name:` or `--name` is given. Relative
+paths in a fetched file refer to the source repository layout, so run the
+result from a checkout.
+
+- Services become containers, named volumes/networks become units referenced
+  via `#self`, `build:` sections become build units. Volumes and networks get fresh
+  systemd-* names by default; pass `--preserve-names` when migrating an
+  existing deployment so the compose-era volumes (and their data) are
+  reused. `external: true` resources are always adopted by name.
+- `depends_on` becomes `After=`+`Requires=`. A service with a `healthcheck:`
+  gets the full notify wiring (`Notify=healthy`, `Type=notify`,
+  `NotifyAccess=all`, and a derived `TimeoutStartSec` when the check math
+  exceeds systemd's 90s default), so `systemctl start` waits for *healthy*,
+  not just started, and `condition: service_healthy` ordering is actually
+  enforced by systemd.
+- `deploy.resources` limits land in the systemd `[Service]` block
+  (`MemoryMax`, `CPUQuota`, `TasksMax`); the rest of `deploy.*` is swarm and is
+  skipped with a warning.
+- `${VAR}` references are not resolved by default: they are lifted into an
+  `env:` struct that `crei validate` forces you to fill. Pass
+  `--env-file`/`--env` to resolve and bake values at import time instead, or
+  `--resolve` to bake using only the file's own `${VAR:-default}` values.
+  Files that interpolate inside structured fields (like `ports:`) cannot be
+  preserved symbolically; the error tells you which resolve mode to use.
+- Compose secrets map onto the secret registry; values are never imported.
+  The conversion report lists how to load each one (`crei secrets list` shows
+  what is still missing).
+- Anything unmappable is listed in the report, never dropped silently, and
+  the source compose file is embedded at the bottom of the emitted CUE as a
+  comment block for reference (`--embed-source=false` to skip).
 
 ### Recorded state and `crei status`
 

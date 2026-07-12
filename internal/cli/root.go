@@ -79,6 +79,7 @@ func newRootCmd() *cobra.Command {
 		newStatusCmd(),
 		newGraphCmd(),
 		newLintCmd(),
+		newImportCmd(),
 		newInitCmd(),
 		newValidateCmd(),
 		newConfigCmd(),

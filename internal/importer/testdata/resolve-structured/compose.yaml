@@ -1,0 +1,32 @@
+name: crawler
+x-common: &common-env
+  LOGGING_LEVEL: ${LOGGING_LEVEL:-info}
+services:
+  api:
+    image: ghcr.io/acme/crawler-api:latest
+    environment:
+      <<: *common-env
+      HOST: "0.0.0.0"
+      PORT: ${INTERNAL_PORT:-3002}
+      BUS_URL: amqp://rabbitmq:5672
+      API_KEY: ${API_KEY}
+    ports:
+      - "${PORT:-3002}:${INTERNAL_PORT:-3002}"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: node dist/src/harness.js --start-docker
+    cpus: 4.0
+    mem_limit: 8G
+  rabbitmq:
+    image: docker.io/library/rabbitmq:3
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+  init:
+    image: docker.io/library/bash:5
+    entrypoint:
+      - /bin/bash
+      - -c
+      - "out=$(probe 2>&1); status=$$?; printf '%s' \"$$out\"; exit $$status"
+    depends_on: [api]

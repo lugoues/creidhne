@@ -1,0 +1,2 @@
+* adopting existing external volumes by name: prod-data
+* adopting existing external networks by name: prod-net

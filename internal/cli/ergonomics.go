@@ -365,7 +365,7 @@ func moduleNameFor(projectDir string) string {
 	return "example.com/" + name + "@v0"
 }
 
-const sampleMain = `package config
+const sampleMain = `package quadlets
 
 import "github.com/lugoues/creidhne@v0"
 

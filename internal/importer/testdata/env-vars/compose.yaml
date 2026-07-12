@@ -1,0 +1,11 @@
+name: envy
+services:
+  app:
+    image: "ghcr.io/acme/app:${APP_VERSION:-latest}"
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      LITERAL_DOLLAR: "cost$$5"
+      HOME_REF: $APP_HOME
+      PASSTHRU:
+    labels:
+      note: "pinned ${APP_VERSION:-latest}"

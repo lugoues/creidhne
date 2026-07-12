@@ -1,0 +1,31 @@
+name: forge
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Build.Dockerfile
+      args:
+        VERSION: "3"
+      target: prod
+      tags: ["localhost/forge-app:edge"]
+      network: buildnet
+      secrets: [npm_token]
+    image: localhost/forge-app:latest
+    secrets:
+      - db_password
+      - source: tls_cert
+        target: /etc/ssl/app.pem
+        mode: 0400
+  db:
+    image: docker.io/library/postgres:16
+    secrets: [db_password]
+networks:
+  buildnet: {}
+secrets:
+  db_password:
+    file: ./db_password.txt
+  tls_cert:
+    external: true
+    name: prod-tls-cert
+  npm_token:
+    file: ./npm_token.txt

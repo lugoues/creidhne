@@ -1,0 +1,2 @@
+! service web: restart unless-stopped mapped to on-failure (a clean self-exit stays stopped)
+* volumes get fresh systemd-* names; migrating an existing deployment? --preserve-names reuses the compose-era volumes (paperless_data, paperless_pg-data)

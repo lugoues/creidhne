@@ -1,0 +1,14 @@
+name: web
+services:
+  nginx:
+    image: docker.io/library/nginx:1.27
+    command: ["nginx", "-g", "daemon off;"]
+    ports:
+      - "8080:80"
+    environment:
+      NGINX_HOST: example.com
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+    labels:
+      app: web
+    restart: always

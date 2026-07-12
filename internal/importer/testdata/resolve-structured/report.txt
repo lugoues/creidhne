@@ -1,0 +1,1 @@
+! variables without defaults resolved from --env-file/.env/the environment, or to empty if unset: API_KEY
