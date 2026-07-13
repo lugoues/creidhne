@@ -7,12 +7,15 @@ import "github.com/lugoues/creidhne"
 // comprehension path (xStrings run before Go decodes); Environment and
 // Unit.After exercise the Go decode path (templates range them directly;
 // After also crosses the generated-section + unit_deps overlay types).
+// The #rendered elements prove the #Rendered contract is writable from a
+// consumer package (this module is not creidhne) and that a list-valued
+// #rendered splices, standalone or inside a nested list.
 app: creidhne.#Quadlet & {
 	name: "app"
 	units: #container: {
 		Container: {
 			Image: "docker.io/app:latest"
-			Label: ["a=b", ["c=d", "e=f"]]
+			Label: ["a=b", ["c=d", "e=f"], {#rendered: ["m=1", "n=2"]}, {#rendered: "o=3"}, [{#rendered: ["p=4"]}, "q=5"]]
 			Environment: ["X=1", ["Y=2", "Z=3"]]
 			Tmpfs: ["/run:size=1m", [{path: "/cache"}]]
 		}

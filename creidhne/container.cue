@@ -234,8 +234,8 @@ import "list"
 	secretStrings: list.Concat([
 		if Container.Secret != _|_ for e in Container.Secret {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for s in (e & [...]) {(s & string) | (s & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for s in (e & [...]) {(s & string) | (s & {#rendered: _}).#rendered},
 			]
 		},
 	])
@@ -246,8 +246,8 @@ import "list"
 	volumeStrings: list.Concat([
 		if Container.Volume != _|_ for e in Container.Volume {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {#rendered: _}).#rendered},
 			]
 		},
 	])
@@ -257,8 +257,8 @@ import "list"
 	networkStrings: list.Concat([
 		if Container.Network != _|_ for e in Container.Network {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {#rendered: _}).#rendered},
 			]
 		},
 	])
@@ -266,13 +266,13 @@ import "list"
 	// Resolved pod (scalar): a #self pod ref flattens to its .pod ref; a raw
 	// string passes through. Only present when Pod is set.
 	if Container.Pod != _|_ {
-		podString: (Container.Pod & string) | (Container.Pod & {_rendered: _})._rendered
+		podString: (Container.Pod & string) | (Container.Pod & {#rendered: _}).#rendered
 	}
 
 	// Resolved image (scalar): a raw image name passes through; an .image/.build
 	// #self flattens to its ref. Absent when Rootfs is used instead of Image.
 	if Container.Image != _|_ {
-		imageString: (Container.Image & string) | (Container.Image & {_rendered: _})._rendered
+		imageString: (Container.Image & string) | (Container.Image & {#rendered: _}).#rendered
 	}
 
 	// Resolved mounts: flattens #MountRef structs to type=...,source=... strings;
@@ -280,8 +280,8 @@ import "list"
 	mountStrings: list.Concat([
 		if Container.Mount != _|_ for e in Container.Mount {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for m in (e & [...]) {(m & string) | (m & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for m in (e & [...]) {(m & string) | (m & {#rendered: _}).#rendered},
 			]
 		},
 	])
@@ -291,20 +291,20 @@ import "list"
 	tmpfsStrings: list.Concat([
 		if Container.Tmpfs != _|_ for e in Container.Tmpfs {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for t in (e & [...]) {(t & string) | (t & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for t in (e & [...]) {(t & string) | (t & {#rendered: _}).#rendered},
 			]
 		},
 	])
 
 	// Resolved labels: raw "key=value" strings pass through; #Rendered helpers
-	// flatten via their computed _rendered.
+	// contribute their #rendered, one label or a spliced list (_#renderLabel).
 	labelStrings: list.Concat([
 		if Container.Label != _|_ for e in Container.Label {
-			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
-			]
+			list.Concat([
+				if (e & [...]) == _|_ {(_#renderLabel & {#e: e}).out},
+				if (e & [...]) != _|_ for l in (e & [...]) {(_#renderLabel & {#e: l}).out},
+			])
 		},
 	])
 }

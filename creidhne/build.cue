@@ -100,25 +100,25 @@ import "list"
 			networkStrings: list.Concat([
 				if Network != _|_ for e in Network {
 					[
-						if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-						if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {_rendered: _})._rendered},
+						if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+						if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {#rendered: _}).#rendered},
 					]
 				},
 			])
 			volumeStrings: list.Concat([
 				if Volume != _|_ for e in Volume {
 					[
-						if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-						if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {_rendered: _})._rendered},
+						if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+						if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {#rendered: _}).#rendered},
 					]
 				},
 			])
 			labelStrings: list.Concat([
 				if Label != _|_ for e in Label {
-					[
-						if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-						if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
-					]
+					list.Concat([
+						if (e & [...]) == _|_ {(_#renderLabel & {#e: e}).out},
+						if (e & [...]) != _|_ for l in (e & [...]) {(_#renderLabel & {#e: l}).out},
+					])
 				},
 			])
 		}

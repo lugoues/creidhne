@@ -3,11 +3,12 @@ package creidhne
 import "list"
 
 #Network: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).network"
 	#service: "\(_stem)-network.service"
+
 	// #self: reference handle for a Network= field, optionally decorated with
 	// connection options: units.networks.X.#self & {ip: "10.0.0.5", alias: ["web"]}.
 	#self: #NetworkSelf & {source: #ref}
@@ -60,13 +61,14 @@ import "list"
 		ContainersConfModule?: [...(string | [...string])]
 	}
 
-	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
+	// Resolved labels: raw strings pass through; #Rendered helpers contribute
+	// their #rendered, one label or a spliced list (_#renderLabel).
 	labelStrings: list.Concat([
 		if Network.Label != _|_ for e in Network.Label {
-			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
-			]
+			list.Concat([
+				if (e & [...]) == _|_ {(_#renderLabel & {#e: e}).out},
+				if (e & [...]) != _|_ for l in (e & [...]) {(_#renderLabel & {#e: l}).out},
+			])
 		},
 	])
 }

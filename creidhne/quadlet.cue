@@ -13,25 +13,25 @@ package creidhne
 
 	// Primary units (singular): name and stem are the quadlet name (not overridable).
 	#container?: #Container & {name: _qn, _stem: _qn}
-	#pod?:       #Pod & {name: _qn, _stem: _qn}
-	#volume?:    #Volume & {name: _qn, _stem: _qn}
-	#network?:   #Network & {name: _qn, _stem: _qn}
-	#kube?:      #Kube & {name: _qn, _stem: _qn}
-	#build?:     #Build & {name: _qn, _stem: _qn}
-	#image?:     #Image & {name: _qn, _stem: _qn}
-	#artifact?:  #Artifact & {name: _qn, _stem: _qn}
+	#pod?: #Pod & {name: _qn, _stem: _qn}
+	#volume?: #Volume & {name: _qn, _stem: _qn}
+	#network?: #Network & {name: _qn, _stem: _qn}
+	#kube?: #Kube & {name: _qn, _stem: _qn}
+	#build?: #Build & {name: _qn, _stem: _qn}
+	#image?: #Image & {name: _qn, _stem: _qn}
+	#artifact?: #Artifact & {name: _qn, _stem: _qn}
 
 	// Additional units (plural, keyed): stem is "<quadlet>-<name>" (name defaults
 	// to the key). name is constrained to #UnitName, which also rejects an unsafe
 	// map key (a key that isn't a valid name fails when it defaults into name).
 	containers: [Key=string]: #Container & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	pods: [Key=string]:       #Pod & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	volumes: [Key=string]:    #Volume & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	networks: [Key=string]:   #Network & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	kubes: [Key=string]:      #Kube & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	builds: [Key=string]:     #Build & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	images: [Key=string]:     #Image & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
-	artifacts: [Key=string]:  #Artifact & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	pods: [Key=string]: #Pod & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	volumes: [Key=string]: #Volume & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	networks: [Key=string]: #Network & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	kubes: [Key=string]: #Kube & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	builds: [Key=string]: #Build & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	images: [Key=string]: #Image & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	artifacts: [Key=string]: #Artifact & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
 }
 
 // #Quadlet is a self-contained, named deployment unit.

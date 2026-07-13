@@ -22,21 +22,46 @@ import (
 // Key=Value pair for labels, annotations, environment variables
 #KeyValue: =~"^[^=]+=.*$"
 
-// #Rendered carries a pre-computed #KeyValue string in its hidden _rendered
-// field, so it can stand in wherever a #KeyValue is accepted (e.g. Label=). The
-// flatteners that read _rendered live in this package; because hidden fields are
-// package-scoped, _rendered MUST be produced by a helper defined here (like
-// #JSONLabel) — a consumer package that hand-writes _rendered would find it
-// silently ignored, since its _rendered is a different field. Open (...) so a
-// helper carrying extra fields (like #JSONLabel's key/value) still satisfies it.
-#Rendered: {_rendered: #KeyValue, ...}
+// #Rendered carries a pre-computed label in its #rendered field: one
+// "key=value" string, or a list of them for a helper that expands to several
+// labels (the label flatteners splice a list in place). #rendered is a
+// definition field, visible across packages, so any package can build label
+// helpers by unifying #Rendered and setting #rendered (a hidden _rendered
+// would be package-scoped and only producible here). Definition fields never
+// survive export, so #rendered stays out of the manifest; the xStrings
+// comprehensions extract it before Go renders. Open (...) so a helper
+// carrying extra fields (like #JSONLabel's key/value) still satisfies it.
+#Rendered: {
+	#rendered: #KeyValue | [...#KeyValue]
+
+	// #renderedList normalizes #rendered for extraction: a scalar wraps into a
+	// one-element list (the default arm), a list passes through (the scalar arm
+	// errors out of the disjunction and drops). When #rendered was never made
+	// concrete, neither arm errors, the default survives holding the unresolved
+	// constraint, and the render fails loud instead of dropping the label:
+	// comprehension guards cannot make that distinction (an unset #rendered is
+	// incomplete, not erroneous, and unifies with [...] as an empty splice).
+	#renderedList: *[#rendered & string] | (#rendered & [...#KeyValue])
+	...
+}
 
 // #LabelValue accepts a raw "key=value" string or a #Rendered helper.
 #LabelValue: #KeyValue | #Rendered
 
+// _#renderLabel resolves one Label element to a flat list of label strings: a
+// raw string passes through; a #Rendered helper contributes its normalized
+// #renderedList, one label or several, spliced in place.
+_#renderLabel: {
+	#e: _
+	out: [
+		if (#e & string) != _|_ {#e},
+		if (#e & string) == _|_ for x in (#e & #Rendered).#renderedList {x},
+	]
+}
+
 // #JSONLabel renders "key=<json(value)>": a structured payload encoded as the
 // label's value, so callers stop hand-rolling json.Marshal in an interpolation.
-// value is an open struct (marshaling it, not the whole helper, keeps _rendered
+// value is an open struct (marshaling it, not the whole helper, keeps #rendered
 // out of the payload — no self-reference). An empty value marshals to "{}", so
 // the schema type-checks without a concrete payload.
 #JSONLabel: #Rendered & {
@@ -47,7 +72,7 @@ import (
 	// <, >, & into \uXXXX; a literal ' would still terminate the single-quoting,
 	// so replace it with its \uXXXX escape as well. Both keep the value valid
 	// JSON that the consumer decodes back.
-	_rendered: "'\(key)=\(strings.Replace(json.HTMLEscape(json.Marshal(value)), "'", "\\u0027", -1))'"
+	#rendered: "'\(key)=\(strings.Replace(json.HTMLEscape(json.Marshal(value)), "'", "\\u0027", -1))'"
 }
 
 // CIDR notation
@@ -76,7 +101,7 @@ import (
 // Every unit exposes a `#self` field: a typed, decoratable handle that other
 // units reference instead of a bare string. It carries a `_kind` discriminator
 // (so a volume's #self cannot be placed in a network slot) and a `source` (the
-// unit's #ref). A consuming field flattens `#self` to a string via `_rendered`,
+// unit's #ref). A consuming field flattens `#self` to a string via `#rendered`,
 // the same mechanism #SecretRef/secretStrings already use.
 
 // #ServiceName is a systemd unit name, the branded type for [Unit] dependency
@@ -90,7 +115,7 @@ import (
 #RefSelf: {
 	_kind:     string
 	source:    string
-	_rendered: source
+	#rendered: source
 }
 
 // #VolumeMountOption is a podman volume mount flag (the ":options" field of a
@@ -110,7 +135,7 @@ import (
 	target?: string
 	options?: [...#VolumeMountOption]
 	_optStr: strings.Join([if options != _|_ for o in options {o}], ",")
-	_rendered: strings.Join(list.Concat([
+	#rendered: strings.Join(list.Concat([
 		[source],
 		[if target != _|_ {target}],
 		[if _optStr != "" {_optStr}],
@@ -148,9 +173,9 @@ import (
 		[if host_interface_name != _|_ {"host_interface_name=\(host_interface_name)"}],
 		[if passthrough != _|_ for kv in passthrough {kv}],
 	]), ",")
-	// _rendered = "_prefix[:opt,opt,...]"; defined here (not in the embedding
+	// #rendered = "_prefix[:opt,opt,...]"; defined here (not in the embedding
 	// struct) so the _connStr/_prefix references stay in #NetConnOptions's scope.
-	_rendered: strings.Join(list.Concat([[_prefix], [if _connStr != "" {_connStr}]]), ":")
+	#rendered: strings.Join(list.Concat([[_prefix], [if _connStr != "" {_connStr}]]), ":")
 }
 
 // Network= destination forms. A Network= field accepts a network's #self
@@ -308,7 +333,7 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	path: =~"^/[^:]+$"
 	options?: [...#TmpfsOption]
 	_optStr: strings.Join([if options != _|_ for o in options {o}], ",")
-	_rendered: strings.Join(list.Concat([
+	#rendered: strings.Join(list.Concat([
 		[path],
 		[if _optStr != "" {_optStr}],
 	]), ":")
@@ -391,7 +416,7 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	// "4000"). podman parses this with base-8 ParseUint, so "400" is valid.
 	mode?: =~"^0?[0-7]{3,4}$"
 
-	_rendered: strings.Join(list.Concat([
+	#rendered: strings.Join(list.Concat([
 		[name],
 		[if type != _|_ {"type=\(type)"}],
 		[if target != _|_ {"target=\(target)"}],
@@ -433,7 +458,7 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	ref:         #VolumeSelf | #ImageSelf
 	destination: string
 	options?: [...#MountOption]
-	_rendered: strings.Join(list.Concat([
+	#rendered: strings.Join(list.Concat([
 		["type=\(ref._kind)", "source=\(ref.source)", "destination=\(destination)"],
 		[if options != _|_ for o in options {o}],
 	]), ",")
@@ -450,7 +475,7 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 	destination: string
 	options?: [...#MountOption]
 	passthrough?: [...#KeyValue]
-	_rendered: strings.Join(list.Concat([
+	#rendered: strings.Join(list.Concat([
 		["type=\(type)"],
 		[if source != _|_ {"source=\(source)"}],
 		["destination=\(destination)"],

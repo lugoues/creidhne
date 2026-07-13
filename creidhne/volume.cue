@@ -57,13 +57,14 @@ import "list"
 		ContainersConfModule?: [...(string | [...string])]
 	}
 
-	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
+	// Resolved labels: raw strings pass through; #Rendered helpers contribute
+	// their #rendered, one label or a spliced list (_#renderLabel).
 	labelStrings: list.Concat([
 		if Volume.Label != _|_ for e in Volume.Label {
-			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
-			]
+			list.Concat([
+				if (e & [...]) == _|_ {(_#renderLabel & {#e: e}).out},
+				if (e & [...]) != _|_ for l in (e & [...]) {(_#renderLabel & {#e: l}).out},
+			])
 		},
 	])
 }

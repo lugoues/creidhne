@@ -1,11 +1,12 @@
 package creidhne
 
 #Artifact: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).artifact"
 	#service: "\(_stem)-artifact.service"
+
 	// #self: reference handle.
 	#self: #RefSelf & {_kind: "artifact", source: #ref}
 

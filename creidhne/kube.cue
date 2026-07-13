@@ -1,11 +1,12 @@
 package creidhne
 
 #Kube: {
-	name:     string
+	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).kube"
 	#service: "\(_stem).service"
+
 	// #self: reference handle.
 	#self: #RefSelf & {_kind: "kube", source: #ref}
 

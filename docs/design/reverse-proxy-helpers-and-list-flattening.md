@@ -146,6 +146,25 @@ not composition points.
 Depth is exactly 1, documented: helpers emit flat lists; deeper nesting is a
 smell and stays a type error.
 
+## #rendered as a definition field (multi-label helpers)
+
+The original `_rendered` was a hidden field, and hidden fields are
+package-scoped: only creidhne itself could produce one, so consumer packages
+could not mint label helpers (their `_rendered` is a different field that the
+extractors never see). Renamed to `#rendered`: definition fields are visible
+across packages but still dropped at export, so any module can build helpers
+while the manifest stays clean. `#Rendered` also accepts a *list* in
+`#rendered` now; the label comprehensions splice it, giving one-helper-to-many-
+labels (the docktail/traefik shape) direct placement in `Label:`.
+
+Evaluator subtlety that shaped the implementation: comprehension guards
+cannot detect an unset `#rendered` (it is incomplete, not erroneous, and its
+list arm unifies with `[...]` as an empty splice), which silently *dropped*
+the label. Normalization therefore lives in `#Rendered.#renderedList`, a
+defaulted disjunction (`*[#rendered & string] | (#rendered & [...])`): real
+kind mismatches error an arm out, while an unset `#rendered` keeps the
+default arm alive holding the unresolved constraint, so rendering fails loud.
+
 Oddities: `Kube.Yaml` carries a non-empty constraint (compose the loosening
 with `[_, ...]`); `Build.Context` is a pattern-keyed map, not a list;
 `Network.Label` never got the `#LabelValue`/`labelStrings` treatment (only

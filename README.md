@@ -167,6 +167,28 @@ Label: ["app=web", #mySpec.#labels]   // renders as one flat Label list
 Exactly one level: helpers emit flat lists, and deeper nesting stays a type
 error.
 
+### Label helpers
+
+`Label` fields also accept structs that carry a pre-rendered value in
+`#rendered`: one `"key=value"` string or a whole list of them, spliced in
+place. `#rendered` is a definition field, so helpers work from any package,
+including vendored helper modules:
+
+```cue
+#DockTail: creidhne.#Rendered & {
+    #value: {...}
+    #rendered: [for k, v in #value {"docktail.\(k)=\(v)"}]
+}
+
+Container: Label: [
+    "app=web",
+    #DockTail & {#value: {enable: true, port: 8080}},
+]
+```
+
+`#JSONLabel` (JSON payload in a single label, quoted and escaped) is built on
+the same contract.
+
 ### Cross-references
 
 Every unit has computed `#ref` and `#service` fields for type-safe references. `#ref` is the Quadlet filename (e.g. `proxy.volume`) used in fields like `Volume`; `#service` is the systemd service Quadlet generates (e.g. `proxy-volume.service`) used in `Unit` fields like `After`/`Requires`.

@@ -2,6 +2,7 @@ package eval_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -37,5 +38,33 @@ func TestNestedListsFlattenInComprehensions(t *testing.T) {
 	want := []any{"a=b", "c=d", "e=f"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("labelStrings = %v, want %v", got, want)
+	}
+}
+
+// TestRenderedSplicesInLabels proves the #Rendered contract is writable from
+// a consumer package (this source is user CUE, not creidhne — a hidden field
+// could never cross that boundary) and that #rendered accepts one label or a
+// list, spliced flat wherever the helper sits, including in a nested list.
+func TestRenderedSplicesInLabels(t *testing.T) {
+	got := containerData(t, selfQuadlet(`{
+		#container: Container: {
+			Image: "img"
+			Label: ["a=b", {#rendered: ["c=d", "e=f"]}, {#rendered: "g=h"}, [{#rendered: ["i=j"]}, "k=l"]]
+		}
+	}`), "labelStrings")
+	want := []any{"a=b", "c=d", "e=f", "g=h", "i=j", "k=l"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("labelStrings = %v, want %v", got, want)
+	}
+}
+
+// TestRenderedIncompleteFailsLoud: a struct in Label whose #rendered never
+// becomes concrete must fail the render, not silently drop the label.
+func TestRenderedIncompleteFailsLoud(t *testing.T) {
+	err := loadSourceErr(t, selfQuadlet(`{
+		#container: Container: {Image: "img", Label: [{key: "x"}]}
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "incomplete") {
+		t.Fatalf("want incomplete-value error, got: %v", err)
 	}
 }

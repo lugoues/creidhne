@@ -87,8 +87,8 @@ import "list"
 	volumeStrings: list.Concat([
 		if Pod.Volume != _|_ for e in Pod.Volume {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for v in (e & [...]) {(v & string) | (v & {#rendered: _}).#rendered},
 			]
 		},
 	])
@@ -97,19 +97,20 @@ import "list"
 	networkStrings: list.Concat([
 		if Pod.Network != _|_ for e in Pod.Network {
 			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {_rendered: _})._rendered},
+				if (e & [...]) == _|_ {(e & string) | (e & {#rendered: _}).#rendered},
+				if (e & [...]) != _|_ for n in (e & [...]) {(n & string) | (n & {#rendered: _}).#rendered},
 			]
 		},
 	])
 
-	// Resolved labels: raw strings pass through; #Rendered helpers flatten.
+	// Resolved labels: raw strings pass through; #Rendered helpers contribute
+	// their #rendered, one label or a spliced list (_#renderLabel).
 	labelStrings: list.Concat([
 		if Pod.Label != _|_ for e in Pod.Label {
-			[
-				if (e & [...]) == _|_ {(e & string) | (e & {_rendered: _})._rendered},
-				if (e & [...]) != _|_ for l in (e & [...]) {(l & string) | (l & {_rendered: _})._rendered},
-			]
+			list.Concat([
+				if (e & [...]) == _|_ {(_#renderLabel & {#e: e}).out},
+				if (e & [...]) != _|_ for l in (e & [...]) {(_#renderLabel & {#e: l}).out},
+			])
 		},
 	])
 }
