@@ -1,7 +1,26 @@
 # Reverse-proxy pair networks, helper ecosystem, and list flattening
 
-Status: list flattening shipped; crei vendor shipped (generic); extras repo
-and the proxy helpers are next.
+Status: list flattening, crei vendor, and the proxy helpers
+(`#ReverseProxySpec`/`#TraefikProxySpec` in creidhne-extras) are shipped.
+Only the optional pair-cardinality lint rule remains.
+
+Extras placement rule (settled): a helper belongs in creidhne-extras iff it
+needs no core changes. The proxy helpers satisfy it: they ride #rendered
+multi-label placement, list flattening, star-defaulted schema fields, and a
+plain marker label. Lint layering (settled): core lint reads *rendered data*,
+never helper definitions. The `creidhne.pair=<name>` marker is the whole
+contract: any producer (extras helper or hand-written label) declares intent
+in output; core verifies graph reality against it. Invariants split two ways:
+value-shape checks live in the helper's own CUE; whole-graph cardinality is
+inexpressible in CUE and lives in core lint keyed on markers, helper-agnostic.
+
+Implementation notes from shipping the helpers: a quadlet-level mixin spec
+must be open at its top level (and at any struct a layer extends), because
+every closed conjunct vetoes unknown fields independently; #Quadlet stays
+closed and still enforces the quadlet's field set, and the final layer's
+closed #exposes literal still rejects config typos (surfacing as an
+empty-disjunction error at the Label site). netavark option confirmed as
+`no_default_route=1`.
 
 ## Problem
 
