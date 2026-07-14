@@ -65,7 +65,8 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status [quadlet...]",
 		Short: "Show desired vs recorded vs disk vs runtime state per unit",
-		Long: "status compares four layers per unit and prints one table:\n\n" +
+		Long: "status compares four layers per unit and prints one table, grouped by\n" +
+			"quadlet:\n\n" +
 			"  DISK     the CUE desired state vs crei.state (what apply last wrote)\n" +
 			"           vs the files on disk: synced, pending (your edit, run apply),\n" +
 			"           tampered (changed outside crei), missing, orphan, foreign\n" +
@@ -518,15 +519,15 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 		rows = visible
 	}
 
-	head := []string{"QUADLET", "UNIT", "DISK", "LOADED", "RUNTIME"}
+	// Rows are grouped under their quadlet name; column widths are computed
+	// globally so every group aligns. The group header sits at column zero,
+	// unit rows indent beneath it.
+	const indent = "  "
+	head := []string{"UNIT", "DISK", "LOADED", "RUNTIME"}
 	cells := make([][]string, 0, len(rows)+1)
 	cells = append(cells, head)
 	for _, r := range rows {
-		q := r.Quadlet
-		if q == "" {
-			q = "(unmanaged)"
-		}
-		cells = append(cells, []string{q, r.Path, r.Disk, dash(r.Loaded), runtimeCell(r)})
+		cells = append(cells, []string{r.Path, r.Disk, dash(r.Loaded), runtimeCell(r)})
 	}
 	widths := make([]int, len(head))
 	for _, row := range cells {
@@ -536,11 +537,12 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 			}
 		}
 	}
-	for ri, row := range cells {
+	line := func(row []string, header bool) string {
 		var b strings.Builder
+		b.WriteString(indent)
 		for i, c := range row {
 			pad := strings.Repeat(" ", widths[i]-len(c)+2)
-			if ri == 0 {
+			if header {
 				b.WriteString(dim(c))
 			} else {
 				b.WriteString(styleCell(i, row, c))
@@ -549,7 +551,23 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 				b.WriteString(pad)
 			}
 		}
-		fmt.Fprintln(out, strings.TrimRight(b.String(), " "))
+		return strings.TrimRight(b.String(), " ")
+	}
+	fmt.Fprintln(out, line(head, true))
+	group := "\x00" // sentinel: no group printed yet
+	for ri, r := range rows {
+		if r.Quadlet != group {
+			if group != "\x00" {
+				fmt.Fprintln(out)
+			}
+			group = r.Quadlet
+			name := group
+			if name == "" {
+				name = "(unmanaged)"
+			}
+			fmt.Fprintln(out, bold(name))
+		}
+		fmt.Fprintln(out, line(cells[ri+1], false))
 	}
 
 	fmt.Fprintln(out)
@@ -598,7 +616,7 @@ func runtimeCell(r statusRow) string {
 // string, so ANSI codes never skew column widths.
 func styleCell(col int, row []string, c string) string {
 	switch col {
-	case 2: // DISK
+	case 1: // DISK
 		switch c {
 		case diskSynced, diskApplied:
 			return green(c)
@@ -609,12 +627,12 @@ func styleCell(col int, row []string, c string) string {
 		default:
 			return yellow(c)
 		}
-	case 3: // LOADED
+	case 2: // LOADED
 		if c == "reload needed" || c == "not loaded" {
 			return yellow(c)
 		}
 		return c
-	case 4: // RUNTIME
+	case 3: // RUNTIME
 		switch {
 		case strings.HasPrefix(c, "✗"):
 			return red(c)

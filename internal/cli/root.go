@@ -550,12 +550,14 @@ var (
 	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorChanged))
 	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorRemove))
 	dimStyle    = lipgloss.NewStyle().Faint(true)
+	boldStyle   = lipgloss.NewStyle().Bold(true)
 )
 
 func green(s string) string  { return greenStyle.Render(s) }
 func yellow(s string) string { return yellowStyle.Render(s) }
 func red(s string) string    { return redStyle.Render(s) }
 func dim(s string) string    { return dimStyle.Render(s) }
+func bold(s string) string   { return boldStyle.Render(s) }
 
 // confirm asks for a y/N answer. On an interactive terminal it uses a huh
 // prompt; otherwise (piped stdin, CI, tests) it reads a line and returns an

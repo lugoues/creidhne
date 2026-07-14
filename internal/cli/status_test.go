@@ -199,6 +199,25 @@ func TestStatusFilterByQuadlet(t *testing.T) {
 	}
 }
 
+// TestStatusGroupedByQuadlet: the table groups units under a quadlet-name
+// header line at column zero, unit rows indented beneath it, no QUADLET
+// column.
+func TestStatusGroupedByQuadlet(t *testing.T) {
+	proj, qd := applyProject(t, buildQuad)
+	out, err := statusOut(t, proj, qd)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, want := range []string{"\nhermes\n  hermes.build", "\ntraefik\n  traefik.container"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing group header + indented row %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "QUADLET") {
+		t.Fatalf("grouped view should not have a QUADLET column:\n%s", out)
+	}
+}
+
 // TestStatusArtifactCollapse: the unfiltered overview hides synced images/
 // rows (with a count note) but keeps non-synced ones; a named quadlet shows
 // everything.
