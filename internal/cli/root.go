@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -41,10 +42,46 @@ func (errSilent) Error() string { return "" }
 // Execute runs the root command and exits non-zero on error.
 func Execute() {
 	if err := newRootCmd().Execute(); err != nil {
-		if msg := err.Error(); msg != "" {
-			fmt.Fprintln(os.Stderr, red("Error: "+msg))
+		var de *eval.DiagnosticError
+		if errors.As(err, &de) {
+			printDiagnostic(de)
+		} else if msg := err.Error(); msg != "" {
+			fmt.Fprintln(os.Stderr, styleEachLine(red, "Error: "+msg))
 		}
 		os.Exit(1)
+	}
+}
+
+// styleEachLine styles line by line: lipgloss pads a multi-line block to its
+// widest line, and the padding wraps into phantom blank lines on terminals
+// narrower than that.
+func styleEachLine(style func(string) string, s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if l != "" {
+			lines[i] = style(l)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// printDiagnostic styles a translated cue error: finding lines loud, their
+// indented positions and the whole raw detail dim, so the actionable line
+// carries the color weight.
+func printDiagnostic(de *eval.DiagnosticError) {
+	for i, line := range strings.Split(de.Findings, "\n") {
+		switch {
+		case i == 0:
+			fmt.Fprintln(os.Stderr, red("Error: "+line))
+		case strings.HasPrefix(line, "    "):
+			fmt.Fprintln(os.Stderr, dim(line))
+		default:
+			fmt.Fprintln(os.Stderr, red(line))
+		}
+	}
+	if de.Detail != "" {
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, styleEachLine(dim, de.Detail))
 	}
 }
 

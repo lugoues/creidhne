@@ -1,6 +1,17 @@
 # Error translation layer
 
-Status: spec / exploration.
+Status: shipped. Matcher catalog v1 plus specimen-driven additions:
+embedded-bottom extraction (`_|_(...)` reasons inside conflict messages are
+the finding), disjunction-element collapse (a failing list element is one
+finding, not one per probed arm field), pathless dispatch errors located
+via the embedded schema's guard lines and user positions, and the `.#self`
+hint for structs in reference slots. Field notes: cue surfaces one
+disjunction failure at a time (fix one, see the next); the did-you-mean
+candidate set must exclude the rejected field itself; closedness parents
+are `userStruct & (variantA | variantB)`, so allowed fields gather through
+And/Or expression nodes; values are unreachable through conflicted paths,
+so hints key on slot and shape; lipgloss pads multi-line blocks, so styling
+is per line. The raw detail is appended only when translation is lossy.
 
 ## Problem
 

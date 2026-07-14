@@ -114,7 +114,7 @@ func Validate(dir string, overlay map[string]load.Source) error {
 	if fails := checkFailures(v, verr, ""); len(fails) > 0 {
 		return fmt.Errorf("%s\n%s", strings.Join(fails, "\n"), cueError("validate "+dir, verr))
 	}
-	return cueError("validate "+dir, verr)
+	return diagError(v, dir, "validate "+dir, verr)
 }
 
 // checkFailures resolves helper-check failures out of a validation error:
@@ -198,7 +198,7 @@ func buildInstance(dir string, overlay map[string]load.Source) (cue.Value, error
 		if fails := checkFailures(v, err, ""); len(fails) > 0 {
 			return cue.Value{}, fmt.Errorf("%s\n%s", strings.Join(fails, "\n"), cueError("build "+dir, err))
 		}
-		return cue.Value{}, cueError("build "+dir, err)
+		return cue.Value{}, diagError(v, dir, "build "+dir, err)
 	}
 	return v, nil
 }
@@ -347,6 +347,9 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 			}
 			if label == "" {
 				label = "a " + ur.Kind
+			}
+			if fs, _ := diagnose(v, "", err); len(fs) > 0 {
+				return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s: %s (%s)", label, fs[0].loc, fs[0].msg, incompleteHint(err))
 			}
 			return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s", label, incompleteHint(err))
 		}
