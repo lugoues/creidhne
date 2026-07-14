@@ -19,8 +19,11 @@ must be open at its top level (and at any struct a layer extends), because
 every closed conjunct vetoes unknown fields independently; #Quadlet stays
 closed and still enforces the quadlet's field set, and the final layer's
 closed #exposes literal still rejects config typos (surfacing as an
-empty-disjunction error at the Label site). netavark option confirmed as
-`no_default_route=1`.
+empty-disjunction error at the Label site). Network defaults upgraded after
+review: `Internal=true` (subsumes no_default_route) plus `isolate=true`,
+because netavark before 2.0 allows cross-network traffic by default, so pair
+networks could reach each other; netavark 2.0 flipped the default to strict
+isolation (isolate since 1.1, strict value since 1.7).
 
 ## Problem
 
