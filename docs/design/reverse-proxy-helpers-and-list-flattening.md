@@ -199,3 +199,11 @@ unit whose labels can't use `#JSONLabel`), folded into this change.
 3. `creidhne-extras` bootstrap: module layout, `#ReverseProxySpec`/
    `#TraefikProxySpec`, migrate app specs as they accrete.
 4. Optional: the exactly-2-attachments lint rule on the pair marker.
+5. Core: helper validation hook. A quadlet mixing in a spec but never
+   placing it is inert: definitions are types, nothing evaluates their
+   required fields, hidden gates are not concreteness-checked (verified,
+   including Validate with cue.Hidden), and lint sees no trace in rendered
+   data. Design sketch: helpers register checks in a conventional field that
+   quadlet.cue promotes through the manifest, and eval forces them at load
+   like the filename-uniqueness checks. Until then, enforcement fires on
+   first placement (Label: [#exposes] forces port/rule).
