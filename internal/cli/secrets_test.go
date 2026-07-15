@@ -3,6 +3,9 @@ package cli
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/lugoues/creidhne/internal/podman"
 )
 
 // A project whose registry declares app-db (explicit name) and api_key (name
@@ -18,13 +21,25 @@ secrets: q.#SecretRegistry & {
 `
 
 // stubSecrets swaps the podman/valuer hooks for the duration of a test (podman
-// isn't available, and the huh form needs a TTY).
+// isn't available, and the huh form needs a TTY). Managed defaults to empty;
+// remove and read fail the test if called unexpectedly.
 func stubSecrets(t *testing.T, existing map[string]bool, create func(string, []byte, bool) error, value func(string) ([]byte, bool, error)) {
 	t.Helper()
-	ol, oc, ov := podmanListSecrets, podmanCreateSecret, secretValuer
-	t.Cleanup(func() { podmanListSecrets, podmanCreateSecret, secretValuer = ol, oc, ov })
+	ol, om, oc, orm, ord, ov := podmanListSecrets, podmanSecretInfos, podmanCreateSecret, podmanRemoveSecret, podmanReadSecret, secretValuer
+	t.Cleanup(func() {
+		podmanListSecrets, podmanSecretInfos, podmanCreateSecret, podmanRemoveSecret, podmanReadSecret, secretValuer = ol, om, oc, orm, ord, ov
+	})
 	podmanListSecrets = func() (map[string]bool, error) { return existing, nil }
+	podmanSecretInfos = func() (map[string]podman.SecretInfo, error) {
+		infos := map[string]podman.SecretInfo{}
+		for n := range existing {
+			infos[n] = podman.SecretInfo{}
+		}
+		return infos, nil
+	}
 	podmanCreateSecret = create
+	podmanRemoveSecret = func(name string) error { t.Errorf("unexpected RemoveSecret(%q)", name); return nil }
+	podmanReadSecret = func(name string) ([]byte, error) { t.Errorf("unexpected ReadSecret(%q)", name); return nil, nil }
 	secretValuer = value
 }
 
@@ -34,12 +49,16 @@ func stubSecrets(t *testing.T, existing map[string]bool, create func(string, []b
 func TestCmdSecretsList(t *testing.T) {
 	dir := setupProject(t, secretsRegistryMain)
 	stubSecrets(t, map[string]bool{"app-db": true}, nil, nil)
+	podmanSecretInfos = func() (map[string]podman.SecretInfo, error) {
+		created := time.Now().Add(-2 * time.Hour)
+		return map[string]podman.SecretInfo{"app-db": {Managed: true, CreatedAt: created, UpdatedAt: created}}, nil
+	}
 
 	out, err := runCmd(t, "--dir", dir, "secrets", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"app-db", "present", "api_key", "missing", "1 present, 1 missing"} {
+	for _, want := range []string{"app-db", "present", "api_key", "missing", "1 present, 1 missing", "CREATED", "2h ago"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("secrets output missing %q:\n%s", want, out)
 		}
@@ -148,6 +167,106 @@ func TestCmdSecretsCreateArgs(t *testing.T) {
 	}
 	if _, err := runCmd(t, "--dir", dir, "secrets", "create", "-a", "app-db"); err == nil {
 		t.Error("create with both a name and -a should error")
+	}
+}
+
+// A project with the registry plus units referencing secrets outside it: a
+// raw container Secret= string and a build Secret= entry.
+const secretsPruneMain = secretsRegistryMain + `
+app: q.#Quadlet & {
+	name: "app"
+	units: {
+		#container: Container: {
+			Image: "docker.io/x"
+			Secret: ["raw-ref,type=env,target=TOKEN"]
+		}
+		#build: {ContainerFile: "FROM alpine\n", Build: Secret: ["build-ref"]}
+	}
+}
+`
+
+// TestCmdSecretsPrune: managed ∧ unreferenced is deleted; referenced managed
+// secrets survive (registry, raw container ref, build ref); unlabeled ones
+// are skipped as not-created-by-crei.
+func TestCmdSecretsPrune(t *testing.T) {
+	dir := setupProject(t, secretsPruneMain)
+	stubSecrets(t, map[string]bool{
+		"app-db":    true, // registry, managed
+		"raw-ref":   true, // container ref, managed
+		"build-ref": true, // build ref, managed
+		"old-one":   true, // managed, unreferenced -> delete
+		"stray":     true, // unmanaged, unreferenced -> skip
+	}, nil, nil)
+	podmanSecretInfos = func() (map[string]podman.SecretInfo, error) {
+		return map[string]podman.SecretInfo{
+			"app-db":    {Managed: true},
+			"raw-ref":   {Managed: true},
+			"build-ref": {Managed: true},
+			"old-one":   {Managed: true},
+			"stray":     {},
+		}, nil
+	}
+	var removed []string
+	podmanRemoveSecret = func(name string) error { removed = append(removed, name); return nil }
+
+	out, err := runCmd(t, "--dir", dir, "secrets", "prune", "-y")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(removed) != 1 || removed[0] != "old-one" {
+		t.Fatalf("expected exactly old-one removed, got %v", removed)
+	}
+	for _, want := range []string{"delete old-one", "1 to delete", "kept (referenced)", "skipped (not created by crei)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("prune output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestCmdSecretsPruneNothing: all managed secrets referenced -> no deletions,
+// no prompt, exit zero.
+func TestCmdSecretsPruneNothing(t *testing.T) {
+	dir := setupProject(t, secretsRegistryMain)
+	stubSecrets(t, map[string]bool{"app-db": true, "stray": true}, nil, nil)
+	podmanSecretInfos = func() (map[string]podman.SecretInfo, error) {
+		return map[string]podman.SecretInfo{"app-db": {Managed: true}, "stray": {}}, nil
+	}
+
+	out, err := runCmd(t, "--dir", dir, "secrets", "prune", "-y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Nothing to prune") {
+		t.Errorf("want 'Nothing to prune':\n%s", out)
+	}
+}
+
+// TestCmdSecretsAdopt: existing unlabeled registry secrets are re-created
+// with their value byte-exact; managed and missing ones are left alone.
+func TestCmdSecretsAdopt(t *testing.T) {
+	dir := setupProject(t, secretsRegistryMain)
+	created := map[string]string{}
+	replaced := map[string]bool{}
+	stubSecrets(t, map[string]bool{"app-db": true, "api_key": true},
+		func(name string, v []byte, replace bool) error {
+			created[name] = string(v)
+			replaced[name] = replace
+			return nil
+		}, nil)
+	podmanSecretInfos = func() (map[string]podman.SecretInfo, error) {
+		return map[string]podman.SecretInfo{"app-db": {}, "api_key": {Managed: true}}, nil
+	}
+	podmanReadSecret = func(name string) ([]byte, error) { return []byte("value-of-" + name + "\n"), nil }
+
+	out, err := runCmd(t, "--dir", dir, "secrets", "adopt")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(created) != 1 || created["app-db"] != "value-of-app-db\n" || !replaced["app-db"] {
+		t.Fatalf("expected app-db re-created byte-exact with replace, got %v (replace=%v)", created, replaced)
+	}
+	if !strings.Contains(out, "app-db adopted") {
+		t.Errorf("want adoption notice:\n%s", out)
 	}
 }
 
