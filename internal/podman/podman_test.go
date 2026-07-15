@@ -24,6 +24,42 @@ func TestListSecretsParsesNames(t *testing.T) {
 	}
 }
 
+// TestSecretInfosViaInspect: labels are only reachable through
+// inspect (`ls --filter` has no label key; ls rows carry no Labels field and
+// `--format json` renders the literal string "json"). The stub replays real
+// podman 5.4 output shapes for both calls.
+func TestSecretInfosViaInspect(t *testing.T) {
+	orig := run
+	defer func() { run = orig }()
+	run = func(args ...string) ([]byte, error) {
+		switch args[1] {
+		case "ls":
+			for _, a := range args {
+				if a == "--filter" || a == "json" {
+					t.Fatalf("ls must not use --filter or a json format: %v", args)
+				}
+			}
+			return []byte("managed-one\nother-tool\n"), nil
+		case "inspect":
+			return []byte(`[
+				{"ID": "b53", "Spec": {"Name": "managed-one", "Driver": {"Name": "file"}, "Labels": {"creidhne.managed": "true"}}},
+				{"ID": "b08", "Spec": {"Name": "other-tool", "Driver": {"Name": "file"}, "Labels": {"manager": "compose"}}}
+			]`), nil
+		default:
+			t.Fatalf("unexpected podman call: %v", args)
+			return nil, nil
+		}
+	}
+
+	got, err := SecretInfos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got["managed-one"].Managed || got["other-tool"].Managed {
+		t.Errorf("SecretInfos() managed flags wrong: %+v", got)
+	}
+}
+
 func TestListSecretsEmpty(t *testing.T) {
 	orig := run
 	defer func() { run = orig }()
@@ -54,6 +90,16 @@ func TestCreateSecretArgsSeparatesFlags(t *testing.T) {
 	}
 	if sep == -1 {
 		t.Fatalf("no %q separator before the name: %v", "--", args)
+	}
+	// Every created secret carries the ownership label prune scopes to.
+	labeled := false
+	for i := 0; i < sep; i++ {
+		if args[i] == "--label" && i+1 < sep && args[i+1] == ManagedLabel {
+			labeled = true
+		}
+	}
+	if !labeled {
+		t.Fatalf("create args missing --label %s: %v", ManagedLabel, args)
 	}
 	// The hostile name must be a positional after the separator, not a flag.
 	if args[len(args)-2] != "--replace" || args[len(args)-1] != "-" {

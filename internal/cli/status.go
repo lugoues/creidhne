@@ -711,12 +711,14 @@ func runtimeSummary(rows []statusRow) string {
 
 func humanDuration(d time.Duration) string {
 	switch {
+	case d >= 72*time.Hour: // past a few days, day granularity is enough
+		return fmt.Sprintf("%dd", int(d.Hours())/24)
 	case d >= 24*time.Hour:
 		days := int(d.Hours()) / 24
 		hours := int(d.Hours()) % 24
 		return fmt.Sprintf("%dd%dh", days, hours)
-	case d >= time.Hour:
-		return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	case d >= time.Hour: // past an hour, minute granularity is noise
+		return fmt.Sprintf("%dh", int(d.Hours()))
 	case d >= time.Minute:
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	default:

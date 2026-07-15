@@ -304,12 +304,23 @@ app: creidhne.#Quadlet & {
 `crei secrets` reconciles that registry against podman's secret store:
 
 ```sh
-crei secrets list               # table of each secret: present or missing in podman
+crei secrets list               # present/missing, crei-managed, created/updated
 crei secrets create db_password # create one, typing (hidden) or generating its value
 crei secrets create -a          # walk through every secret missing from podman
+crei secrets adopt              # label pre-existing registry secrets as crei-managed
+crei secrets prune              # delete crei-created secrets nothing references
 ```
 
 `create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The registry is read from the top-level `secrets` field by default; override with `secrets_field` in `crei.toml`.
+
+Everything `create` makes carries a `creidhne.managed=true` label, and `prune`
+only ever considers labeled secrets: what crei didn't create, it never
+deletes. A secret counts as referenced if it's in the registry or named by
+any `Secret=` entry on a container or build unit. `adopt` migrates secrets
+created before labeling: it re-creates registry-declared ones in place,
+value preserved byte-exact (read via `inspect --showsecret`, piped straight
+back). Secrets referenced only inside `.kube` YAML aren't parsed; declare
+them in the registry to protect them.
 
 ### Inline Containerfile & Context
 Craei supports inlining Containerfiles and their context within a Build unit. Context files will be placed next to the Containerfile when being build so `COPY . /` is all you need to pull your context in. This is useful when you want only minor changes to the original image (such as installing packages).
