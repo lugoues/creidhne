@@ -189,6 +189,30 @@ Container: Label: [
 `#JSONLabel` (JSON payload in a single label, quoted and escaped) is built on
 the same contract.
 
+### Helper checks
+
+Helpers (and quadlets themselves) can register invariants that fail
+`validate`, `render`, `plan`, and `apply` with a real message, instead of
+silently doing nothing when a mixin's config was never filled:
+
+```cue
+#WebSpec: {
+    #cfg: port!: int
+    #checks: "web/cfg": {
+        require: [#cfg.port]                  // must be concrete to render
+        why: "fill #cfg when mixing #WebSpec" // shown on failure
+    }
+    ...
+}
+```
+
+```
+Error: quadlet app: check "web/cfg" failed: fill #cfg when mixing #WebSpec
+```
+
+A check may also carry `assert: <expr>`, which must evaluate to `true`.
+Checks never appear in rendered units or crei.state.
+
 ### Cross-references
 
 Every unit has computed `#ref` and `#service` fields for type-safe references. `#ref` is the Quadlet filename (e.g. `proxy.volume`) used in fields like `Volume`; `#service` is the systemd service Quadlet generates (e.g. `proxy-volume.service`) used in `Unit` fields like `After`/`Requires`.

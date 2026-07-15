@@ -1,6 +1,11 @@
 # Helper validation hook (`#checks`)
 
-Status: spec. Sequencing item 5 of the reverse-proxy design.
+Status: shipped (core `#checks` + the traefik check in extras). Sequencing
+item 5 of the reverse-proxy design. Implementation notes: failures are
+reported at the registration site (`#checks."name"`) rather than the
+promoted index, so the mapper resolves both path shapes; `crei validate`
+maps through the same helper. Open questions resolved: `#Check` is closed;
+naming stayed `#checks`/`checks`; a lint listing remains future work.
 
 ## Problem
 

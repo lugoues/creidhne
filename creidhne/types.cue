@@ -59,6 +59,15 @@ _#renderLabel: {
 	]
 }
 
+// #Check is one helper-registered invariant on a quadlet (see
+// #Quadlet.#checks): require lists values that must be concrete to render,
+// assert must unify to true, why is shown when the check fails.
+#Check: {
+	require?: [...]
+	assert?: true
+	why?:    string
+}
+
 // #JSONLabel renders "key=<json(value)>": a structured payload encoded as the
 // label's value, so callers stop hand-rolling json.Marshal in an interpolation.
 // value is an open struct (marshaling it, not the whole helper, keeps #rendered

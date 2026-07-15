@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -109,7 +110,71 @@ func Validate(dir string, overlay map[string]load.Source) error {
 	if err != nil {
 		return err
 	}
-	return cueError("validate "+dir, v.Validate(cue.Concrete(true)))
+	verr := v.Validate(cue.Concrete(true))
+	if fails := checkFailures(v, verr, ""); len(fails) > 0 {
+		return fmt.Errorf("%s\n%s", strings.Join(fails, "\n"), cueError("validate "+dir, verr))
+	}
+	return cueError("validate "+dir, verr)
+}
+
+// checkFailures resolves helper-check failures out of a validation error:
+// every error path through a promoted `checks` list is mapped back to that
+// entry's name and why (which stay decodable next to the failing field).
+// fallback labels the owning quadlet when root is the quadlet itself and the
+// path carries no prefix.
+func checkFailures(root cue.Value, err error, fallback string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, e := range errors.Errors(err) {
+		p := e.Path()
+		for i := 0; i+1 < len(p); i++ {
+			prefix := make([]cue.Selector, 0, i+2)
+			for _, seg := range p[:i] {
+				prefix = append(prefix, cue.Str(strings.Trim(seg, `"`)))
+			}
+			// root is the whole instance (Validate) or the quadlet value
+			// (tryQuadlet, where the error path is still absolute): try the
+			// prefixed path first, then the quadlet-relative one.
+			lookup := func(sel ...cue.Selector) cue.Value {
+				if v := root.LookupPath(cue.MakePath(append(append([]cue.Selector{}, prefix...), sel...)...)); v.Exists() {
+					return v
+				}
+				return root.LookupPath(cue.MakePath(sel...))
+			}
+			var entry cue.Value
+			var name string
+			switch p[i] {
+			case "#checks":
+				// Failure reported at the registration site: the key is the name.
+				name = strings.Trim(p[i+1], `"`)
+				entry = lookup(cue.Def("#checks"), cue.Str(name))
+			case "checks":
+				// Failure reported through the promoted list: resolve the entry.
+				idx, aerr := strconv.Atoi(p[i+1])
+				if aerr != nil {
+					continue
+				}
+				entry = lookup(cue.Str("checks"), cue.Index(idx))
+				name, _ = entry.LookupPath(cue.ParsePath("name")).String()
+			default:
+				continue
+			}
+			quad := strings.Join(p[:i], ".")
+			if quad == "" {
+				quad = fallback
+			}
+			msg := fmt.Sprintf("quadlet %s: check %q failed", quad, name)
+			if why, werr := entry.LookupPath(cue.ParsePath("why")).String(); werr == nil && why != "" {
+				msg += ": " + why
+			}
+			if !seen[msg] {
+				seen[msg] = true
+				out = append(out, msg)
+			}
+			break
+		}
+	}
+	return out
 }
 
 // buildInstance loads and builds the CUE package in dir into a single value,
@@ -128,6 +193,11 @@ func buildInstance(dir string, overlay map[string]load.Source) (cue.Value, error
 	}
 	v := cuecontext.New().BuildInstance(insts[0])
 	if err := v.Err(); err != nil {
+		// A check whose assert conflicts fails at build time, before any
+		// mapper downstream sees it; resolve name/why here too.
+		if fails := checkFailures(v, err, ""); len(fails) > 0 {
+			return cue.Value{}, fmt.Errorf("%s\n%s", strings.Join(fails, "\n"), cueError("build "+dir, err))
+		}
 		return cue.Value{}, cueError("build "+dir, err)
 	}
 	return v, nil
@@ -235,6 +305,19 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 	}
 	name, _ := v.LookupPath(cue.ParsePath("name")).String()
 	q := Quadlet{Name: name}
+
+	// Helper-registered invariants (#checks, promoted to `checks`): force
+	// them concrete so an unfilled mixin fails here instead of rendering
+	// inert. Validated and dropped; checks never reach the Quadlet.
+	if cv := v.LookupPath(cue.ParsePath("checks")); cv.Exists() {
+		if err := cv.Validate(cue.Concrete(true)); err != nil {
+			if fails := checkFailures(v, err, name); len(fails) > 0 {
+				return Quadlet{}, false, fmt.Errorf("%s", strings.Join(fails, "; "))
+			}
+			return Quadlet{}, false, fmt.Errorf("quadlet %s checks: %s", name, incompleteHint(err))
+		}
+	}
+
 	for list.Next() {
 		rec := list.Value()
 		kind, _ := rec.LookupPath(cue.ParsePath("kind")).String()

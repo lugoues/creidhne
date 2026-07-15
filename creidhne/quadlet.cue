@@ -69,6 +69,21 @@ package creidhne
 	name: #UnitName
 	units: #Units & {#quadletName: name}
 
+	// #checks holds helper-registered invariants, keyed "<helper>/<check>".
+	// A definition field: any package's mixin can register (a map, so
+	// multiple mixins merge), and it never reaches the export.
+	#checks: [Name=string]: #Check
+
+	// checks promotes #checks for enforcement (computed, like manifest):
+	// eval forces it concrete at load, maps failures to name/why, and drops
+	// it. Definitions are types, so an unpromoted check would never fire.
+	checks: [for n, c in #checks {
+		name: n
+		if c.why != _|_ {why: c.why}
+		if c.require != _|_ {require: c.require}
+		if c.assert != _|_ {assert: c.assert}
+	}]
+
 	// manifest is the exported, non-hidden contract consumed by the Go
 	// renderer. `cue export` drops hidden fields (#container, #ref, #service),
 	// so each unit's computed stem/#ref/#service are *promoted* here into
