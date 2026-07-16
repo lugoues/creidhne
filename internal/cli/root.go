@@ -92,7 +92,7 @@ func newRootCmd() *cobra.Command {
 		Long: "Creidhne renders Podman Quadlet unit files from typed, validated CUE\n" +
 			"definitions and reconciles them against a quadlet directory.\n\n" +
 			"The CUE schema is embedded in this binary, so projects resolve\n" +
-			"`import \"github.com/lugoues/creidhne@v0\"` offline.",
+			"`import \"github.com/lugoues/creidhne\"` offline.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Theme the output from crei.toml [style] before any command runs.

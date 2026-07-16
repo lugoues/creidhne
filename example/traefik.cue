@@ -1,6 +1,6 @@
 package example
 
-// import "github.com/lugoues/creidhne@v0"
+// import "github.com/lugoues/creidhne"
 import "github.com/lugoues/creidhne"
 
 traefik: creidhne.#Quadlet & {
