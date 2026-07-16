@@ -153,7 +153,8 @@ The module path doubles as the git URL (`--source` for private remotes or
 local paths); the resolved commit and a tree hash are pinned in
 `cue.mod/crei-vendor.json`. A vendored module may import only the CUE
 standard library, itself, and the creidhne schema: transitive module
-dependencies are refused.
+dependencies are refused. Use the same creidhne import form (`@v0`) in
+helper modules as in your project; mixing forms is rejected at load.
 
 ### List nesting
 
