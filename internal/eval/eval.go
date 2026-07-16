@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/build"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/errors"
 	"cuelang.org/go/cue/load"
@@ -191,6 +192,9 @@ func buildInstance(dir string, overlay map[string]load.Source) (cue.Value, error
 	if err := insts[0].Err; err != nil {
 		return cue.Value{}, cueError("load "+dir, err)
 	}
+	if err := checkImportForms(insts[0]); err != nil {
+		return cue.Value{}, err
+	}
 	v := cuecontext.New().BuildInstance(insts[0])
 	if err := v.Err(); err != nil {
 		// A check whose assert conflicts fails at build time, before any
@@ -201,6 +205,63 @@ func buildInstance(dir string, overlay map[string]load.Source) (cue.Value, error
 		return cue.Value{}, diagError(v, dir, "build "+dir, err)
 	}
 	return v, nil
+}
+
+// checkImportForms rejects mixing `import ".../creidhne"` with the @v0 form
+// anywhere in the instance or its dependencies (vendored helper modules
+// included). CUE loads the two forms as distinct packages even though both
+// resolve to the same directory, so hidden fields split per form and the
+// #self _kind discriminators stop unifying, which surfaces as unresolvable
+// disjunctions far from the cause.
+func checkImportForms(root *build.Instance) error {
+	forms := map[string][]string{}
+	seen := map[*build.Instance]bool{}
+	var walk func(*build.Instance)
+	walk = func(bi *build.Instance) {
+		if bi == nil || seen[bi] {
+			return
+		}
+		seen[bi] = true
+		for _, f := range bi.Files {
+			for _, imp := range f.Imports {
+				p := strings.Trim(imp.Path.Value, `"`)
+				if base, _, _ := strings.Cut(p, "@"); base != ModulePath {
+					continue
+				}
+				name := filepath.Base(f.Filename)
+				if strings.Contains(f.Filename, "cue.mod") {
+					name += " (vendored)"
+				}
+				forms[p] = append(forms[p], name)
+			}
+		}
+		for _, dep := range bi.Imports {
+			walk(dep)
+		}
+	}
+	walk(root)
+	if len(forms) < 2 {
+		return nil
+	}
+	var lines []string
+	for _, form := range sortedKeysOf(forms) {
+		files := forms[form]
+		sort.Strings(files)
+		if len(files) > 4 {
+			files = append(files[:4], fmt.Sprintf("and %d more", len(files)-4))
+		}
+		lines = append(lines, fmt.Sprintf("  %q in %s", form, strings.Join(files, ", ")))
+	}
+	return fmt.Errorf("conflicting creidhne import forms load the schema as separate packages, so typed handles (#self) stop unifying:\n%s\nuse one form everywhere; crei init writes %q", strings.Join(lines, "\n"), ModulePath+"@v0")
+}
+
+func sortedKeysOf[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // cueError expands a cuelang error so every underlying error is shown with its
