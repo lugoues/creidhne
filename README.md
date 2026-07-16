@@ -85,7 +85,7 @@ A quadlet with a container and a volume:
 ```cue
 package quadlets
 
-import "github.com/lugoues/creidhne@v0"
+import "github.com/lugoues/creidhne"
 
 app: creidhne.#Quadlet & {
     name: "app"
@@ -518,7 +518,7 @@ Colors are hex (`#3FB950`) or an ANSI index (`0`–`255`); an unknown attribute 
 
 ## How it works
 
-CUE validates and exports your unit definitions as plain data; **Go does the rendering**. Each `#Quadlet` exposes a `manifest` (the typed data plus computed filenames/service names); the CLI evaluates it via the embedded `cuelang.org/go` library (resolving your `import "github.com/lugoues/creidhne@v0"` from the **schema baked into the binary**, with no network or registry), then renders each unit through a Go `text/template` and reconciles the result against your quadlet directory.
+CUE validates and exports your unit definitions as plain data; **Go does the rendering**. Each `#Quadlet` exposes a `manifest` (the typed data plus computed filenames/service names); the CLI evaluates it via the embedded `cuelang.org/go` library (resolving your `import "github.com/lugoues/creidhne"` from the **schema baked into the binary**, with no network or registry), then renders each unit through a Go `text/template` and reconciles the result against your quadlet directory.
 
 Your editor's CUE tooling resolves the import from a vendored copy that `crei init` writes into `cue.mod/usr/` (and that the binary keeps in sync), so the LSP works offline, with nothing to fetch from a registry.
 
@@ -530,7 +530,7 @@ internal/eval/       # CUE evaluation (cue/load + overlay) → manifest
 internal/render/     # text/template execution → unit files
 internal/reconcile/  # plan / diff / apply against the quadlet dir
 internal/cli/        # cobra commands
-creidhne/            # CUE schema module (github.com/lugoues/creidhne@v0)
+creidhne/            # CUE schema module (github.com/lugoues/creidhne)
 templates/           # Go text/templates, one per unit type
 testdata/            # golden fixtures (input.cue + expected/)
 example/             # a realistic multi-quadlet project

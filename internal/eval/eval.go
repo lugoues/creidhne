@@ -252,7 +252,7 @@ func checkImportForms(root *build.Instance) error {
 		}
 		lines = append(lines, fmt.Sprintf("  %q in %s", form, strings.Join(files, ", ")))
 	}
-	return fmt.Errorf("conflicting creidhne import forms load the schema as separate packages, so typed handles (#self) stop unifying:\n%s\nuse one form everywhere; crei init writes %q", strings.Join(lines, "\n"), ModulePath+"@v0")
+	return fmt.Errorf("conflicting creidhne import forms load the schema as separate packages, so typed handles (#self) stop unifying:\n%s\nuse one form everywhere; crei init writes %q", strings.Join(lines, "\n"), ModulePath)
 }
 
 func sortedKeysOf[V any](m map[string]V) []string {
@@ -518,7 +518,7 @@ func normalizeValue(v any) (any, error) {
 
 // Overlay vendors the embedded schema module under
 // moduleRoot/cue.mod/usr/<ModulePath>/..., mirroring the repo's on-disk symlink
-// layout so `import "github.com/lugoues/creidhne@v0"` resolves offline. schemaFS
+// layout so `import "github.com/lugoues/creidhne"` resolves offline. schemaFS
 // must contain the module under a top-level "creidhne/" directory.
 func Overlay(moduleRoot string, schemaFS fs.FS) (map[string]load.Source, error) {
 	overlay := map[string]load.Source{}

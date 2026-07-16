@@ -367,7 +367,7 @@ func moduleNameFor(projectDir string) string {
 
 const sampleMain = `package quadlets
 
-import "github.com/lugoues/creidhne@v0"
+import "github.com/lugoues/creidhne"
 
 // A minimal example. Run 'crei plan' to preview, 'crei apply' to write.
 hello: creidhne.#Quadlet & {
