@@ -23,7 +23,12 @@ empty-disjunction error at the Label site). Network defaults upgraded after
 review: `Internal=true` (subsumes no_default_route) plus `isolate=true`,
 because netavark before 2.0 allows cross-network traffic by default, so pair
 networks could reach each other; netavark 2.0 flipped the default to strict
-isolation (isolate since 1.1, strict value since 1.7).
+isolation (isolate since 1.1, strict value since 1.7). DisableDNS was later
+retracted from the guarantees, reluctantly: combined with Internal, podman
+< 6 omits the network's gateway address and traefik's docker client fails
+on Gateway "<nil>", never configuring the backend (podman#28705, fixed for
+podman 6). Until podman 6 is the floor, the DNS egress side-channel it
+closed stays open, a known accepted gap; it returns when the floor rises.
 
 ## Problem
 
@@ -89,8 +94,10 @@ Key decisions (settled):
   (`proxy:`) is a pure CUE handle. Attachments always go through the
   canonical `units.networks.<key>.#self`.
 - **Opinionated pair-network defaults** (override-friendly, star-defaulted):
-  `DisableDNS: *true | bool` (traefik dials container IPs from inspect data,
-  DNS is dead weight) and `Options: ["no_default_route=true"]` (pair network
+  `DisableDNS: *true | bool` (isolation, not hygiene: aardvark forwards
+  non-container queries to the host's resolvers, so DNS is an egress
+  side-channel through an Internal network, and DisableDNS is its only
+  per-network off-switch) and `Options: ["no_default_route=true"]` (pair network
   must never become an egress path). Verify exact netavark option spelling at
   implementation. Also a `creidhne.pair=<name>` marker label for the future
   lint rule.
