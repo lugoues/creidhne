@@ -71,7 +71,10 @@ package creidhne
 
 	// #checks holds helper-registered invariants, keyed "<helper>/<check>".
 	// A definition field: any package's mixin can register (a map, so
-	// multiple mixins merge), and it never reaches the export.
+	// multiple mixins merge), and it never reaches the export. Register
+	// through an open literal (#checks: {"name": {...}, ...}): a mixin's
+	// registration literal is definition-nested and therefore closed, and
+	// two closed single-key registrations on one quadlet veto each other.
 	#checks: [Name=string]: #Check
 
 	// checks promotes #checks for enforcement (computed, like manifest):

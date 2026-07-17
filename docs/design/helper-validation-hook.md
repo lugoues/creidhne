@@ -154,3 +154,28 @@ graph, or the importer.
 2. Should `#Check` stay closed (typo safety) with additive versioning, or
    open for forward compatibility?
 3. Should `crei lint` list registered checks as an informational view?
+
+## Field note: registrations must be open literals (2026-07-17)
+
+The first quadlet mixing two check-registering mixins
+(`#TraefikProxyMixin` + `#StaticNetworkMixin` on one `#Quadlet`) failed
+with `#checks."<name>": field not allowed` for *both* checks. The
+shorthand registration `#checks: "name": {...}` is a definition-nested
+literal, so it closes the `#checks` map to its single key; two such
+registrations veto each other. One mixin alone unifies fine with the
+core's open pattern, which is why single-mixin tests never caught it.
+
+Convention (also documented at the `#checks` declaration): register via
+
+```cue
+#checks: {
+    "helper/check": {...}
+    ...
+}
+```
+
+Wart observed while diagnosing: `checkFailures` maps any error whose path
+traverses `#checks."<name>"` into a `check "<name>" failed` line, so the
+closedness rejection was mislabeled as two why-less check failures above
+the real `field not allowed` error. Mapping only genuine assert/require
+conflicts would remove the misdirection.
