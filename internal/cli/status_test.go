@@ -30,7 +30,21 @@ func TestStatusFreshAllMissing(t *testing.T) {
 	}
 }
 
+// noSystemctl makes the runtime layer deterministically unavailable: CI
+// runners have a live systemd that truthfully reports test units as
+// not-found, which is not the layer these tests exercise.
+func noSystemctl(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "systemctl"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 func TestStatusSyncedAfterApply(t *testing.T) {
+	noSystemctl(t)
 	proj, qd := applyProject(t, stateMain)
 	out, err := statusOut(t, proj, qd)
 	if err != nil {
@@ -343,6 +357,7 @@ ActiveEnterTimestamp=
 // TestStatusJSON: --format json emits every row (artifacts included, nothing
 // hidden) with stable keys and the clean verdict.
 func TestStatusJSON(t *testing.T) {
+	noSystemctl(t)
 	proj, qd := applyProject(t, buildQuad)
 	out, err := statusOut(t, proj, qd, "--format", "json")
 	if err != nil {
