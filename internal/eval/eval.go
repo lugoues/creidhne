@@ -223,7 +223,7 @@ func checkImportForms(root *build.Instance) error {
 		}
 		seen[bi] = true
 		for _, f := range bi.Files {
-			for _, imp := range f.Imports {
+			for imp := range f.ImportSpecs() {
 				p := strings.Trim(imp.Path.Value, `"`)
 				if base, _, _ := strings.Cut(p, "@"); base != ModulePath {
 					continue
