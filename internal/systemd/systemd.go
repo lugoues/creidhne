@@ -51,6 +51,22 @@ var run = func(args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
+// Restart restarts the named units in one systemctl call. userScope selects
+// `systemctl --user`.
+func Restart(userScope bool, units []string) error {
+	if len(units) == 0 {
+		return nil
+	}
+	args := make([]string, 0, len(units)+2)
+	if userScope {
+		args = append(args, "--user")
+	}
+	args = append(args, "restart")
+	args = append(args, units...)
+	_, err := run(args...)
+	return err
+}
+
 // Show fetches runtime state for the named units in one systemctl call.
 // userScope selects `systemctl --user`. An empty unit list returns an empty
 // map without invoking systemctl.

@@ -94,14 +94,18 @@ func newPlanCmd() *cobra.Command {
 }
 
 func newDiffCmd() *cobra.Command {
-	return &cobra.Command{
+	var stale bool
+	cmd := &cobra.Command{
 		Use:   "diff",
-		Short: "Diff generated files against the live quadlet directory",
+		Short: "Diff generated files against the live quadlet directory (--stale: running config vs applied)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig()
 			if err != nil {
 				return err
+			}
+			if stale {
+				return diffStale(cmd.OutOrStdout(), cfg)
 			}
 			desired, err := generate(cfg.ProjectDir)
 			if err != nil {
@@ -119,6 +123,8 @@ func newDiffCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&stale, "stale", false, "diff each stale unit's running config against the currently applied file")
+	return cmd
 }
 
 func newApplyCmd() *cobra.Command {

@@ -40,7 +40,8 @@ type statusRow struct {
 	Loaded   string // "", "ok", "reload needed", "not loaded"
 	Runtime  string // "", "running", "failed", ...
 	Since    time.Duration
-	Stale    bool // running, but started before this file's last content change
+	Stale    bool   // running, but started before this file's last content change
+	StaleNote string // what the staleness means: changed keys, recreate required
 	artifact bool
 }
 
@@ -73,7 +74,9 @@ func newStatusCmd() *cobra.Command {
 			"  LOADED   whether systemd's generator has picked the file up\n" +
 			"           (not loaded / reload needed / ok)\n" +
 			"  RUNTIME  the service's ActiveState, how long it has been up, and\n" +
-			"           (stale) when the running process predates the last apply\n\n" +
+			"           (stale: ...) when the running process predates the last apply,\n" +
+			"           annotated with the changed keys and whether a restart can even\n" +
+			"           apply them (see crei diff --stale, crei restart --stale)\n\n" +
 			"Every layer degrades independently: a broken CUE eval falls back to\n" +
 			"recorded state, no crei.state falls back to desired vs disk, and a\n" +
 			"missing systemd leaves the runtime columns blank. Read-only.\n\n" +
@@ -423,6 +426,7 @@ func classifyRows(in statusInput) []statusRow {
 						row.Since = in.Now.Sub(rt.ActiveEnter)
 						if inState && rec.AppliedAt.After(rt.ActiveEnter) {
 							row.Stale = true
+							row.StaleNote = staleNote(p, rec, rt.ActiveEnter)
 						}
 					}
 				}
@@ -596,7 +600,11 @@ func runtimeCell(r statusRow) string {
 		cell += " " + humanDuration(r.Since)
 	}
 	if r.Stale {
-		cell += " (stale)"
+		cell += " (stale"
+		if r.StaleNote != "" {
+			cell += ": " + r.StaleNote
+		}
+		cell += ")"
 	}
 	return cell
 }
@@ -646,7 +654,7 @@ func styleCell(col int, row []string, c string) string {
 		switch {
 		case strings.HasPrefix(c, "failed"):
 			return red(c)
-		case strings.Contains(c, "(stale)"):
+		case strings.Contains(c, "(stale"):
 			return yellow(c)
 		// "activating" does not prefix-match "active": the words diverge
 		// at the sixth character.
@@ -759,6 +767,7 @@ type statusRowJSON struct {
 	Runtime      string `json:"runtime,omitempty"`
 	SinceSeconds int64  `json:"sinceSeconds,omitempty"`
 	Stale        bool   `json:"stale"`
+	StaleNote    string `json:"staleNote,omitempty"`
 }
 
 func renderStatusJSON(out io.Writer, quadletDir string, rows []statusRow, notes []string) error {
@@ -784,6 +793,7 @@ func renderStatusJSON(out io.Writer, quadletDir string, rows []statusRow, notes 
 			Runtime:      r.Runtime,
 			SinceSeconds: int64(r.Since / time.Second),
 			Stale:        r.Stale,
+			StaleNote:    r.StaleNote,
 		})
 	}
 	enc := json.NewEncoder(out)

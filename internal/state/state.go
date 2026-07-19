@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/lugoues/creidhne/internal/eval"
@@ -41,12 +42,43 @@ type Unit struct {
 
 // File records one file crei wrote: its quadlet-dir-relative path, the SHA-256
 // of the bytes written, the mode, and when its content last changed via apply
-// (carried forward across applies that leave it untouched).
+// (carried forward across applies that leave it untouched). Top-level unit
+// files also retain their exact content plus superseded versions, so the
+// config a still-running unit was created from stays diffable after later
+// applies (staleness diffs); images/ artifacts carry neither.
 type File struct {
 	Path      string    `json:"path"`
 	SHA256    string    `json:"sha256"`
 	Mode      string    `json:"mode"`
 	AppliedAt time.Time `json:"appliedAt"`
+	Content   string    `json:"content,omitempty"`
+	History   []Revision `json:"history,omitempty"`
+}
+
+// Revision is one superseded applied content of a file, oldest first.
+type Revision struct {
+	SHA256    string    `json:"sha256"`
+	AppliedAt time.Time `json:"appliedAt"`
+	Content   string    `json:"content"`
+}
+
+// historyCap bounds retained versions per file; a unit left running through
+// more content changes than this loses its diff, never its staleness flag.
+const historyCap = 10
+
+// InEffectAt returns the file content that was applied and current at t: the
+// newest version (history or present) whose AppliedAt is not after t. ok is
+// false when that version predates retention (or content was never recorded).
+func (f File) InEffectAt(t time.Time) (content string, ok bool) {
+	if !f.AppliedAt.After(t) {
+		return f.Content, f.Content != ""
+	}
+	for i := len(f.History) - 1; i >= 0; i-- {
+		if !f.History[i].AppliedAt.After(t) {
+			return f.History[i].Content, f.History[i].Content != ""
+		}
+	}
+	return "", false
 }
 
 // Quadlet is one quadlet's record: the manifest as evaluated at apply time and
@@ -156,8 +188,28 @@ func Build(creiVersion string, now time.Time, prev *State, quads []eval.Quadlet,
 		for _, p := range paths {
 			in := filesByQuadlet[q.Name][p]
 			f := File{Path: p, SHA256: HashBytes(in.Content), Mode: in.Mode, AppliedAt: now}
-			if pf, ok := prevFiles[p]; ok && pf.SHA256 == f.SHA256 {
-				f.AppliedAt = pf.AppliedAt
+			// Content (and history) only for unit files, which are always
+			// top-level; images/ artifacts can be binary and no service runs
+			// from them, so they have no staleness to diff.
+			if !strings.Contains(p, "/") {
+				f.Content = string(in.Content)
+			}
+			if pf, ok := prevFiles[p]; ok {
+				if pf.SHA256 == f.SHA256 {
+					f.AppliedAt = pf.AppliedAt
+					f.History = pf.History
+				} else {
+					f.History = pf.History
+					// Pre-history records carry no content; nothing to retain.
+					if pf.Content != "" {
+						f.History = append(append([]Revision{}, pf.History...), Revision{
+							SHA256: pf.SHA256, AppliedAt: pf.AppliedAt, Content: pf.Content,
+						})
+					}
+					if n := len(f.History) - historyCap; n > 0 {
+						f.History = f.History[n:]
+					}
+				}
 			}
 			rec.Files = append(rec.Files, f)
 		}
