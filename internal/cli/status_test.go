@@ -119,7 +119,7 @@ func fakeSystemctl(t *testing.T, showOutput string) {
 func TestStatusRuntimeColumns(t *testing.T) {
 	twoQuads := `package config
 import "github.com/lugoues/creidhne@v0"
-app: creidhne.#Quadlet & {name: "app", units: #container: Container: Image: "docker.io/x"}
+app: creidhne.#Quadlet & {name: "app", units: {#container: Container: Image: "docker.io/x", networks: net: {}}}
 db: creidhne.#Quadlet & {name: "db", units: #container: Container: {Image: "docker.io/pg", ContainerName: "db"}}
 `
 	proj, qd := applyProject(t, twoQuads)
@@ -138,12 +138,21 @@ ActiveState=failed
 SubState=failed
 NeedDaemonReload=no
 ActiveEnterTimestamp=
+
+Id=app-net-network.service
+LoadState=loaded
+ActiveState=active
+SubState=exited
+NeedDaemonReload=no
+ActiveEnterTimestamp=
 `)
 	out, err := statusOut(t, proj, qd)
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	for _, want := range []string{"● running", "(stale)", "reload needed", "✗ failed"} {
+	// The state glyph leads each row systemctl-style; oneshot units
+	// (network) read active, as healthy as running.
+	for _, want := range []string{"● app.container", "✗ db.container", "● app-net.network", "active", "(stale)", "reload needed", "failed"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runtime columns missing %q:\n%s", want, out)
 		}

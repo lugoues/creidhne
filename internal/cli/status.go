@@ -539,7 +539,6 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 	}
 	line := func(row []string, header bool) string {
 		var b strings.Builder
-		b.WriteString(indent)
 		for i, c := range row {
 			pad := strings.Repeat(" ", widths[i]-len(c)+2)
 			if header {
@@ -553,7 +552,7 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 		}
 		return strings.TrimRight(b.String(), " ")
 	}
-	fmt.Fprintln(out, line(head, true))
+	fmt.Fprintln(out, indent+line(head, true))
 	group := "\x00" // sentinel: no group printed yet
 	for ri, r := range rows {
 		if r.Quadlet != group {
@@ -567,7 +566,7 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 			}
 			fmt.Fprintln(out, bold(name))
 		}
-		fmt.Fprintln(out, line(cells[ri+1], false))
+		fmt.Fprintln(out, glyphFor(r)+" "+line(cells[ri+1], false))
 	}
 
 	fmt.Fprintln(out)
@@ -593,16 +592,6 @@ func runtimeCell(r statusRow) string {
 		return "-"
 	}
 	cell := r.Runtime
-	switch r.Runtime {
-	case "running":
-		cell = "● running"
-	case "failed":
-		cell = "✗ failed"
-	case "inactive":
-		cell = "○ inactive"
-	case "activating", "deactivating":
-		cell = "◌ " + r.Runtime
-	}
 	if r.Since > 0 {
 		cell += " " + humanDuration(r.Since)
 	}
@@ -610,6 +599,27 @@ func runtimeCell(r statusRow) string {
 		cell += " (stale)"
 	}
 	return cell
+}
+
+// glyphFor is the systemctl-style state dot at the start of each unit row:
+// the fastest health read on a stack is one column of green dots. Healthy
+// covers active as well as running (oneshot network/volume/build units are
+// "active (exited)" forever).
+func glyphFor(r statusRow) string {
+	switch {
+	case r.Runtime == "":
+		return " "
+	case r.Runtime == "failed":
+		return red("✗")
+	case r.Stale:
+		return yellow("●")
+	case r.Runtime == "running" || r.Runtime == "active":
+		return green("●")
+	case r.Runtime == "inactive":
+		return dim("○")
+	default: // activating, deactivating, reloading, ...
+		return "◌"
+	}
 }
 
 // styleCell colors DISK and RUNTIME cells; the padding math runs on the plain
@@ -634,11 +644,13 @@ func styleCell(col int, row []string, c string) string {
 		return c
 	case 3: // RUNTIME
 		switch {
-		case strings.HasPrefix(c, "✗"):
+		case strings.HasPrefix(c, "failed"):
 			return red(c)
 		case strings.Contains(c, "(stale)"):
 			return yellow(c)
-		case strings.HasPrefix(c, "●"):
+		// "activating" does not prefix-match "active": the words diverge
+		// at the sixth character.
+		case strings.HasPrefix(c, "running"), strings.HasPrefix(c, "active"):
 			return green(c)
 		case c == "-":
 			return c
@@ -681,7 +693,7 @@ func runtimeSummary(rows []statusRow) string {
 		return ""
 	}
 	var parts []string
-	for _, k := range []string{"running", "running stale", "failed", "inactive", "activating"} {
+	for _, k := range []string{"running", "running stale", "active", "active stale", "failed", "inactive", "activating"} {
 		n := run[k]
 		delete(run, k)
 		if n == 0 {
@@ -691,7 +703,7 @@ func runtimeSummary(rows []statusRow) string {
 		switch k {
 		case "failed":
 			p = red(p)
-		case "running stale":
+		case "running stale", "active stale":
 			p = yellow(p)
 		}
 		parts = append(parts, p)
