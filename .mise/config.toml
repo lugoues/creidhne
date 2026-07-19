@@ -7,8 +7,8 @@ go = "latest"
 aube = "latest"
 "npm:@withgraphite/graphite-cli" = "stable"
 "aqua:tombi-toml/tombi" = "0.9.20"
-"aqua:biomejs/biome" = "latest"
 golangci-lint = "2.12.2"
+"aqua:cli/cli" = "latest"
 
 [settings]
 activate_aggressive = true
