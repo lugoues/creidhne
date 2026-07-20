@@ -17,7 +17,7 @@ test: testing.#Test & {
 					ServiceName: "custom-storage"
 					Driver:      "local"
 					Type:        "tmpfs"
-					Device: ["/dev/sda1", "/dev/sdb1"]
+					Device: "/dev/sda1"
 					Options: ["size=1G", "noexec"]
 					Copy:  false
 					User:  "appuser"

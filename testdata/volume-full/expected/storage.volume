@@ -3,11 +3,9 @@
 VolumeName=app-storage
 ServiceName=custom-storage
 Driver=local
-Options=size=1G
-Options=noexec
+Options=size=1G,noexec
 Type=tmpfs
 Device=/dev/sda1
-Device=/dev/sdb1
 Copy=false
 Image=docker.io/volume-init:latest
 User=appuser

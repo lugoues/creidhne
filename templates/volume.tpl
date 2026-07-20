@@ -7,11 +7,11 @@
 {{ end -}}
 {{ if .Volume.Driver -}}Driver={{ .Volume.Driver }}
 {{ end -}}
-{{ range .Volume.Options -}}Options={{ . }}
+{{ if .Volume.Options -}}Options={{ range $i, $o := .Volume.Options }}{{ if $i }},{{ end }}{{ $o }}{{ end }}
 {{ end -}}
 {{ if .Volume.Type -}}Type={{ .Volume.Type }}
 {{ end -}}
-{{ range .Volume.Device -}}Device={{ . }}
+{{ if .Volume.Device -}}Device={{ .Volume.Device }}
 {{ end -}}
 Copy={{ .Volume.Copy }}
 {{ if .Volume.Image -}}Image={{ .Volume.Image }}

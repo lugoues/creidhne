@@ -336,6 +336,13 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 // typed #UlimitSpec.
 #UlimitEntry: #Ulimit | #UlimitSpec
 
+// #VolumeOption is one [Volume] Options= element: a mount(8) -o option,
+// a bare flag ("rw", "noexec") or key=value ("addr=host", "size=1G").
+// Comma-free by construction: the template joins elements with "," into
+// the single `o=` payload quadlet accepts, so an embedded comma (e.g. a
+// pre-joined "rw,noexec" pasted as one element) would corrupt the join.
+#VolumeOption: =~"^[^,]+$"
+
 // #TmpfsOption is one mount option for a typed #TmpfsSpec: a known kernel/podman
 // tmpfs flag, or a key=value (size=, mode=, uid=, gid=, nr_blocks=, nr_inodes=,
 // huge=). Not exhaustive (mpol= and exotic flags fall back to the raw-string form

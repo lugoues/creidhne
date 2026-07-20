@@ -29,11 +29,16 @@ import "list"
 		// Specify the volume driver name. When set to "image", the Image key must also be set.
 		Driver?: string
 		// The mount options to use for a filesystem, per mount(8) -o option.
-		Options?: [...(string | [...string])]
+		// A typed list here; the template joins it into ONE Options= line:
+		// unlike [Network] Options (a repeatable --opt), quadlet folds the
+		// [Volume] value into a single `--opt o=<value>` and keeps only the
+		// last occurrence, so multiple lines would silently drop options.
+		Options?: [...#VolumeOption]
 		// The filesystem type of Device, per mount(8) -t option.
 		Type?: string
-		// The path of a device which is mounted for the volume.
-		Device?: [...(string | [...string])]
+		// The path of a device which is mounted for the volume. Single-valued:
+		// a volume mounts one device.
+		Device?: string
 		// If enabled, the content of the image at the mountpoint is copied into the volume on first run.
 		Copy: *true | bool
 		// Specifies the image the volume is based on when Driver is set to "image".
