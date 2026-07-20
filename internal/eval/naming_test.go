@@ -20,7 +20,7 @@ func loadSource(t *testing.T, src string) []eval.Quadlet {
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(src)
 	quads, err := eval.LoadAndValidate(tmp, overlay)
 	if err != nil {
@@ -245,7 +245,7 @@ func loadSourceErr(t *testing.T, src string) error {
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(src)
 	_, err = eval.LoadAndValidate(tmp, overlay)
 	return err

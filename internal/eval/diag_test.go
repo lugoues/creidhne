@@ -122,9 +122,12 @@ func TestDiagDispatchErrorsLocated(t *testing.T) {
 	}
 }
 
-// TestDiagEmbeddedBottomExtracted: when a helper's list bottoms out inside
-// an interpolation, cue buries the reason as _|_(...) in a huge conflict
-// message; the finding must carry the reason, not a stub.
+// TestDiagEmbeddedBottomExtracted: a helper's list bottoming out inside an
+// interpolation must yield a located finding, not a stub. Under cue 0.16
+// the reason arrived as a _|_(...) dump inside a huge conflict message
+// (extracted by bottomRe); cue 0.17 reports a clean "error in call to
+// list.Concat" but drops the underlying reason from the message entirely,
+// so the finding asserts location over cause.
 func TestDiagEmbeddedBottomExtracted(t *testing.T) {
 	err := loadSourceErr(t, `package naming
 
@@ -151,8 +154,10 @@ app: q.#Quadlet & {
 	if i := strings.Index(findings, "\nbuild "); i >= 0 {
 		findings = findings[:i]
 	}
-	if !strings.Contains(findings, "required field missing: port") {
-		t.Fatalf("embedded bottom reason not extracted:\n%v", err)
+	if !strings.Contains(findings, "error in call to list.Concat") ||
+		!strings.Contains(findings, "Label (flattened)") ||
+		!strings.Contains(findings, "main.cue:16:63") {
+		t.Fatalf("embedded bottom not located:\n%v", err)
 	}
 	if strings.Contains(findings, "values…") {
 		t.Fatalf("contentless stub leaked:\n%v", err)

@@ -20,7 +20,7 @@ func multiFileProject(t *testing.T, files map[string]string) (string, map[string
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	for name, src := range files {
 		overlay[filepath.Join(tmp, name)] = load.FromString(src)
 	}

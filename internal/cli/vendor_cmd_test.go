@@ -16,7 +16,7 @@ func gitModuleRepo(t *testing.T, modulePath string, files map[string]string) str
 	}
 	repo := t.TempDir()
 	mustWrite(t, filepath.Join(repo, "cue.mod", "module.cue"),
-		"module: \""+modulePath+"@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \""+modulePath+"@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	for rel, content := range files {
 		mustWrite(t, filepath.Join(repo, rel), content)
 	}

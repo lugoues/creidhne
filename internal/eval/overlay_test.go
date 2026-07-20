@@ -24,7 +24,7 @@ func TestOverlayOffline(t *testing.T) {
 	}
 	// Supply the user's project via the overlay too, so tmp stays empty on disk.
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
 
 import q "github.com/lugoues/creidhne@v0"
@@ -68,7 +68,7 @@ func TestDiscoverNestedQuadlets(t *testing.T) {
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
 
 import q "github.com/lugoues/creidhne@v0"
@@ -106,7 +106,7 @@ func TestDiscoverIgnoresFalseManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
 
 import q "github.com/lugoues/creidhne@v0"
@@ -138,7 +138,7 @@ func TestValidateRejectsIncomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
 
 import q "github.com/lugoues/creidhne@v0"
@@ -169,7 +169,7 @@ func TestIncompleteUnitConciseError(t *testing.T) {
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(`package demo
 
 import q "github.com/lugoues/creidhne@v0"

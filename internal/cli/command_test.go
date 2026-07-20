@@ -40,7 +40,7 @@ func setupProject(t *testing.T, mainCue string) string {
 	t.Helper()
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "cue.mod", "module.cue"),
-		"module: \"example.com/test@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/test@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	mustWrite(t, filepath.Join(dir, "main.cue"), mainCue)
 	return dir
 }
@@ -294,7 +294,7 @@ func TestCmdDiffStyleInline(t *testing.T) {
 func TestCmdCrossQuadletNetworkName(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "cue.mod", "module.cue"),
-		"module: \"example.com/test@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/test@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	mustWrite(t, filepath.Join(dir, "provider.cue"), `package config
 import q "github.com/lugoues/creidhne@v0"
 provider: q.#Quadlet & {name: "provider", units: networks: internal: Network: Internal: true}

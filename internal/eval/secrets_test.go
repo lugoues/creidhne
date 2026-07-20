@@ -19,7 +19,7 @@ func secretsProject(t *testing.T, mainCue string) (string, map[string]load.Sourc
 		t.Fatal(err)
 	}
 	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
-		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.16.0\"\n")
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
 	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(mainCue)
 	return tmp, overlay
 }

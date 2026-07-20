@@ -153,7 +153,7 @@ func runInit(out io.Writer, projectDir string) error {
 	module := moduleNameFor(projectDir)
 
 	created, err := writeIfAbsent(filepath.Join(projectDir, "cue.mod", "module.cue"),
-		fmt.Sprintf("module: %q\nlanguage: {\n\tversion: \"v0.16.0\"\n}\n", module))
+		fmt.Sprintf("module: %q\nlanguage: {\n\tversion: \"v0.17.0\"\n}\n", module))
 	if err != nil {
 		return err
 	}
