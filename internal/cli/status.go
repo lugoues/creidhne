@@ -33,16 +33,16 @@ const (
 
 // statusRow is one line of the table.
 type statusRow struct {
-	Quadlet  string
-	Path     string
-	Service  string // "" for artifacts (images/...) and unit kinds with no service
-	Disk     string
-	Loaded   string // "", "ok", "reload needed", "not loaded"
-	Runtime  string // "", "running", "failed", ...
-	Since    time.Duration
-	Stale    bool   // running, but started before this file's last content change
+	Quadlet   string
+	Path      string
+	Service   string // "" for artifacts (images/...) and unit kinds with no service
+	Disk      string
+	Loaded    string // "", "ok", "reload needed", "not loaded"
+	Runtime   string // "", "running", "failed", ...
+	Since     time.Duration
+	Stale     bool   // running, but started before this file's last content change
 	StaleNote string // what the staleness means: changed keys, recreate required
-	artifact bool
+	artifact  bool
 }
 
 // statusInput is everything classifyRows needs, gathered by the command.

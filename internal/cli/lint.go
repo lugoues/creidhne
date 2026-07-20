@@ -58,6 +58,9 @@ func newLintCmd() *cobra.Command {
 			"  - After=/Wants= on network-online.target (or the rootless\n" +
 			"    podman-user-wait-network-online.service). Quadlet adds these to every\n" +
 			"    generated unit by default.\n\n" +
+			"It also enforces whole-project graph contracts that no single quadlet\n" +
+			"can express: pair-network cardinality (creidhne.pair marker), duplicate\n" +
+			"effective runtime names, orphan networks, duplicate traefik routers.\n\n" +
 			"With no arguments it lints the whole project; given quadlet names it lints\n" +
 			"only those. Exits non-zero when it finds anything.",
 		Args: cobra.ArbitraryArgs,
@@ -81,11 +84,24 @@ func newLintCmd() *cobra.Command {
 				}
 			}
 			findings := lintQuadlets(focus, all)
-			printLintFindings(cmd.OutOrStdout(), findings)
-			if len(findings) > 0 {
-				return errSilent{}
+			rules := graphRuleFindings(all)
+			if len(args) > 0 {
+				rules = focusRuleFindings(rules, focus)
 			}
-			return nil
+			out := cmd.OutOrStdout()
+			if len(findings) == 0 && len(rules) == 0 {
+				fmt.Fprintln(out, "lint: no redundant dependencies found")
+				return nil
+			}
+			printLintFindings(out, findings)
+			if len(rules) > 0 {
+				if len(findings) > 0 {
+					fmt.Fprintln(out)
+				}
+				printRuleFindings(out, rules)
+			}
+			fmt.Fprintf(out, "\n%d finding(s)\n", len(findings)+len(rules))
+			return errSilent{}
 		},
 	}
 	return cmd
@@ -150,10 +166,6 @@ func lintQuadlets(focus, all []eval.Quadlet) []lintFinding {
 }
 
 func printLintFindings(out io.Writer, findings []lintFinding) {
-	if len(findings) == 0 {
-		fmt.Fprintln(out, "lint: no redundant dependencies found")
-		return
-	}
 	cur := ""
 	for _, f := range findings {
 		if f.Unit != cur {
@@ -162,5 +174,21 @@ func printLintFindings(out io.Writer, findings []lintFinding) {
 		}
 		fmt.Fprintln(out, "  "+yellow("redundant:")+" "+f.Message)
 	}
-	fmt.Fprintf(out, "\n%d redundant dependency declaration(s)\n", len(findings))
+}
+
+// focusRuleFindings keeps findings attributed to units of the focus quadlets.
+func focusRuleFindings(fs []ruleFinding, focus []eval.Quadlet) []ruleFinding {
+	in := map[string]bool{}
+	for _, q := range focus {
+		for _, u := range q.Units {
+			in[u.Filename] = true
+		}
+	}
+	out := fs[:0:0]
+	for _, f := range fs {
+		if in[f.Unit] {
+			out = append(out, f)
+		}
+	}
+	return out
 }

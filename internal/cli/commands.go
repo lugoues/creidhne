@@ -69,7 +69,14 @@ func newPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			desired, err := generate(cfg.ProjectDir)
+			quads, err := loadQuadlets(cfg.ProjectDir)
+			if err != nil {
+				return err
+			}
+			if len(quads) == 0 {
+				return fmt.Errorf("no quadlets found (no top-level #Quadlet values in %s)", cfg.ProjectDir)
+			}
+			desired, err := renderQuadlets(quads)
 			if err != nil {
 				return err
 			}
@@ -80,6 +87,11 @@ func newPlanCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			if err := renderPlan(out, changes, cfg, noDiff); err != nil {
 				return err
+			}
+			// Whole-project graph contracts, advisory here (validate enforces).
+			if rules := graphRuleFindings(quads); len(rules) > 0 {
+				fmt.Fprintln(out)
+				printRuleFindings(out, rules)
 			}
 			s := reconcile.Summarize(changes)
 			printSummary(out, s, "to add", "to update", "to remove")

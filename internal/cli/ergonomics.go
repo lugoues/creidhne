@@ -57,11 +57,19 @@ func newValidateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := cmd.OutOrStdout()
+			// Whole-project graph contracts: errors fail validation, warnings
+			// report (crei lint shows the same findings).
+			if rules := graphRuleFindings(quads); len(rules) > 0 {
+				if errs := printRuleFindings(out, rules); errs > 0 {
+					return errSilent{}
+				}
+			}
 			units := 0
 			for _, q := range quads {
 				units += len(q.Units)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "OK: %d quadlet(s), %d unit(s) valid\n", len(quads), units)
+			fmt.Fprintf(out, "OK: %d quadlet(s), %d unit(s) valid\n", len(quads), units)
 			return nil
 		},
 	}
