@@ -42,21 +42,48 @@ func TestPairCardinalityExact(t *testing.T) {
 	}
 }
 
-// TestPairCardinalityOver: a third attacher breaks the isolation contract and
-// fails validate; lint reports it too.
+// TestPairCardinalityOver: a second external attacher breaks the isolation
+// contract and fails validate; lint reports it too.
 func TestPairCardinalityOver(t *testing.T) {
 	proj := setupProject(t, pairProject(2))
 	out, err := runCmd(t, "--dir", proj, "validate")
 	if err == nil {
-		t.Fatalf("three attachers must fail validate:\n%s", out)
+		t.Fatalf("two external attachers must fail validate:\n%s", out)
 	}
-	for _, want := range []string{"svc-proxy.network", "3 attachers", "the contract is exactly two"} {
+	for _, want := range []string{"svc-proxy.network", "2 external attachers", "exactly one, the proxy"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("validate output missing %q:\n%s", want, out)
 		}
 	}
 	if _, err := runCmd(t, "--dir", proj, "lint"); err == nil {
 		t.Fatal("lint must exit non-zero on findings")
+	}
+}
+
+// TestPairMultiServiceQuadlet: several in-quadlet containers on the pair wire
+// (per-container route splitting) plus one proxy is within the contract.
+func TestPairMultiServiceQuadlet(t *testing.T) {
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+svc: creidhne.#Quadlet & {
+	name: "svc"
+	units: {
+		networks: proxy: Network: Label: ["creidhne.pair=svc"]
+		#container: Container: {Image: "docker.io/x", Network: [units.networks.proxy.#self]}
+		containers: side: Container: {Image: "docker.io/y", Network: [units.networks.proxy.#self]}
+	}
+}
+edge: creidhne.#Quadlet & {
+	name: "edge"
+	units: #container: Container: {Image: "docker.io/p", Network: [svc.units.networks.proxy.#self]}
+}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("owner units + one proxy must validate: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "pair network") {
+		t.Fatalf("no pair finding expected:\n%s", out)
 	}
 }
 
@@ -68,7 +95,7 @@ func TestPairCardinalityUnder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("one attacher is a warning, validate must pass: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "wiring incomplete") {
+	if !strings.Contains(out, "the proxy is not wired yet") {
 		t.Fatalf("expected incomplete-wiring warning:\n%s", out)
 	}
 }

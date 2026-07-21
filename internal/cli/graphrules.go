@@ -10,9 +10,10 @@ import (
 )
 
 // pairMarkerPrefix is the pair-network contract label (placed by helpers such
-// as extras' #ReverseProxyMixin): exactly two containers, the service and the
-// proxy, should ever attach the carrying network. The marker is the whole
-// contract; the rules need no knowledge of the helper that placed it.
+// as extras' #ReverseProxyMixin): the owning quadlet's own units (one or
+// several route-serving containers) plus exactly one external attacher, the
+// proxy. The marker is the whole contract; the rules need no knowledge of
+// the helper that placed it.
 const pairMarkerPrefix = "creidhne.pair="
 
 // routerLabelPrefix keys traefik router definitions inside container labels;
@@ -40,8 +41,10 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 	var networks []eval.UnitRecord
 	var attachable []eval.UnitRecord   // containers and pods
 	attachers := map[string][]string{} // network filename -> attaching unit filenames
+	owner := map[string]string{}       // unit filename -> owning quadlet
 	for _, q := range all {
 		for _, u := range q.Units {
+			owner[u.Filename] = q.Name
 			switch u.Kind {
 			case "network":
 				networks = append(networks, u)
@@ -57,9 +60,12 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 		}
 	}
 
-	// Pair cardinality: more than two attachers breaks the isolation
-	// contract (error); fewer than two is incomplete wiring, legitimate
-	// mid-migration (warning).
+	// Pair contract, ownership-based: the owning quadlet's units may all
+	// attach (per-container route splitting is a documented pattern), but
+	// exactly one external unit, the proxy, may join them. A second foreign
+	// attacher is the isolation breach (error); none yet, or no in-quadlet
+	// service, is incomplete wiring (warning). Route-to-container counts
+	// are not derivable here: routes can share one container.
 	for _, n := range networks {
 		pair := ""
 		for _, l := range topList(n.Data, "labelStrings") {
@@ -70,14 +76,24 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 		if pair == "" {
 			continue
 		}
-		at := attachers[n.Filename]
+		var external, internal []string
+		for _, at := range attachers[n.Filename] {
+			if owner[at] == owner[n.Filename] {
+				internal = append(internal, at)
+			} else {
+				external = append(external, at)
+			}
+		}
 		switch {
-		case len(at) > 2:
+		case len(external) > 1:
 			out = append(out, ruleFinding{Unit: n.Filename, Severity: "error",
-				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has %d attachers (%s); the contract is exactly two: the service and the proxy", pair, len(at), strings.Join(at, ", "))})
-		case len(at) < 2:
+				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has %d external attachers (%s); the contract allows exactly one, the proxy", pair, len(external), strings.Join(external, ", "))})
+		case len(external) == 0:
 			out = append(out, ruleFinding{Unit: n.Filename, Severity: "warning",
-				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has %d attacher(s); expected the service and the proxy — wiring incomplete?", pair, len(at))})
+				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has no external attacher; the proxy is not wired yet", pair)})
+		case len(internal) == 0:
+			out = append(out, ruleFinding{Unit: n.Filename, Severity: "warning",
+				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has no in-quadlet attacher; nothing serves behind the proxy", pair)})
 		}
 	}
 
