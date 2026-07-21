@@ -5,16 +5,19 @@ import (
 	"io"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/lugoues/creidhne/internal/systemd"
 )
 
-// lifecycleUnits selects the services acted on by restart/logs: every unit of
+// lifecycleRows selects the units acted on by restart/logs: every unit of
 // the named quadlets, narrowed to stale ones by staleOnly. skipUnrestartable
 // drops (with a warning) stale units whose change a restart cannot apply.
-func lifecycleUnits(out io.Writer, cfg config, args []string, staleOnly, skipUnrestartable bool) ([]string, error) {
+// Rows are returned (not just service names) so callers can show why a unit
+// is in the set (the staleness delta).
+func lifecycleRows(out io.Writer, cfg config, args []string, staleOnly, skipUnrestartable bool) ([]statusRow, error) {
 	in, notes, err := gatherStatus(cfg, args)
 	if err != nil {
 		return nil, err
@@ -22,7 +25,7 @@ func lifecycleUnits(out io.Writer, cfg config, args []string, staleOnly, skipUnr
 	for _, n := range notes {
 		fmt.Fprintln(out, yellow("! "+n))
 	}
-	var units []string
+	var rows []statusRow
 	for _, r := range classifyRows(in) {
 		if r.Service == "" {
 			continue
@@ -39,9 +42,18 @@ func lifecycleUnits(out io.Writer, cfg config, args []string, staleOnly, skipUnr
 				}
 			}
 		}
+		rows = append(rows, r)
+	}
+	return rows, nil
+}
+
+// serviceNames extracts the systemd unit names from lifecycle rows.
+func serviceNames(rows []statusRow) []string {
+	units := make([]string, 0, len(rows))
+	for _, r := range rows {
 		units = append(units, r.Service)
 	}
-	return units, nil
+	return units
 }
 
 func newRestartCmd() *cobra.Command {
@@ -66,17 +78,35 @@ func newRestartCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			units, err := lifecycleUnits(out, cfg, args, staleOnly, true)
+			rows, err := lifecycleRows(out, cfg, args, staleOnly, true)
 			if err != nil {
 				return err
 			}
-			if len(units) == 0 {
+			if len(rows) == 0 {
 				fmt.Fprintln(out, "Nothing to restart.")
 				return nil
 			}
-			fmt.Fprintf(out, "Restarting %d unit(s):\n", len(units))
-			for _, u := range units {
-				fmt.Fprintln(out, "  "+u)
+			units := serviceNames(rows)
+			fmt.Fprintf(out, "Restarting %d unit(s):\n", len(rows))
+			// The staleness delta on each line (like status) shows what the
+			// restart is for; padding is computed on plain strings so ANSI
+			// styling never skews the column.
+			width := 0
+			for _, r := range rows {
+				if len(r.Service) > width {
+					width = len(r.Service)
+				}
+			}
+			for _, r := range rows {
+				line := "  " + r.Service
+				if r.Stale {
+					note := "(stale)"
+					if r.StaleNote != "" {
+						note = "(stale: " + r.StaleNote + ")"
+					}
+					line += strings.Repeat(" ", width-len(r.Service)+2) + yellow(note)
+				}
+				fmt.Fprintln(out, line)
 			}
 			if !yes {
 				ok, err := confirm(cmd.InOrStdin(), out, "Restart?")
@@ -119,14 +149,15 @@ func newLogsCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			units, err := lifecycleUnits(out, cfg, args, staleOnly, false)
+			rows, err := lifecycleRows(out, cfg, args, staleOnly, false)
 			if err != nil {
 				return err
 			}
-			if len(units) == 0 {
+			if len(rows) == 0 {
 				fmt.Fprintln(out, "No units.")
 				return nil
 			}
+			units := serviceNames(rows)
 			jargs := []string{}
 			if underHome(cfg.QuadletDir) {
 				jargs = append(jargs, "--user")

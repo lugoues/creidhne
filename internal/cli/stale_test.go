@@ -169,6 +169,10 @@ func TestRestartStale(t *testing.T) {
 	if !strings.Contains(out, "skipping app-data.volume") || !strings.Contains(out, "Restarted.") {
 		t.Fatalf("restart output wrong:\n%s", out)
 	}
+	// Each line carries the staleness delta, status-style.
+	if !strings.Contains(out, "(stale: Environment)") {
+		t.Fatalf("restart listing missing the delta:\n%s", out)
+	}
 	args, err := os.ReadFile(filepath.Join(recDir, "restart.args"))
 	if err != nil {
 		t.Fatalf("systemctl restart never invoked: %v", err)
