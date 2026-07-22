@@ -175,7 +175,7 @@ func runInit(out io.Writer, projectDir string) error {
 	freshProject := false
 	if existing, _ := filepath.Glob(filepath.Join(projectDir, "*.cue")); len(existing) == 0 {
 		freshProject = true
-		created, err = writeIfAbsent(filepath.Join(projectDir, "main.cue"), sampleMain)
+		created, err = writeIfAbsent(filepath.Join(projectDir, "main.cue"), sampleMainFor(module))
 		if err != nil {
 			return err
 		}
@@ -183,6 +183,14 @@ func runInit(out io.Writer, projectDir string) error {
 	} else {
 		fmt.Fprintf(out, "  %s main.cue (existing .cue files present, sample skipped)\n", dim("-"))
 	}
+
+	// The registries package is crei-owned (managed image pins). Always
+	// scaffold it so 'crei image' has a home; existing entries are kept.
+	created, err = writeIfAbsent(filepath.Join(projectDir, "registries", "images.cue"), sampleRegistries)
+	if err != nil {
+		return err
+	}
+	report(out, created, "registries/images.cue")
 
 	// Config and its JSON Schema live under .crei/ to keep the project root clean.
 	// The "#:schema ./config.schema.json" directive in the sample resolves within
@@ -388,20 +396,45 @@ func moduleNameFor(projectDir string) string {
 	return "example.com/" + name + "@v0"
 }
 
-const sampleMain = `package quadlets
+// sampleMainFor templates the registries import (module-specific) into the
+// starter quadlet, so a fresh project shows the managed-image pattern. The
+// subpackage import is the bare form (no @major, which is only valid at the
+// end of a path) — the blessed convention.
+func sampleMainFor(module string) string {
+	base, _, _ := strings.Cut(module, "@")
+	return fmt.Sprintf(`package quadlets
 
-import "github.com/lugoues/creidhne"
+import (
+	"github.com/lugoues/creidhne"
+	reg "%s/registries"
+)
 
 // A minimal example. Run 'crei plan' to preview, 'crei apply' to write.
+// The image comes from the registry (registries/images.cue): run
+// 'crei image pin' to resolve its digest, 'crei image outdated' to check.
 hello: creidhne.#Quadlet & {
 	name: "hello"
 	units: #container: {
 		Container: {
-			Image:         "docker.io/library/hello-world:latest"
+			Image:         reg.images.hello.ref
 			ContainerName: "hello"
 		}
 		Install: WantedBy: ["default.target"]
 	}
+}
+`, base)
+}
+
+// sampleRegistries is the starter registries/images.cue (crei-owned).
+const sampleRegistries = `package registries
+
+import "github.com/lugoues/creidhne"
+
+// crei-owned image pins. Add entries as repo:tag; 'crei image pin' resolves
+// and writes the @sha256 digests, 'crei image outdated' reports drift.
+// Reference an entry from a container: Image: reg.images.<name>.ref
+images: creidhne.#ImageRegistry & {
+	hello: ref: "docker.io/library/hello-world:latest"
 }
 `
 
