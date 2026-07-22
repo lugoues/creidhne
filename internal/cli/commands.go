@@ -324,6 +324,14 @@ func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool, di
 				bodyln(w, red("- "+l))
 			}
 		case reconcile.ActionChange:
+			// A change whose only difference is crei's build-hash stamp is
+			// derived, not authored: label it instead of showing a cryptic
+			// hash swap. The file still changes (it stays in the summary);
+			// only its diff body is relabeled.
+			if note := buildHashOnlyChange(c.Name, string(c.Existing), string(c.Content)); note != "" {
+				bodyln(w, dim("  ("+note+")"))
+				continue
+			}
 			// Built-in differ: render a structured inline diff from the in-memory
 			// old/new content. A configured external tool formats (and colors) its
 			// own output, so pass it through indented.

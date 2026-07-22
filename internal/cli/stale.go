@@ -135,6 +135,21 @@ func buildHash(content string) string {
 	return ""
 }
 
+// buildHashOnlyChange returns a human reason when the sole difference between
+// two versions of a unit file is its build-hash stamp — a derived change (a
+// rebuilt image, or a Containerfile/context edit), not user-authored config.
+// Empty when the hash is unchanged or other keys also changed (show the real
+// diff then). The file still changes on disk; this only relabels its body.
+func buildHashOnlyChange(name, old, current string) string {
+	if buildHash(old) == buildHash(current) || len(changedKeys(old, current)) != 0 {
+		return ""
+	}
+	if strings.HasSuffix(name, ".build") {
+		return "Containerfile or context changed"
+	}
+	return "image rebuilt"
+}
+
 // diffStale prints, per stale unit, the diff between the config the running
 // process was created from (state history) and the currently applied file.
 func diffStale(out io.Writer, cfg config) error {

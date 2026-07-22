@@ -232,6 +232,31 @@ app: creidhne.#Quadlet & {
 }
 `
 
+func TestBuildHashOnlyChange(t *testing.T) {
+	base := "[Container]\nImage=app.build\n"
+	withHash := func(h string) string { return base + "Annotation=creidhne.build-hash=" + h + "\n" }
+
+	// Only the hash moved on a consumer -> "image rebuilt".
+	if got := buildHashOnlyChange("app.container", withHash("aaa"), withHash("bbb")); got != "image rebuilt" {
+		t.Fatalf("consumer hash-only = %q, want image rebuilt", got)
+	}
+	// Only the hash moved on a build -> Containerfile/context.
+	b := "[Build]\nFile=images/app.Containerfile\n"
+	if got := buildHashOnlyChange("app.build", b+"Annotation=creidhne.build-hash=aaa\n", b+"Annotation=creidhne.build-hash=bbb\n"); got != "Containerfile or context changed" {
+		t.Fatalf("build hash-only = %q, want Containerfile note", got)
+	}
+	// A real key changed too -> not hash-only (show the real diff).
+	old := withHash("aaa") + "Environment=A=1\n"
+	cur := withHash("bbb") + "Environment=A=2\n"
+	if got := buildHashOnlyChange("app.container", old, cur); got != "" {
+		t.Fatalf("mixed change = %q, want empty", got)
+	}
+	// Hash unchanged -> not a hash-driven diff.
+	if got := buildHashOnlyChange("app.container", withHash("aaa"), withHash("aaa")+"Environment=B=1\n"); got != "" {
+		t.Fatalf("unchanged hash = %q, want empty", got)
+	}
+}
+
 func showBlock(svc, active string) string {
 	return "Id=" + svc + "\nLoadState=loaded\nActiveState=active\nSubState=running\nNeedDaemonReload=no\nActiveEnterTimestamp=" + active + "\n"
 }
