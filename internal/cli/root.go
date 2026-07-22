@@ -119,6 +119,7 @@ func newRootCmd() *cobra.Command {
 		newGraphCmd(),
 		newLintCmd(),
 		newVendorCmd(),
+		newImageCmd(),
 		newImportCmd(),
 		newInitCmd(),
 		newValidateCmd(),

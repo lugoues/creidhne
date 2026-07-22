@@ -5,12 +5,36 @@ package registry
 
 import (
 	"fmt"
-	"strings"
+	"strconv"
 	"time"
+
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 )
+
+// ParseAge parses a min-age string ("7d", "2w", "12h") into a duration. Empty
+// is a zero duration (no minimum).
+func ParseAge(s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(s[:len(s)-1])
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("invalid age %q: want <int>[dwh]", s)
+	}
+	switch s[len(s)-1] {
+	case 'h':
+		return time.Duration(n) * time.Hour, nil
+	case 'd':
+		return time.Duration(n) * 24 * time.Hour, nil
+	case 'w':
+		return time.Duration(n) * 7 * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("invalid age unit in %q: want d, w, or h", s)
+	}
+}
 
 // Status classifies a pin by what it carries.
 type Status string

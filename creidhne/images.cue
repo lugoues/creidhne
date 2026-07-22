@@ -29,9 +29,9 @@ package creidhne
 	// handles the edge cases.
 	ref: #ImageRef
 
-	// minAge skips a candidate digest whose image is younger than this,
-	// overriding the global default from crei.toml. See crei image outdated.
-	minAge?: #GoDuration
+	// minAge skips a candidate digest whose image is younger than this: an
+	// integer with a d/w/h suffix ("7d", "2w", "12h"). See crei image outdated.
+	minAge?: =~"^[0-9]+[dwh]$"
 
 	// Open for policy fields added in later phases (semver range, ...).
 	...
