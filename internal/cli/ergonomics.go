@@ -416,7 +416,7 @@ hello: creidhne.#Quadlet & {
 	name: "hello"
 	units: #container: {
 		Container: {
-			Image:         reg.images.hello.ref
+			Image:         reg.images.hello.#ref
 			ContainerName: "hello"
 		}
 		Install: WantedBy: ["default.target"]
@@ -430,11 +430,11 @@ const sampleRegistries = `package registries
 
 import "github.com/lugoues/creidhne"
 
-// crei-owned image pins. Add entries as repo:tag; 'crei image pin' resolves
-// and writes the @sha256 digests, 'crei image outdated' reports drift.
-// Reference an entry from a container: Image: reg.images.<name>.ref
+// crei-owned image pins. Add entries as image: repo:tag; 'crei image pin'
+// resolves and writes the digest, 'crei image outdated' reports drift.
+// Reference an entry from a container: Image: reg.images.<name>.#ref
 images: creidhne.#ImageRegistry & {
-	hello: ref: "docker.io/library/hello-world:latest"
+	hello: image: "docker.io/library/hello-world:latest"
 }
 `
 

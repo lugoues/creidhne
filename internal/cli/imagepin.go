@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"cuelang.org/go/cue/format"
 	"github.com/spf13/cobra"
@@ -58,12 +59,12 @@ func newImagePinCmd() *cobra.Command {
 				if len(only) > 0 && !only[entries[i].Key] {
 					continue
 				}
-				r, err := registry.Parse(entries[i].Ref)
+				r, err := registry.Parse(entries[i].Image)
 				if err != nil {
 					fmt.Fprintln(out, yellow("! "+entries[i].Key+": "+err.Error()))
 					continue
 				}
-				if r.Tag == "" { // unmanaged: nothing to resolve
+				if r.Tag == "" { // unmanaged: no channel to resolve
 					fmt.Fprintf(out, "  %s %s (no tag, unchanged)\n", dim("-"), entries[i].Key)
 					continue
 				}
@@ -72,13 +73,12 @@ func newImagePinCmd() *cobra.Command {
 					fmt.Fprintln(out, yellow("! "+entries[i].Key+": "+firstLine(err.Error())))
 					continue
 				}
-				pinned := r.Pinned(digest)
-				if pinned == entries[i].Ref {
+				if digest == entries[i].Digest {
 					fmt.Fprintf(out, "  %s %s (up to date)\n", dim("-"), entries[i].Key)
 					continue
 				}
 				fmt.Fprintf(out, "  %s %s -> %s\n", green("~"), entries[i].Key, short(digest))
-				entries[i].Ref = pinned
+				entries[i].Digest = digest // pin writes only the digest field
 				changed++
 			}
 			if changed == 0 {
@@ -125,14 +125,22 @@ func emitImageRegistry(entries []eval.ImageEntry) ([]byte, error) {
 	w("")
 	w("import %q", eval.ModulePath)
 	w("")
-	w("// Managed by crei (crei image pin). Entries track a tag and pin a digest;")
-	w("// edit refs/policy here, then 'crei image pin' refreshes the digests.")
+	w("// Managed by crei (crei image pin). Each entry's image is the tracked")
+	w("// channel (edit it here); crei image pin writes the digest.")
 	w("images: creidhne.#ImageRegistry & {")
 	for _, e := range entries {
+		var fields []string
+		fields = append(fields, fmt.Sprintf("image: %q", e.Image))
+		if e.Digest != "" {
+			fields = append(fields, fmt.Sprintf("digest: %q", e.Digest))
+		}
 		if e.MinAge != "" {
-			w("\t%s: {ref: %q, minAge: %q}", cueKey(e.Key), e.Ref, e.MinAge)
+			fields = append(fields, fmt.Sprintf("minAge: %q", e.MinAge))
+		}
+		if len(fields) == 1 {
+			w("\t%s: %s", cueKey(e.Key), fields[0])
 		} else {
-			w("\t%s: ref: %q", cueKey(e.Key), e.Ref)
+			w("\t%s: {%s}", cueKey(e.Key), strings.Join(fields, ", "))
 		}
 	}
 	w("}")

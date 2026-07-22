@@ -27,11 +27,11 @@ func TestCheckOutdated(t *testing.T) {
 		},
 	}
 	entries := []eval.ImageEntry{
-		{Key: "current", Ref: "docker.io/a/managed-current:v1@sha256:cur"},
-		{Key: "behind", Ref: "docker.io/a/managed-behind:v1@sha256:old"},
-		{Key: "held", Ref: "docker.io/a/held:v1@sha256:old", MinAge: "7d"},
-		{Key: "unpinned", Ref: "docker.io/a/x:v1"},
-		{Key: "unmanaged", Ref: "docker.io/a/y@sha256:z"},
+		{Key: "current", Image: "docker.io/a/managed-current:v1", Digest: "sha256:cur"},
+		{Key: "behind", Image: "docker.io/a/managed-behind:v1", Digest: "sha256:old"},
+		{Key: "held", Image: "docker.io/a/held:v1", Digest: "sha256:old", MinAge: "7d"},
+		{Key: "unpinned", Image: "docker.io/a/x:v1"},
+		{Key: "unmanaged", Image: "docker.io/a/y", Digest: "sha256:z"},
 	}
 	rows, available := checkOutdated(entries, 0, now, res)
 	if available != 1 {
@@ -57,8 +57,9 @@ func TestCheckOutdated(t *testing.T) {
 
 func TestEmitImageRegistry(t *testing.T) {
 	entries := []eval.ImageEntry{
-		{Key: "gluetun", Ref: "docker.io/qmcgaw/gluetun:v3@sha256:abc"},
-		{Key: "ha", Ref: "ghcr.io/x/home-assistant:stable@sha256:def", MinAge: "3d"},
+		{Key: "gluetun", Image: "docker.io/qmcgaw/gluetun:v3", Digest: "sha256:abc"},
+		{Key: "ha", Image: "ghcr.io/x/home-assistant:stable", Digest: "sha256:def", MinAge: "3d"},
+		{Key: "fresh", Image: "docker.io/x/y:1"},
 	}
 	out, err := emitImageRegistry(entries)
 	if err != nil {
@@ -69,8 +70,9 @@ func TestEmitImageRegistry(t *testing.T) {
 		"package registries",
 		`import "github.com/lugoues/creidhne"`,
 		"images: creidhne.#ImageRegistry & {",
-		`gluetun: ref: "docker.io/qmcgaw/gluetun:v3@sha256:abc"`,
-		`ha: {ref: "ghcr.io/x/home-assistant:stable@sha256:def", minAge: "3d"}`,
+		`gluetun: {image: "docker.io/qmcgaw/gluetun:v3", digest: "sha256:abc"}`,
+		`ha: {image: "ghcr.io/x/home-assistant:stable", digest: "sha256:def", minAge: "3d"}`,
+		`fresh: image: "docker.io/x/y:1"`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("emit missing %q:\n%s", want, s)

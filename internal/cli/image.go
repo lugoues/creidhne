@@ -102,13 +102,14 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 	var rows []imageRow
 	available := 0
 	for _, e := range entries {
-		r, err := registry.Parse(e.Ref)
+		r, err := registry.Parse(e.Image)
 		if err != nil {
 			rows = append(rows, imageRow{name: e.Key, status: "invalid", note: err.Error()})
 			continue
 		}
-		row := imageRow{name: e.Key, status: string(r.Status())}
-		switch r.Status() {
+		status := registry.Classify(r.Tag != "", e.Digest != "")
+		row := imageRow{name: e.Key, status: string(status)}
+		switch status {
 		case registry.Unpinned:
 			row.note = "no digest — run 'crei image pin'"
 		case registry.Unmanaged:
@@ -119,7 +120,7 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 				row.note = "lookup failed: " + firstLine(err.Error())
 				break
 			}
-			if cur == r.Digest {
+			if cur == e.Digest {
 				row.note = "up to date"
 				break
 			}

@@ -82,12 +82,14 @@ func Parse(ref string) (Ref, error) {
 	return r, nil
 }
 
-// Status classifies the ref.
-func (r Ref) Status() Status {
+// Classify labels an entry from whether its image carries a trackable tag and
+// whether a digest is pinned. (Digest lives in a separate registry field, so
+// it is passed in rather than read from the parsed image ref.)
+func Classify(hasTag, hasDigest bool) Status {
 	switch {
-	case r.Tag != "" && r.Digest != "":
+	case hasTag && hasDigest:
 		return Managed
-	case r.Tag != "":
+	case hasTag:
 		return Unpinned
 	default:
 		return Unmanaged
@@ -96,14 +98,6 @@ func (r Ref) Status() Status {
 
 // TaggedRef is "repo:tag" — the channel to resolve.
 func (r Ref) TaggedRef() string { return r.Repo + ":" + r.Tag }
-
-// Pinned returns "repo:tag@digest" for a resolved digest, preserving the tag.
-func (r Ref) Pinned(digest string) string {
-	if r.Tag != "" {
-		return r.Repo + ":" + r.Tag + "@" + digest
-	}
-	return r.Repo + "@" + digest
-}
 
 // Digest resolves the current manifest digest of "repo:tag" (a HEAD; no layer
 // pull). Auth comes from the ambient docker keychain.

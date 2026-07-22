@@ -14,7 +14,8 @@ import (
 // registries package, for the crei image commands.
 type ImageEntry struct {
 	Key    string
-	Ref    string
+	Image  string // tracked ref, no digest
+	Digest string // "sha256:…", "" when unpinned
 	MinAge string // "" when unset
 }
 
@@ -51,11 +52,15 @@ func LoadImageRegistry(dir string, overlay map[string]load.Source) ([]ImageEntry
 	var out []ImageEntry
 	for it.Next() {
 		e := ImageEntry{Key: it.Selector().Unquoted()}
-		if ref := it.Value().LookupPath(cue.ParsePath("ref")); ref.Exists() {
-			e.Ref, _ = ref.String()
+		v := it.Value()
+		if f := v.LookupPath(cue.ParsePath("image")); f.Exists() {
+			e.Image, _ = f.String()
 		}
-		if ma := it.Value().LookupPath(cue.ParsePath("minAge")); ma.Exists() {
-			e.MinAge, _ = ma.String()
+		if f := v.LookupPath(cue.ParsePath("digest")); f.Exists() {
+			e.Digest, _ = f.String()
+		}
+		if f := v.LookupPath(cue.ParsePath("minAge")); f.Exists() {
+			e.MinAge, _ = f.String()
 		}
 		out = append(out, e)
 	}
