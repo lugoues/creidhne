@@ -22,7 +22,7 @@ func newImageCmd() *cobra.Command {
 			"pins a digest (repo:tag@sha256:...); podman pulls the digest, crei checks\n" +
 			"the tag for updates. Bumping is a config write-back, not a runtime pull.",
 	}
-	cmd.AddCommand(newImageOutdatedCmd(), newImagePinCmd())
+	cmd.AddCommand(newImageAddCmd(), newImageOutdatedCmd(), newImagePinCmd())
 	return cmd
 }
 

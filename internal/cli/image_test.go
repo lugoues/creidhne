@@ -55,6 +55,22 @@ func TestCheckOutdated(t *testing.T) {
 	}
 }
 
+func TestDeriveName(t *testing.T) {
+	cases := map[string]string{
+		"ghcr.io/matrix-construct/tuwunel":      "tuwunel",
+		"ghcr.io/home-assistant/home-assistant": "home_assistant",
+		"docker.io/library/redis":               "redis",
+		"ghcr.io/paperless-ngx/paperless-ngx":   "paperless_ngx",
+		"docker.io/company/7zip":                "_7zip",
+		"registry:5000/team/my.app":             "my_app",
+	}
+	for repo, want := range cases {
+		if got := deriveName(repo); got != want {
+			t.Fatalf("deriveName(%q) = %q, want %q", repo, got, want)
+		}
+	}
+}
+
 func TestEmitImageRegistry(t *testing.T) {
 	entries := []eval.ImageEntry{
 		{Key: "gluetun", Image: "docker.io/qmcgaw/gluetun:v3", Digest: "sha256:abc"},
