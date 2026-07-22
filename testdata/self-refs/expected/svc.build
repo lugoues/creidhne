@@ -4,4 +4,5 @@ ImageTag=localhost/svc:latest
 SetWorkingDirectory=unit
 File=images/svc.Containerfile
 Network=svc-net.network
+Annotation=creidhne.build-hash=96357087110e
 Volume=svc-data.volume:/build

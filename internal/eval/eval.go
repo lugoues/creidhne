@@ -59,6 +59,7 @@ func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, err
 	if err := checkUniqueServices(quads); err != nil {
 		return nil, err
 	}
+	injectBuildHashes(quads)
 	return quads, nil
 }
 

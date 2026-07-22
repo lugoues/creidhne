@@ -5,3 +5,4 @@ SetWorkingDirectory=unit
 File=images/app.Containerfile
 Label=plain=1
 Label='app.spec={"kind":"build"}'
+Annotation=creidhne.build-hash=8961a841d14a

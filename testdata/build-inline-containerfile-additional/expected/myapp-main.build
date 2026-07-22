@@ -3,3 +3,4 @@
 ImageTag=localhost/myapp:latest
 SetWorkingDirectory=unit
 File=images/myapp-main.Containerfile
+Annotation=creidhne.build-hash=b2b7f67afdd6

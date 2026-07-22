@@ -209,3 +209,82 @@ func TestLogsStale(t *testing.T) {
 		}
 	}
 }
+
+const buildStaleV1 = `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: {
+		#build: {ContainerFile: "FROM alpine\n", Context: {"etc/app.conf": "x=1\n"}}
+		#container: Container: Image: units.#build.#self
+	}
+}
+`
+
+const buildStaleV2 = `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: {
+		#build: {ContainerFile: "FROM alpine\n", Context: {"etc/app.conf": "x=2\n"}}
+		#container: Container: Image: units.#build.#self
+	}
+}
+`
+
+func showBlock(svc, active string) string {
+	return "Id=" + svc + "\nLoadState=loaded\nActiveState=active\nSubState=running\nNeedDaemonReload=no\nActiveEnterTimestamp=" + active + "\n"
+}
+
+// TestBuildStaleOnContextChange: changing a build's context moves the
+// injected build-hash on both the .build unit and its consuming container,
+// so both flag stale through the normal per-file mechanism — the build for
+// "Containerfile/context", the container for "image rebuilt".
+func TestBuildStaleOnContextChange(t *testing.T) {
+	proj, qd := applyProject(t, buildStaleV1)
+	reapply(t, proj, qd, buildStaleV2) // context x=1 -> x=2: hash moves on both units
+
+	s, err := state.Load(qd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := s.Quadlets["app"]
+	var buildSvc, ctrSvc string
+	for _, u := range q.Units {
+		switch u.Kind {
+		case "build":
+			buildSvc = u.Service
+		case "container":
+			ctrSvc = u.Service
+		}
+	}
+	if buildSvc == "" || ctrSvc == "" {
+		t.Fatalf("services not recorded: build=%q container=%q", buildSvc, ctrSvc)
+	}
+
+	// Backdate the superseded (v1) versions to an hour ago so InEffectAt at
+	// the runtime's ActiveEnter returns v1; current stays "now".
+	for i := range q.Files {
+		for j := range q.Files[i].History {
+			q.Files[i].History[j].AppliedAt = time.Now().Add(-time.Hour)
+		}
+	}
+	s.Quadlets["app"] = q
+	if err := state.Write(qd, s); err != nil {
+		t.Fatal(err)
+	}
+
+	active := time.Now().Add(-30 * time.Minute).UTC().Format("Mon 2006-01-02 15:04:05 MST")
+	fakeSystemctl(t, showBlock(buildSvc, active)+"\n"+showBlock(ctrSvc, active))
+
+	out, err := statusOut(t, proj, qd)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "app.build") || !strings.Contains(out, "Containerfile/context") {
+		t.Fatalf("build must be stale with a Containerfile/context note:\n%s", out)
+	}
+	if !strings.Contains(out, "app.container") || !strings.Contains(out, "image rebuilt") {
+		t.Fatalf("consumer must be stale with an image-rebuilt note:\n%s", out)
+	}
+}

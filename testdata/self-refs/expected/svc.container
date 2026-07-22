@@ -5,6 +5,7 @@ ContainerName=svc
 Volume=svc-data.volume:/data:ro,U
 Mount=type=volume,source=svc-data.volume,destination=/mnt,ro
 Mount=type=tmpfs,destination=/tmp,tmpfs-size=64m,ro
+Annotation=creidhne.build-hash=96357087110e
 
 [Install]
 WantedBy=default.target

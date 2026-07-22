@@ -33,7 +33,20 @@ func staleNote(path string, rec state.File, activeEnter time.Time) string {
 		parts = append(parts, "recreate required")
 	}
 	if old, ok := rec.InEffectAt(activeEnter); ok {
-		if keys := changedKeys(old, rec.Content); len(keys) > 0 {
+		keys := changedKeys(old, rec.Content)
+		// A moved build-hash is not a user-facing key change: translate it to
+		// a human reason. On a build, an empty key set means only the
+		// Containerfile/context moved (a [Build] field change would already
+		// show its own key). On a consumer, it means the image was rebuilt.
+		if buildHash(old) != buildHash(rec.Content) {
+			switch {
+			case strings.HasSuffix(path, ".build") && len(keys) == 0:
+				keys = append(keys, "Containerfile/context")
+			case !strings.HasSuffix(path, ".build"):
+				keys = append(keys, "image rebuilt")
+			}
+		}
+		if len(keys) > 0 {
 			const max = 3
 			if len(keys) > max {
 				keys = append(keys[:max], fmt.Sprintf("+%d more", len(keys)-max))
@@ -96,10 +109,30 @@ func unitKeyValues(content string) map[string][]string {
 		if !ok {
 			continue
 		}
-		key := section + "." + strings.TrimSpace(k)
-		m[key] = append(m[key], strings.TrimSpace(v))
+		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+		// The build-hash annotation is crei's own version stamp; hide it from
+		// the key diff so it does not surface as a raw "Annotation" change
+		// (staleNote translates a hash change into a human reason instead).
+		if k == "Annotation" && strings.HasPrefix(v, buildHashPrefix) {
+			continue
+		}
+		m[section+"."+k] = append(m[section+"."+k], v)
 	}
 	return m
+}
+
+// buildHashPrefix is the annotation crei stamps to carry a build's content
+// hash (see eval.injectBuildHashes).
+const buildHashPrefix = "creidhne.build-hash="
+
+// buildHash extracts the stamped build-hash from unit content ("" if absent).
+func buildHash(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "Annotation="+buildHashPrefix); ok {
+			return v
+		}
+	}
+	return ""
 }
 
 // diffStale prints, per stale unit, the diff between the config the running
