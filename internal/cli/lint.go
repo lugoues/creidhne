@@ -2,8 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,11 +37,6 @@ func resourceKeyword(rel string) string {
 var networkOnlineTargets = map[string]bool{
 	"network-online.target":                   true,
 	"podman-user-wait-network-online.service": true,
-}
-
-type lintFinding struct {
-	Unit    string
-	Message string
 }
 
 func newLintCmd() *cobra.Command {
@@ -83,24 +76,30 @@ func newLintCmd() *cobra.Command {
 					return err
 				}
 			}
+			levels, err := newLintLevels(cfg.Lint)
+			if err != nil {
+				return err
+			}
 			findings := lintQuadlets(focus, all)
 			rules := graphRuleFindings(all)
 			if len(args) > 0 {
 				rules = focusRuleFindings(rules, focus)
 			}
+			entries, _, err := loadImages()
+			if err != nil {
+				return err
+			}
+			findings = append(findings, rules...)
+			findings = append(findings, imageRuleFindings(all, entries)...)
+			findings = levels.apply(findings)
+			sortFindings(findings)
 			out := cmd.OutOrStdout()
-			if len(findings) == 0 && len(rules) == 0 {
-				fmt.Fprintln(out, "lint: no redundant dependencies found")
+			if len(findings) == 0 {
+				fmt.Fprintln(out, "lint: no findings")
 				return nil
 			}
-			printLintFindings(out, findings)
-			if len(rules) > 0 {
-				if len(findings) > 0 {
-					fmt.Fprintln(out)
-				}
-				printRuleFindings(out, rules)
-			}
-			fmt.Fprintf(out, "\n%d finding(s)\n", len(findings)+len(rules))
+			printRuleFindings(out, findings)
+			fmt.Fprintf(out, "\n%d finding(s)\n", len(findings))
 			return errSilent{}
 		},
 	}
@@ -109,8 +108,8 @@ func newLintCmd() *cobra.Command {
 
 // lintQuadlets collects redundant-dependency findings for the focus quadlets,
 // resolving references against the whole project.
-func lintQuadlets(focus, all []eval.Quadlet) []lintFinding {
-	var findings []lintFinding
+func lintQuadlets(focus, all []eval.Quadlet) []ruleFinding {
+	var findings []ruleFinding
 
 	// Redundant resource dependencies: the graph already resolves both the
 	// resource reference and any hand-written [Unit] dep to the same node, so a
@@ -129,7 +128,8 @@ func lintQuadlets(focus, all []eval.Quadlet) []lintFinding {
 		if resource == "" || len(dirs) == 0 {
 			continue
 		}
-		findings = append(findings, lintFinding{
+		findings = append(findings, ruleFinding{
+			Rule:    "deps/redundant-resource",
 			Unit:    e.From,
 			Message: fmt.Sprintf("%s on %s is redundant with the %s= reference — Quadlet wires this dependency automatically", strings.Join(dirs, "/"), e.To, resource),
 		})
@@ -146,7 +146,8 @@ func lintQuadlets(focus, all []eval.Quadlet) []lintFinding {
 			for _, dir := range []string{"After", "Wants"} {
 				for _, t := range nestedList(u.Data, "Unit", dir) {
 					if networkOnlineTargets[t] {
-						findings = append(findings, lintFinding{
+						findings = append(findings, ruleFinding{
+							Rule:    "deps/redundant-network-online",
 							Unit:    u.Filename,
 							Message: fmt.Sprintf("%s=%s is redundant — Quadlet adds network-online dependencies to every generated unit by default", dir, t),
 						})
@@ -156,24 +157,7 @@ func lintQuadlets(focus, all []eval.Quadlet) []lintFinding {
 		}
 	}
 
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Unit != findings[j].Unit {
-			return findings[i].Unit < findings[j].Unit
-		}
-		return findings[i].Message < findings[j].Message
-	})
 	return findings
-}
-
-func printLintFindings(out io.Writer, findings []lintFinding) {
-	cur := ""
-	for _, f := range findings {
-		if f.Unit != cur {
-			cur = f.Unit
-			fmt.Fprintln(out, cur)
-		}
-		fmt.Fprintln(out, "  "+yellow("redundant:")+" "+f.Message)
-	}
 }
 
 // focusRuleFindings keeps findings attributed to units of the focus quadlets.

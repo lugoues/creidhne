@@ -16,7 +16,11 @@
     },
     "diff_style": {
       "type": "string",
-      "enum": ["highlight", "plain", "inline"],
+      "enum": [
+        "highlight",
+        "plain",
+        "inline"
+      ],
       "default": "highlight",
       "description": "How a modified line renders in plan/diff/apply: highlight (pair, changed span emphasized), plain (pair, whole lines colored), or inline (single ~ word-diff line)."
     },
@@ -33,14 +37,42 @@
       "additionalProperties": false,
       "description": "Output styles for plan/diff/apply. Each entry is a color string or a table of fg/bg plus attributes.",
       "properties": {
-        "header": { "$ref": "#/definitions/style" },
-        "text": { "$ref": "#/definitions/style" },
-        "context": { "$ref": "#/definitions/style" },
-        "inline_context": { "$ref": "#/definitions/style" },
-        "add": { "$ref": "#/definitions/style" },
-        "remove": { "$ref": "#/definitions/style" },
-        "add_char": { "$ref": "#/definitions/style" },
-        "remove_char": { "$ref": "#/definitions/style" }
+        "header": {
+          "$ref": "#/definitions/style"
+        },
+        "text": {
+          "$ref": "#/definitions/style"
+        },
+        "context": {
+          "$ref": "#/definitions/style"
+        },
+        "inline_context": {
+          "$ref": "#/definitions/style"
+        },
+        "add": {
+          "$ref": "#/definitions/style"
+        },
+        "remove": {
+          "$ref": "#/definitions/style"
+        },
+        "add_char": {
+          "$ref": "#/definitions/style"
+        },
+        "remove_char": {
+          "$ref": "#/definitions/style"
+        }
+      }
+    },
+    "lint": {
+      "type": "object",
+      "description": "Per-rule severity overrides. Keys are rule names (e.g. 'graph/orphan-network', 'image/unpinned'); values are 'error', 'warn', or 'off'. Unknown rule names are rejected.",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "error",
+          "warn",
+          "off"
+        ]
       }
     }
   },
@@ -48,19 +80,37 @@
     "style": {
       "description": "A color string (foreground), or a table of fg/bg plus attribute toggles.",
       "oneOf": [
-        { "$ref": "#/definitions/color" },
+        {
+          "$ref": "#/definitions/color"
+        },
         {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "fg": { "$ref": "#/definitions/color" },
-            "bg": { "$ref": "#/definitions/color" },
-            "bold": { "type": "boolean" },
-            "italic": { "type": "boolean" },
-            "underline": { "type": "boolean" },
-            "reverse": { "type": "boolean" },
-            "strikethrough": { "type": "boolean" },
-            "faint": { "type": "boolean" }
+            "fg": {
+              "$ref": "#/definitions/color"
+            },
+            "bg": {
+              "$ref": "#/definitions/color"
+            },
+            "bold": {
+              "type": "boolean"
+            },
+            "italic": {
+              "type": "boolean"
+            },
+            "underline": {
+              "type": "boolean"
+            },
+            "reverse": {
+              "type": "boolean"
+            },
+            "strikethrough": {
+              "type": "boolean"
+            },
+            "faint": {
+              "type": "boolean"
+            }
           }
         }
       ]

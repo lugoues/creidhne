@@ -59,7 +59,7 @@ app: creidhne.#Quadlet & {
 	if err != nil {
 		t.Fatalf("clean project should exit zero, got %v:\n%s", err, out)
 	}
-	if !strings.Contains(out, "no redundant dependencies found") {
+	if !strings.Contains(out, "lint: no findings") {
 		t.Fatalf("expected clean message:\n%s", out)
 	}
 }
@@ -82,7 +82,7 @@ app: creidhne.#Quadlet & {
 	if err != nil {
 		t.Fatalf("network-online must not be flagged when DefaultDependencies=false; got %v:\n%s", err, out)
 	}
-	if !strings.Contains(out, "no redundant dependencies found") {
+	if !strings.Contains(out, "lint: no findings") {
 		t.Fatalf("expected clean:\n%s", out)
 	}
 }

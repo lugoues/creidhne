@@ -21,11 +21,14 @@ const pairMarkerPrefix = "creidhne.pair="
 // their config.
 const routerLabelPrefix = "traefik.http.routers."
 
-// ruleFinding is one whole-project invariant violation. Severity "error"
-// fails validate; "warning" only reports.
+// ruleFinding is one named-rule violation. Findings are created with Rule set
+// and Severity empty; lintLevels.apply stamps the effective severity (config
+// override or the rule's default) and drops "off" rules. Severity "error"
+// fails validate; "warn" only reports.
 type ruleFinding struct {
+	Rule     string // e.g. "graph/orphan-network"
 	Unit     string
-	Severity string // "error" | "warning"
+	Severity string // stamped by lintLevels.apply
 	Message  string
 }
 
@@ -86,13 +89,13 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 		}
 		switch {
 		case len(external) > 1:
-			out = append(out, ruleFinding{Unit: n.Filename, Severity: "error",
+			out = append(out, ruleFinding{Rule: "graph/pair-cardinality", Unit: n.Filename,
 				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has %d external attachers (%s); the contract allows exactly one, the proxy", pair, len(external), strings.Join(external, ", "))})
 		case len(external) == 0:
-			out = append(out, ruleFinding{Unit: n.Filename, Severity: "warning",
+			out = append(out, ruleFinding{Rule: "graph/pair-unwired", Unit: n.Filename,
 				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has no external attacher; the proxy is not wired yet", pair)})
 		case len(internal) == 0:
-			out = append(out, ruleFinding{Unit: n.Filename, Severity: "warning",
+			out = append(out, ruleFinding{Rule: "graph/pair-unwired", Unit: n.Filename,
 				Message: fmt.Sprintf("pair network (creidhne.pair=%s) has no in-quadlet attacher; nothing serves behind the proxy", pair)})
 		}
 	}
@@ -116,7 +119,7 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 	for name, units := range names {
 		if len(units) > 1 {
 			sort.Strings(units)
-			out = append(out, ruleFinding{Unit: units[0], Severity: "error",
+			out = append(out, ruleFinding{Rule: "graph/duplicate-name", Unit: units[0],
 				Message: fmt.Sprintf("effective runtime name %q is shared by %s; podman requires uniqueness and name-based references resolve arbitrarily", name, strings.Join(units, ", "))})
 		}
 	}
@@ -132,7 +135,7 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 			}
 		}
 		if !isPair && len(attachers[n.Filename]) == 0 {
-			out = append(out, ruleFinding{Unit: n.Filename, Severity: "warning",
+			out = append(out, ruleFinding{Rule: "graph/orphan-network", Unit: n.Filename,
 				Message: "no container or pod in the project attaches this network"})
 		}
 	}
@@ -163,21 +166,26 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 				ids = append(ids, id)
 			}
 			sort.Strings(ids)
-			out = append(out, ruleFinding{Unit: ids[0], Severity: "warning",
+			out = append(out, ruleFinding{Rule: "graph/duplicate-router", Unit: ids[0],
 				Message: fmt.Sprintf("traefik router %q is defined by %s; router labels merge across containers and corrupt both routes", name, strings.Join(ids, ", "))})
 		}
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Severity != out[j].Severity {
-			return out[i].Severity == "error"
-		}
-		if out[i].Unit != out[j].Unit {
-			return out[i].Unit < out[j].Unit
-		}
-		return out[i].Message < out[j].Message
-	})
 	return out
+}
+
+// sortFindings orders stamped findings: errors first, then by unit, then
+// message. Call after lintLevels.apply has assigned severities.
+func sortFindings(fs []ruleFinding) {
+	sort.Slice(fs, func(i, j int) bool {
+		if fs[i].Severity != fs[j].Severity {
+			return fs[i].Severity == sevError
+		}
+		if fs[i].Unit != fs[j].Unit {
+			return fs[i].Unit < fs[j].Unit
+		}
+		return fs[i].Message < fs[j].Message
+	})
 }
 
 // nestedStr reads a string under data[section][key] ("" when absent).
@@ -200,11 +208,11 @@ func printRuleFindings(out io.Writer, findings []ruleFinding) (errs int) {
 			fmt.Fprintln(out, cur)
 		}
 		tag := yellow("warning:")
-		if f.Severity == "error" {
+		if f.Severity == sevError {
 			tag = red("error:")
 			errs++
 		}
-		fmt.Fprintln(out, "  "+tag+" "+f.Message)
+		fmt.Fprintln(out, "  "+tag+" "+f.Message+" "+dim("("+f.Rule+")"))
 	}
 	return errs
 }

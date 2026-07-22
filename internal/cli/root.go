@@ -145,6 +145,9 @@ type config struct {
 	// SecretsField is the top-level CUE field `crei secrets` reads the
 	// #SecretRegistry from (default "secrets").
 	SecretsField string
+	// Lint holds the [lint] severity overrides (rule name -> error/warn/off),
+	// validated against the rule registry by newLintLevels.
+	Lint map[string]string
 
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
@@ -160,8 +163,9 @@ type fileConfig struct {
 	DiffTool      string      `toml:"diff_tool"`
 	DiffStyle     string      `toml:"diff_style"`
 	ReloadSystemd *bool       `toml:"reload_systemd"` // pointer: distinguish unset from false
-	SecretsField  string      `toml:"secrets_field"`
-	Style         styleConfig `toml:"style"`
+	SecretsField  string            `toml:"secrets_field"`
+	Style         styleConfig       `toml:"style"`
+	Lint          map[string]string `toml:"lint"`
 }
 
 // diff_style values: how a modified line renders in plan/diff/apply.
@@ -392,6 +396,7 @@ func resolveConfig() (config, error) {
 		DiffStyle:           ds.value,
 		ReloadSystemd:       reload,
 		SecretsField:        sf.value,
+		Lint:                fc.Lint,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
 		diffStyleSource:     ds.source,

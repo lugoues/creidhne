@@ -58,9 +58,21 @@ func newValidateCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			// Whole-project graph contracts: errors fail validation, warnings
-			// report (crei lint shows the same findings).
-			if rules := graphRuleFindings(quads); len(rules) > 0 {
+			// Named-rule findings (graph contracts, image registry): rules at
+			// severity error fail validation, warn reports, off is silent —
+			// per the [lint] config. crei lint shows the same findings.
+			levels, err := newLintLevels(cfg.Lint)
+			if err != nil {
+				return err
+			}
+			images, err := eval.LoadImageRegistry(cfg.ProjectDir, overlay)
+			if err != nil {
+				return err
+			}
+			rules := append(graphRuleFindings(quads), imageRuleFindings(quads, images)...)
+			rules = levels.apply(rules)
+			sortFindings(rules)
+			if len(rules) > 0 {
 				if errs := printRuleFindings(out, rules); errs > 0 {
 					return errSilent{}
 				}
@@ -460,6 +472,16 @@ quadlet_dir = "~/.config/containers/systemd"
 
 # Top-level CUE field 'crei secrets' reads the #SecretRegistry from.
 # secrets_field = "secrets"
+
+# Per-rule severity overrides for crei's named lint rules ("error", "warn",
+# or "off"). Rules and defaults: graph/pair-cardinality (error),
+# graph/pair-unwired (warn), graph/duplicate-name (error),
+# graph/orphan-network (warn), graph/duplicate-router (warn),
+# deps/redundant-resource (warn), deps/redundant-network-online (warn),
+# image/unpinned (warn), image/unmanaged (off).
+# [lint]
+# "graph/orphan-network" = "off"
+# "image/unmanaged" = "warn"
 
 # Output styles for plan/diff/apply. Each entry is a color string (foreground)
 # or a table { fg, bg, bold, italic, underline, reverse, strikethrough, faint }.
