@@ -30,23 +30,23 @@ package creidhne
 	image: #ImageRef & !~"@"
 
 	// digest is the pinned content digest, written by crei image pin. Absent
-	// means unpinned (not reproducible) until the next pin.
-	digest?: =~"^sha256:[0-9a-f]+$"
+	// or empty ("") means unpinned (not reproducible) until the next pin — a
+	// new entry can be written either way; crei image pin fills it in.
+	digest?: "" | =~"^sha256:[0-9a-f]+$"
 
 	// minAge skips a candidate digest whose image is younger than this: an
 	// integer with a d/w/h suffix ("7d", "2w", "12h"). See crei image outdated.
 	minAge?: =~"^[0-9]+[dwh]$"
 
+	// _digest is the effective pin: the digest when set, else "" (covering
+	// both an omitted and an explicitly-empty field uniformly).
+	_digest: [if digest != _|_ {digest}, ""][0]
+
 	// #ref is what a container consumes: image@digest when pinned, else the
 	// bare image. Computed, so it earns the hidden-handle convention (like
 	// #self/#ref/#service): the consuming container reads #ref, never the
 	// source fields.
-	if digest != _|_ {
-		#ref: "\(image)@\(digest)"
-	}
-	if digest == _|_ {
-		#ref: image
-	}
+	#ref: [if _digest != "" {"\(image)@\(_digest)"}, image][0]
 
 	// Open for policy fields added in later phases (semver range, ...).
 	...
