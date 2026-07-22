@@ -146,7 +146,9 @@ func newInitCmd() *cobra.Command {
 		Long: "init creates a cue.mod, a sample quadlet, and .crei/ (config.toml plus\n" +
 			"its JSON Schema), and vendors the embedded schema under cue.mod/usr so\n" +
 			"editors and the cue CLI resolve the import without a registry. Existing\n" +
-			"files are kept.",
+			"files are kept, and the sample main.cue is skipped when the project\n" +
+			"already has .cue files (so re-running init in a real project only\n" +
+			"re-syncs the tooling).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(cmd.OutOrStdout(), flagProjectDir)
@@ -167,11 +169,20 @@ func runInit(out io.Writer, projectDir string) error {
 	}
 	report(out, created, "cue.mod/module.cue")
 
-	created, err = writeIfAbsent(filepath.Join(projectDir, "main.cue"), sampleMain)
-	if err != nil {
-		return err
+	// The sample main.cue is scaffolding for a fresh project; writing it into
+	// one that already has .cue files is just noise (the schema, config, and
+	// vendored copy below are still (re)synced either way).
+	freshProject := false
+	if existing, _ := filepath.Glob(filepath.Join(projectDir, "*.cue")); len(existing) == 0 {
+		freshProject = true
+		created, err = writeIfAbsent(filepath.Join(projectDir, "main.cue"), sampleMain)
+		if err != nil {
+			return err
+		}
+		report(out, created, "main.cue")
+	} else {
+		fmt.Fprintf(out, "  %s main.cue (existing .cue files present, sample skipped)\n", dim("-"))
 	}
-	report(out, created, "main.cue")
 
 	// Config and its JSON Schema live under .crei/ to keep the project root clean.
 	// The "#:schema ./config.schema.json" directive in the sample resolves within
@@ -198,7 +209,11 @@ func runInit(out io.Writer, projectDir string) error {
 	}
 	fmt.Fprintf(out, "  %s cue.mod/usr/%s (vendored schema for editor/LSP)\n", green("✓"), eval.ModulePath)
 
-	fmt.Fprintln(out, "\nNext: edit main.cue, then run 'crei plan'.")
+	if freshProject {
+		fmt.Fprintln(out, "\nNext: edit main.cue, then run 'crei plan'.")
+	} else {
+		fmt.Fprintln(out, "\nNext: run 'crei plan'.")
+	}
 	return nil
 }
 
