@@ -5,10 +5,12 @@ package registry
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
-	"time"
-
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -99,9 +101,59 @@ func Classify(hasTag, hasDigest bool) Status {
 // TaggedRef is "repo:tag" — the channel to resolve.
 func (r Ref) TaggedRef() string { return r.Repo + ":" + r.Tag }
 
+// configureAuth points crane's default keychain at podman's auth.json when
+// nothing the keychain checks on its own would be found. The keychain looks at
+// ~/.docker/config.json, $DOCKER_CONFIG, $REGISTRY_AUTH_FILE, and
+// $XDG_RUNTIME_DIR/containers/auth.json — but under sudo XDG_RUNTIME_DIR is
+// typically stripped, and podman's default locations (/run/user/<uid>/ and
+// root's /run/containers/0/) are never consulted, so `podman login` creds went
+// unused. Setting REGISTRY_AUTH_FILE reuses the keychain's own parsing.
+var configureAuth = sync.OnceFunc(func() {
+	if p := podmanAuthFallback(os.Getenv, os.Getuid(), fileExists); p != "" {
+		if err := os.Setenv("REGISTRY_AUTH_FILE", p); err != nil {
+			return // keychain stays anonymous; lookups fail loudly with 401s
+		}
+	}
+})
+
+// podmanAuthFallback returns the podman auth file to use when the default
+// keychain would otherwise find nothing ("" to leave things alone).
+func podmanAuthFallback(getenv func(string) string, uid int, exists func(string) bool) string {
+	if getenv("REGISTRY_AUTH_FILE") != "" {
+		return ""
+	}
+	if home, err := os.UserHomeDir(); err == nil && exists(filepath.Join(home, ".docker", "config.json")) {
+		return ""
+	}
+	if dc := getenv("DOCKER_CONFIG"); dc != "" && exists(filepath.Join(dc, "config.json")) {
+		return ""
+	}
+	if x := getenv("XDG_RUNTIME_DIR"); x != "" && exists(filepath.Join(x, "containers", "auth.json")) {
+		return ""
+	}
+	// Podman's defaults the keychain can't see: the per-user runtime dir
+	// (when XDG_RUNTIME_DIR is stripped, e.g. under sudo) and root's.
+	candidates := []string{fmt.Sprintf("/run/user/%d/containers/auth.json", uid)}
+	if uid == 0 {
+		candidates = append(candidates, "/run/containers/0/auth.json")
+	}
+	for _, p := range candidates {
+		if exists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
+func fileExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && !st.IsDir()
+}
+
 // Digest resolves the current manifest digest of "repo:tag" (a HEAD; no layer
-// pull). Auth comes from the ambient docker keychain.
+// pull). Auth comes from the docker/podman keychain (see configureAuth).
 func Digest(repoTag string) (string, error) {
+	configureAuth()
 	d, err := crane.Digest(repoTag)
 	if err != nil {
 		return "", fmt.Errorf("resolve digest for %q: %w", repoTag, err)
@@ -112,6 +164,7 @@ func Digest(repoTag string) (string, error) {
 // Created returns an image's build time (its config's Created), used for the
 // min-age policy. Fetches only the config blob, not layers.
 func Created(ref string) (time.Time, error) {
+	configureAuth()
 	img, err := crane.Pull(ref)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("pull config for %q: %w", ref, err)

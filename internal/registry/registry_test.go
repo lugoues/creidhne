@@ -61,6 +61,43 @@ func TestParseAge(t *testing.T) {
 	}
 }
 
+// TestPodmanAuthFallback covers the sudo/root gap: podman's default auth
+// locations that the crane keychain never checks on its own.
+func TestPodmanAuthFallback(t *testing.T) {
+	env := func(m map[string]string) func(string) string {
+		return func(k string) string { return m[k] }
+	}
+	exists := func(paths ...string) func(string) bool {
+		set := map[string]bool{}
+		for _, p := range paths {
+			set[p] = true
+		}
+		return func(p string) bool { return set[p] }
+	}
+
+	// Explicit REGISTRY_AUTH_FILE: leave alone.
+	if got := podmanAuthFallback(env(map[string]string{"REGISTRY_AUTH_FILE": "/x"}), 0, exists()); got != "" {
+		t.Fatalf("explicit REGISTRY_AUTH_FILE must not be overridden, got %q", got)
+	}
+	// XDG set and auth present: keychain already finds it, leave alone.
+	if got := podmanAuthFallback(env(map[string]string{"XDG_RUNTIME_DIR": "/run/user/1000"}), 1000,
+		exists("/run/user/1000/containers/auth.json")); got != "" {
+		t.Fatalf("XDG-visible auth must not be overridden, got %q", got)
+	}
+	// sudo shape: no env, uid 0, root podman auth present -> found.
+	if got := podmanAuthFallback(env(nil), 0, exists("/run/containers/0/auth.json")); got != "/run/containers/0/auth.json" {
+		t.Fatalf("root podman auth not found, got %q", got)
+	}
+	// stripped env for a user: per-uid runtime dir still found.
+	if got := podmanAuthFallback(env(nil), 1000, exists("/run/user/1000/containers/auth.json")); got != "/run/user/1000/containers/auth.json" {
+		t.Fatalf("per-uid podman auth not found, got %q", got)
+	}
+	// nothing anywhere: stay anonymous.
+	if got := podmanAuthFallback(env(nil), 1000, exists()); got != "" {
+		t.Fatalf("no auth anywhere must return empty, got %q", got)
+	}
+}
+
 // TestDigestReal resolves a live digest. Network-gated (CREI_TEST_REGISTRY) so
 // CI/offline runs skip it, like the podman integration test.
 func TestDigestReal(t *testing.T) {
