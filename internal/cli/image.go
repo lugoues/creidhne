@@ -22,7 +22,7 @@ func newImageCmd() *cobra.Command {
 			"pins a digest (repo:tag@sha256:...); podman pulls the digest, crei checks\n" +
 			"the tag for updates. Bumping is a config write-back, not a runtime pull.",
 	}
-	cmd.AddCommand(newImageAddCmd(), newImageOutdatedCmd(), newImagePinCmd())
+	cmd.AddCommand(newImageAddCmd(), newImageOutdatedCmd(), newImagePinCmd(), newImageUpdateCmd())
 	return cmd
 }
 
@@ -90,10 +90,11 @@ type imageRow struct {
 type resolver struct {
 	digest  func(repoTag string) (string, error)
 	created func(ref string) (time.Time, error)
+	tags    func(repo string) ([]string, error)
 }
 
 func liveResolver() resolver {
-	return resolver{digest: registry.Digest, created: registry.Created}
+	return resolver{digest: registry.Digest, created: registry.Created, tags: registry.Tags}
 }
 
 // checkOutdated resolves each managed entry and classifies it. Returns the
@@ -115,30 +116,21 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 		case registry.Unmanaged:
 			row.note = "no tag — can't check for updates"
 		case registry.Managed:
-			cur, err := res.digest(r.TaggedRef())
+			c, err := nextPin(e, r, defAge, now, res)
 			if err != nil {
 				row.note = "lookup failed: " + firstLine(err.Error())
 				break
 			}
-			if cur == e.Digest {
+			switch {
+			case c.Reason == "":
 				row.note = "up to date"
-				break
+			case c.Held != "":
+				row.note = c.Held
+			default:
+				row.update = true
+				row.note = "update available: " + c.Reason + " " + short(c.Digest)
+				available++
 			}
-			effAge := defAge
-			if e.MinAge != "" {
-				effAge, _ = registry.ParseAge(e.MinAge) // schema regex already validated
-			}
-			if effAge > 0 {
-				if created, err := res.created(r.Repo + "@" + cur); err == nil {
-					if age := now.Sub(created); age < effAge {
-						row.note = fmt.Sprintf("held: candidate is %s old (min-age %s)", humanDuration(age), humanDuration(effAge))
-						break
-					}
-				}
-			}
-			row.update = true
-			row.note = "update available: " + short(cur)
-			available++
 		}
 		rows = append(rows, row)
 	}

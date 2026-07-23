@@ -159,10 +159,10 @@ type config struct {
 }
 
 type fileConfig struct {
-	QuadletDir    string      `toml:"quadlet_dir"`
-	DiffTool      string      `toml:"diff_tool"`
-	DiffStyle     string      `toml:"diff_style"`
-	ReloadSystemd *bool       `toml:"reload_systemd"` // pointer: distinguish unset from false
+	QuadletDir    string            `toml:"quadlet_dir"`
+	DiffTool      string            `toml:"diff_tool"`
+	DiffStyle     string            `toml:"diff_style"`
+	ReloadSystemd *bool             `toml:"reload_systemd"` // pointer: distinguish unset from false
 	SecretsField  string            `toml:"secrets_field"`
 	Style         styleConfig       `toml:"style"`
 	Lint          map[string]string `toml:"lint"`

@@ -17,6 +17,7 @@ type ImageEntry struct {
 	Image  string // tracked ref, no digest
 	Digest string // "sha256:…", "" when unpinned
 	MinAge string // "" when unset
+	Range  string // semver constraint for tag advancement, "" when unset
 }
 
 // LoadImageRegistry loads dir/registries and decodes its `images` map. A
@@ -61,6 +62,9 @@ func LoadImageRegistry(dir string, overlay map[string]load.Source) ([]ImageEntry
 		}
 		if f := v.LookupPath(cue.ParsePath("minAge")); f.Exists() {
 			e.MinAge, _ = f.String()
+		}
+		if f := v.LookupPath(cue.ParsePath("range")); f.Exists() {
+			e.Range, _ = f.String()
 		}
 		out = append(out, e)
 	}
