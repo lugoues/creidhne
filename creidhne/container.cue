@@ -67,8 +67,11 @@ import "list"
 		IP?: #IPv4
 		// Specify a static IPv6 address for the container.
 		IP6?: #IPv6
-		// Set network-scoped DNS resolver/nameserver for the container.
-		DNS?: [...(#IPAddress | [...#IPAddress])]
+		// Set network-scoped DNS resolver/nameserver for the container, or
+		// ["none"] to disable resolv.conf management entirely. Exclusive:
+		// podman rejects none mixed with addresses ("none is not allowed to
+		// be specified with other DNS ip addresses"), so the schema does too.
+		DNS?: [...(#IPAddress | [...#IPAddress])] | ["none"]
 		// Set custom DNS options.
 		DNSOption?: [...(string | [...string])]
 		// Set custom DNS search domains. Use DNSSearch=. to remove the search domain.
