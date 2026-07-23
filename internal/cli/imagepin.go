@@ -32,12 +32,12 @@ func newImagePinCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pin [name...]",
 		Short: "Resolve tracked tags to current digests and write them back",
-		Long: "pin resolves each managed entry's tag to its current registry digest\n" +
-			"and rewrites registries/images.cue with the pinned refs. Unpinned\n" +
-			"entries (tag, no digest) become pinned; managed entries refresh to the\n" +
-			"tag's current digest; unmanaged entries (digest, no tag) are left alone.\n" +
-			"The change is a reviewable config edit — apply follows normally. Given\n" +
-			"names, only those entries are pinned.",
+		Long: "pin fills the gaps: entries with a tag but no digest get the tag's\n" +
+			"current digest written back to registries/images.cue. Already-pinned\n" +
+			"entries are left alone (crei image update is the verb that moves\n" +
+			"existing pins, honoring min-age and semver-range policy); unmanaged\n" +
+			"entries (digest, no tag) too. The change is a reviewable config edit.\n" +
+			"Given names, only those entries are pinned.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entries, projectDir, err := loadImages()
@@ -68,15 +68,18 @@ func newImagePinCmd() *cobra.Command {
 					fmt.Fprintf(out, "  %s %s (no tag, unchanged)\n", dim("-"), entries[i].Key)
 					continue
 				}
+				// pin only fills gaps; moving an existing pin is update's job
+				// (which respects min-age and semver-range policy).
+				if entries[i].Digest != "" {
+					fmt.Fprintf(out, "  %s %s (pinned; use 'crei image update' to advance)\n", dim("-"), entries[i].Key)
+					continue
+				}
 				digest, err := registry.Digest(r.TaggedRef())
 				if err != nil {
 					fmt.Fprintln(out, yellow("! "+entries[i].Key+": "+firstLine(err.Error())))
 					continue
 				}
-				if digest == entries[i].Digest {
-					fmt.Fprintf(out, "  %s %s (up to date)\n", dim("-"), entries[i].Key)
-					continue
-				}
+
 				fmt.Fprintf(out, "  %s %s -> %s\n", green("~"), entries[i].Key, short(digest))
 				entries[i].Digest = digest // pin writes only the digest field
 				changed++
@@ -136,6 +139,9 @@ func emitImageRegistry(entries []eval.ImageEntry) ([]byte, error) {
 		}
 		if e.MinAge != "" {
 			fields = append(fields, fmt.Sprintf("minAge: %q", e.MinAge))
+		}
+		if e.Range != "" {
+			fields = append(fields, fmt.Sprintf("range: %q", e.Range))
 		}
 		if len(fields) == 1 {
 			w("\t%s: %s", cueKey(e.Key), fields[0])

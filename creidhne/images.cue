@@ -38,6 +38,12 @@ package creidhne
 	// integer with a d/w/h suffix ("7d", "2w", "12h"). See crei image outdated.
 	minAge?: =~"^[0-9]+[dwh]$"
 
+	// range makes crei image update advance the tag itself within a semver
+	// constraint ("^1.2", "~8.25", "8.x"): the image's tag should then be a
+	// concrete version, and update selects the highest registry tag
+	// satisfying the range. Validated as a constraint in Go.
+	range?: string & !=""
+
 	// _digest is the effective pin: the digest when set, else "" (covering
 	// both an omitted and an explicitly-empty field uniformly).
 	_digest: [if digest != _|_ {digest}, ""][0]

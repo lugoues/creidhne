@@ -98,6 +98,29 @@ func TestPodmanAuthFallback(t *testing.T) {
 	}
 }
 
+func TestPickVersion(t *testing.T) {
+	tags := []string{"latest", "stable", "8.25.0", "8.25.3", "8.26.1", "v9.0.0", "sha-abc123", "8"}
+	cases := []struct{ constraint, want string }{
+		{"~8.25", "8.25.3"},
+		{"^8.25", "8.26.1"},
+		{"8.x", "8.26.1"},
+		{">=9", "v9.0.0"}, // literal registry form kept (v prefix)
+		{"^10", ""},       // nothing satisfies
+	}
+	for _, c := range cases {
+		got, err := PickVersion(tags, c.constraint)
+		if err != nil {
+			t.Fatalf("PickVersion(%q): %v", c.constraint, err)
+		}
+		if got != c.want {
+			t.Fatalf("PickVersion(%q) = %q, want %q", c.constraint, got, c.want)
+		}
+	}
+	if _, err := PickVersion(tags, "not a range ]["); err == nil {
+		t.Fatal("invalid constraint must error")
+	}
+}
+
 // TestDigestReal resolves a live digest. Network-gated (CREI_TEST_REGISTRY) so
 // CI/offline runs skip it, like the podman integration test.
 func TestDigestReal(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 )
@@ -159,6 +160,43 @@ func Digest(repoTag string) (string, error) {
 		return "", fmt.Errorf("resolve digest for %q: %w", repoTag, err)
 	}
 	return d, nil
+}
+
+// Tags lists a repository's tags (for semver-range selection).
+func Tags(repo string) ([]string, error) {
+	configureAuth()
+	tags, err := crane.ListTags(repo)
+	if err != nil {
+		return nil, fmt.Errorf("list tags for %q: %w", repo, err)
+	}
+	return tags, nil
+}
+
+// PickVersion selects the highest tag satisfying a semver constraint (e.g.
+// "^1.2", "~8.25", "8.x") from a repository's tag list. Tags that do not
+// parse as semver (latest, stable, sha-…) are ignored; a v prefix is
+// tolerated and the returned tag keeps its literal registry form. Returns
+// ("", nil) when nothing in the list satisfies the constraint.
+func PickVersion(tags []string, constraint string) (string, error) {
+	c, err := semver.NewConstraint(constraint)
+	if err != nil {
+		return "", fmt.Errorf("invalid semver range %q: %w", constraint, err)
+	}
+	best := ""
+	var bestV *semver.Version
+	for _, t := range tags {
+		v, err := semver.NewVersion(t)
+		if err != nil {
+			continue // non-semver tag
+		}
+		if !c.Check(v) {
+			continue
+		}
+		if bestV == nil || v.GreaterThan(bestV) {
+			best, bestV = t, v
+		}
+	}
+	return best, nil
 }
 
 // Created returns an image's build time (its config's Created), used for the
