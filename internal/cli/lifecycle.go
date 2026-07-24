@@ -253,19 +253,21 @@ func newRestartCmd() *cobra.Command {
 				}
 				return nil
 			}
-			// Interactive --stale: pick which stale units to restart (like
-			// crei image update), all unselected — restarting is an explicit
-			// choice. -y (or no TTY) keeps the list+confirm-all flow.
+			// Interactive --stale: pick which stale units to restart. Unlike
+			// crei image update (a bigger decision, so it starts unselected),
+			// the user already asked to restart stale units, so everything
+			// starts selected, deselect to skip any. -y (or no TTY) keeps the
+			// list+confirm-all flow.
 			if staleOnly && !yes && stdinIsTTY(cmd.InOrStdin()) {
 				var chosen []int
 				opts := make([]huh.Option[int], len(rows))
 				for k, r := range rows {
-					opts[k] = huh.NewOption(staleOptionLabel(r), k)
+					opts[k] = huh.NewOption(staleOptionLabel(r), k).Selected(true)
 				}
 				err := huh.NewForm(huh.NewGroup(
 					huh.NewMultiSelect[int]().
 						Title("Stale units").
-						Description("space toggles, enter restarts the selection").
+						Description("all selected; space toggles, enter restarts the selection").
 						Options(opts...).
 						Value(&chosen),
 				)).Run()
