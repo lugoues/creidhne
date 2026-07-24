@@ -150,7 +150,7 @@ func printHeld(out io.Writer, held []updateItem, at time.Time) {
 	if len(held) == 0 {
 		return
 	}
-	fmt.Fprintln(out, bold("Held by a lock (not offered):"))
+	fmt.Fprintln(out, bold("Locked (not offered):"))
 	for _, it := range held {
 		fmt.Fprintf(out, "  %s %s  %s\n", yellow("x"), bold(it.e.Key), dim(it.c.Reason))
 		fmt.Fprintf(out, "      %s\n", lockNote(it.e.Lock, at))

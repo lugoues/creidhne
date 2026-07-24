@@ -27,12 +27,12 @@ func lockNote(l *eval.ImageLock, at time.Time) string {
 	switch {
 	case !ok:
 	// since carries a date, not a timestamp, so anything under a day is
-	// measured from midnight: reporting "held 19h" for a lock placed minutes
-	// ago would be precision the field does not have.
+	// measured from midnight: reporting "placed 19h ago" for a lock set
+	// minutes ago would be precision the field does not have.
 	case age < 24*time.Hour:
-		s += " (held today)"
+		s += " (placed today)"
 	default:
-		s += " (held " + humanDuration(age) + ")"
+		s += " (placed " + humanDuration(age) + " ago)"
 	}
 	return s
 }
