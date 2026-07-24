@@ -152,8 +152,15 @@ func printHeld(out io.Writer, held []updateItem, at time.Time) {
 	}
 	fmt.Fprintln(out, bold("Locked (not offered):"))
 	for _, it := range held {
-		fmt.Fprintf(out, "  %s %s  %s\n", yellow("x"), bold(it.e.Key), dim(it.c.Reason))
-		fmt.Fprintf(out, "      %s\n", lockNote(it.e.Lock, at))
+		// Mirror the selectable items' shape: name on the marker line, details
+		// indented beneath. The section title already says "locked", so the
+		// per-item lines are just the change, the reason, and the date.
+		fmt.Fprintf(out, "  %s %s\n", yellow("x"), bold(it.e.Key))
+		fmt.Fprintf(out, "      %s\n", it.c.Reason)
+		fmt.Fprintf(out, "      reason: %s\n", it.e.Lock.Reason)
+		if d := lockDate(it.e.Lock, at); d != "" {
+			fmt.Fprintf(out, "      date: %s\n", d)
+		}
 	}
 	fmt.Fprintf(out, "  %s\n\n", dim("run 'crei image unlock <name>' to release"))
 }

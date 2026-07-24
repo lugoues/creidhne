@@ -116,8 +116,13 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 		// is costing, not to hide it. Held updates are not "available", so they
 		// never make outdated exit non-zero.
 		if e.Lock != nil {
+			// The status column already reads "locked", so the note is just the
+			// reason (dated when known) and what the lock is holding back.
 			row.status = "locked"
-			row.note = lockNote(e.Lock, now)
+			row.note = e.Lock.Reason
+			if d := lockDate(e.Lock, now); d != "" {
+				row.note += " (" + d + ")"
+			}
 			if status == registry.Managed {
 				if c, err := nextPin(e, r, defAge, now, res); err == nil && c.Reason != "" {
 					row.note += "; holding back " + c.Reason + " " + short(c.Digest)

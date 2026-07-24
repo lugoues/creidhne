@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"cuelang.org/go/cue/format"
 	"github.com/spf13/cobra"
@@ -64,7 +63,7 @@ func newImagePinCmd() *cobra.Command {
 				// unpinned one included: establishing a pin would still change
 				// what runs, which is exactly what the lock forbids.
 				if l := entries[i].Lock; l != nil {
-					fmt.Fprintf(out, "  %s %s (%s)\n", dim("-"), entries[i].Key, lockNote(l, time.Now()))
+					fmt.Fprintf(out, "  %s %s (locked: %s)\n", dim("-"), entries[i].Key, l.Reason)
 					continue
 				}
 				r, err := registry.Parse(entries[i].Image)

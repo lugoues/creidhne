@@ -16,25 +16,23 @@ import (
 // #ImageEntry.lock validates).
 const lockDateFormat = "2006-01-02"
 
-// lockNote renders a lock for a one-line report: the reason, plus how long it
-// has been held when the date is known. Age is the decay signal: a hold placed
-// two years ago for a bug fixed since is the failure mode worth seeing. The
-// clock is a parameter rather than a package var so callers that already have
-// a reference time (the outdated report) stay consistent with themselves.
-func lockNote(l *eval.ImageLock, at time.Time) string {
-	s := "locked: " + l.Reason
+// lockDate renders when the lock was set: "today" for one set today (since
+// carries a date, not a timestamp, so sub-day precision is not real), the raw
+// YYYY-MM-DD otherwise, and "" when since is unset or hand-edited to garbage.
+// The raw date, not a fuzzy age, is the decay signal a stale lock needs: a
+// 2026-01 date next to a reason about a bug fixed in March tells the story.
+// The clock is a parameter so a caller with its own reference time (the
+// outdated report) stays consistent with itself.
+func lockDate(l *eval.ImageLock, at time.Time) string {
 	age, ok := lockAge(l, at)
 	switch {
 	case !ok:
-	// since carries a date, not a timestamp, so anything under a day is
-	// measured from midnight: reporting "placed 19h ago" for a lock set
-	// minutes ago would be precision the field does not have.
+		return ""
 	case age < 24*time.Hour:
-		s += " (placed today)"
+		return "today"
 	default:
-		s += " (placed " + humanDuration(age) + " ago)"
+		return l.Since
 	}
-	return s
 }
 
 // lockAge is how long the lock has been in place, false when since is unset or
