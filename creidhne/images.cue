@@ -44,6 +44,24 @@ package creidhne
 	// satisfying the range. Validated as a constraint in Go.
 	range?: string & !=""
 
+	// lock holds this entry where it is and says why. While present, crei
+	// never rewrites the entry: update will not offer it (naming it on the
+	// command line does not override, unlike a min-age marker), pin skips it,
+	// and add --force refuses. The reason is surfaced by update and outdated,
+	// so the rationale outlives your memory of it. Written by
+	// `crei image lock <name> <reason>`; cleared by `crei image unlock`.
+	//
+	// This differs from range: "=x.y.z", which freezes the tag but still lets
+	// the digest follow a re-push. A lock freezes both.
+	lock?: {
+		// reason is why this is held, e.g. "3.6 breaks websocket upgrades".
+		reason: string & !=""
+
+		// since is the date the lock was placed (YYYY-MM-DD), stamped by
+		// crei image lock so a stale hold is visible as one.
+		since?: =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+	}
+
 	// _digest is the effective pin: the digest when set, else "" (covering
 	// both an omitted and an explicitly-empty field uniformly).
 	_digest: [if digest != _|_ {digest}, ""][0]

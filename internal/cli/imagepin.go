@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"cuelang.org/go/cue/format"
 	"github.com/spf13/cobra"
@@ -57,6 +58,13 @@ func newImagePinCmd() *cobra.Command {
 			changed := 0
 			for i := range entries {
 				if len(only) > 0 && !only[entries[i].Key] {
+					continue
+				}
+				// A lock means crei rewrites nothing about the entry, an
+				// unpinned one included: establishing a pin would still change
+				// what runs, which is exactly what the lock forbids.
+				if l := entries[i].Lock; l != nil {
+					fmt.Fprintf(out, "  %s %s (%s)\n", dim("-"), entries[i].Key, lockNote(l, time.Now()))
 					continue
 				}
 				r, err := registry.Parse(entries[i].Image)
@@ -118,10 +126,16 @@ func newImagePinCmd() *cobra.Command {
 // emitImageRegistry regenerates registries/images.cue from the entries. crei
 // owns this file, so it is rewritten canonically (cue fmt) rather than
 // surgically patched; the entry fields decoded by LoadImageRegistry (ref,
-// minAge) are the whole schema today, so nothing is lost. Extend both when a
-// policy field is added.
+// minAge, range, lock) are the whole schema today, so nothing is lost. Extend
+// both when a policy field is added.
 func emitImageRegistry(entries []eval.ImageEntry) ([]byte, error) {
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Key < entries[j].Key })
+	// Sort a copy: callers hold indexes into their slice (findImage, the
+	// picker's updateItem.idx) and reordering it underneath them silently
+	// retargets those indexes at the wrong entry.
+	sorted := make([]eval.ImageEntry, len(entries))
+	copy(sorted, entries)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Key < sorted[j].Key })
+	entries = sorted
 	var b bytes.Buffer
 	w := func(f string, a ...any) { fmt.Fprintf(&b, f+"\n", a...) }
 	w("package registries")
@@ -143,9 +157,24 @@ func emitImageRegistry(entries []eval.ImageEntry) ([]byte, error) {
 		if e.Range != "" {
 			fields = append(fields, fmt.Sprintf("range: %q", e.Range))
 		}
-		if len(fields) == 1 {
+		switch {
+		// A lock carries prose meant to be read, so a locked entry is emitted
+		// expanded rather than crammed onto the one-line form.
+		case e.Lock != nil:
+			w("\t%s: {", cueKey(e.Key))
+			for _, f := range fields {
+				w("\t\t%s", f)
+			}
+			w("\t\tlock: {")
+			w("\t\t\treason: %q", e.Lock.Reason)
+			if e.Lock.Since != "" {
+				w("\t\t\tsince: %q", e.Lock.Since)
+			}
+			w("\t\t}")
+			w("\t}")
+		case len(fields) == 1:
 			w("\t%s: %s", cueKey(e.Key), fields[0])
-		} else {
+		default:
 			w("\t%s: {%s}", cueKey(e.Key), strings.Join(fields, ", "))
 		}
 	}

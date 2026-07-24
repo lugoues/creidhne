@@ -18,6 +18,17 @@ type ImageEntry struct {
 	Digest string // "sha256:…", "" when unpinned
 	MinAge string // "" when unset
 	Range  string // semver constraint for tag advancement, "" when unset
+	Lock   *ImageLock
+}
+
+// ImageLock is an entry's hold: crei rewrites neither its image nor its digest
+// while it is set. Nil means unlocked. Unlike a min-age marker (information the
+// picker lets you override), a lock is a gate: `crei image unlock` is the only
+// way past it, so a decision made months ago still holds when you have
+// forgotten it.
+type ImageLock struct {
+	Reason string // why it is held; required by the schema
+	Since  string // "YYYY-MM-DD" when the lock was placed, "" when unset
 }
 
 // LoadImageRegistry loads dir/registries and decodes its `images` map. A
@@ -65,6 +76,16 @@ func LoadImageRegistry(dir string, overlay map[string]load.Source) ([]ImageEntry
 		}
 		if f := v.LookupPath(cue.ParsePath("range")); f.Exists() {
 			e.Range, _ = f.String()
+		}
+		if f := v.LookupPath(cue.ParsePath("lock")); f.Exists() {
+			l := &ImageLock{}
+			if r := f.LookupPath(cue.ParsePath("reason")); r.Exists() {
+				l.Reason, _ = r.String()
+			}
+			if s := f.LookupPath(cue.ParsePath("since")); s.Exists() {
+				l.Since, _ = s.String()
+			}
+			e.Lock = l
 		}
 		out = append(out, e)
 	}

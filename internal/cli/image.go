@@ -22,7 +22,8 @@ func newImageCmd() *cobra.Command {
 			"pins a digest (repo:tag@sha256:...); podman pulls the digest, crei checks\n" +
 			"the tag for updates. Bumping is a config write-back, not a runtime pull.",
 	}
-	cmd.AddCommand(newImageAddCmd(), newImageOutdatedCmd(), newImagePinCmd(), newImageUpdateCmd())
+	cmd.AddCommand(newImageAddCmd(), newImageOutdatedCmd(), newImagePinCmd(), newImageUpdateCmd(),
+		newImageLockCmd(), newImageUnlockCmd())
 	return cmd
 }
 
@@ -110,6 +111,21 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 		}
 		status := registry.Classify(r.Tag != "", e.Digest != "")
 		row := imageRow{name: e.Key, status: string(status)}
+		// A lock is reported instead of the update, but the candidate is still
+		// resolved and named: the point of the report is to show what the hold
+		// is costing, not to hide it. Held updates are not "available", so they
+		// never make outdated exit non-zero.
+		if e.Lock != nil {
+			row.status = "locked"
+			row.note = lockNote(e.Lock, now)
+			if status == registry.Managed {
+				if c, err := nextPin(e, r, defAge, now, res); err == nil && c.Reason != "" {
+					row.note += "; holding back " + c.Reason + " " + short(c.Digest)
+				}
+			}
+			rows = append(rows, row)
+			continue
+		}
 		switch status {
 		case registry.Unpinned:
 			row.note = "no digest — run 'crei image pin'"

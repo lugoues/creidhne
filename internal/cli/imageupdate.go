@@ -108,6 +108,56 @@ func (it updateItem) label() string {
 	return fmt.Sprintf("%s\n  %s\n  %s\n  %s", name, it.c.Reason, age, short(it.c.Digest))
 }
 
+// splitCandidates resolves every in-scope entry and sorts the ones with a
+// waiting update into selectable (items) and lock-held (held), plus per-entry
+// lookup warnings. only, when non-empty, restricts the scope to those names.
+//
+// A lock diverts an entry to held even when it was named explicitly: naming
+// overrides a min-age marker (youth is information) but never a lock (a lock is
+// a decision, made when you had the context you now lack). This split is the
+// whole behavioral contract, so it lives apart from the command for testing.
+func splitCandidates(entries []eval.ImageEntry, only map[string]bool, defAge time.Duration, now time.Time, res resolver) (items, held []updateItem, warns []string) {
+	for i := range entries {
+		e := entries[i]
+		if len(only) > 0 && !only[e.Key] {
+			continue
+		}
+		r, err := registry.Parse(e.Image)
+		if err != nil || r.Tag == "" {
+			continue // invalid/unmanaged surface in outdated, not here
+		}
+		c, err := nextPin(e, r, defAge, now, res)
+		if err != nil {
+			warns = append(warns, firstLine(err.Error()))
+			continue
+		}
+		if c.Reason == "" {
+			continue // already current
+		}
+		if e.Lock != nil {
+			held = append(held, updateItem{idx: i, e: e, c: c})
+			continue
+		}
+		items = append(items, updateItem{idx: i, e: e, c: c})
+	}
+	return items, held, warns
+}
+
+// printHeld reports the candidates a lock is holding back, above the picker.
+// They are shown rather than silently dropped: seeing the update exists, with
+// the reason it is being refused, is the whole reason the lock records one.
+func printHeld(out io.Writer, held []updateItem, at time.Time) {
+	if len(held) == 0 {
+		return
+	}
+	fmt.Fprintln(out, bold("Held by a lock (not offered):"))
+	for _, it := range held {
+		fmt.Fprintf(out, "  %s %s  %s\n", yellow("x"), bold(it.e.Key), dim(it.c.Reason))
+		fmt.Fprintf(out, "      %s\n", lockNote(it.e.Lock, at))
+	}
+	fmt.Fprintf(out, "  %s\n\n", dim("run 'crei image unlock <name>' to release"))
+}
+
 func newImageUpdateCmd() *cobra.Command {
 	var yes bool
 	var minAgeFlag string
@@ -123,7 +173,9 @@ func newImageUpdateCmd() *cobra.Command {
 			"registries/images.cue — a reviewable config edit; apply follows\n" +
 			"normally.\n\n" +
 			"-y skips the picker and applies every aged candidate; naming entries\n" +
-			"restricts (and pre-selects) just those.",
+			"restricts (and pre-selects) just those.\n\n" +
+			"Locked entries (crei image lock) are listed with their reason but are\n" +
+			"never offered, and naming one does not override that: unlock it first.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defAge, err := registry.ParseAge(minAgeFlag)
@@ -144,32 +196,21 @@ func newImageUpdateCmd() *cobra.Command {
 				only[a] = true
 			}
 			res := liveResolver()
-			var items []updateItem
+			now := time.Now()
+			var items, held []updateItem
 			var warns []string
 			withSpinner(out, "Image updates: fetching versions", func() {
-				for i := range entries {
-					e := entries[i]
-					if len(only) > 0 && !only[e.Key] {
-						continue
-					}
-					r, err := registry.Parse(e.Image)
-					if err != nil || r.Tag == "" {
-						continue // invalid/unmanaged surface in outdated, not here
-					}
-					c, err := nextPin(e, r, defAge, time.Now(), res)
-					if err != nil {
-						warns = append(warns, firstLine(err.Error()))
-						continue
-					}
-					if c.Reason != "" {
-						items = append(items, updateItem{idx: i, e: e, c: c})
-					}
-				}
+				items, held, warns = splitCandidates(entries, only, defAge, now, res)
 			})
 			for _, w := range warns {
 				fmt.Fprintln(out, yellow("! "+w))
 			}
+			printHeld(out, held, now)
 			if len(items) == 0 {
+				if len(held) > 0 {
+					fmt.Fprintln(out, "Nothing to update (every candidate is locked).")
+					return nil
+				}
 				fmt.Fprintln(out, "Everything up to date.")
 				return nil
 			}

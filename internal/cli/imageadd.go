@@ -47,7 +47,15 @@ func newImageAddCmd() *cobra.Command {
 				return err
 			}
 			for _, e := range entries {
-				if e.Key == name && !force {
+				if e.Key != name {
+					continue
+				}
+				// --force replaces an entry, which would silently drop a lock
+				// and its reason. Refuse: unlocking must be deliberate.
+				if e.Lock != nil {
+					return fmt.Errorf("%q is locked (%s); run 'crei image unlock %s' first", name, e.Lock.Reason, name)
+				}
+				if !force {
 					return fmt.Errorf("%q already in the registry; use 'crei image pin %s' to refresh, or --force to replace", name, name)
 				}
 			}

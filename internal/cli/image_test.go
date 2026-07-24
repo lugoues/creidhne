@@ -1,13 +1,51 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"cuelang.org/go/cue/load"
+
+	"github.com/lugoues/creidhne"
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/registry"
 )
+
+// writeProject materializes a minimal CUE project whose registries/images.cue
+// is emitImageRegistry's own output, so a round-trip test exercises the real
+// writer rather than a hand-written approximation of it.
+func writeProject(t *testing.T, dir string, entries []eval.ImageEntry) {
+	t.Helper()
+	content, err := emitImageRegistry(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(dir, "cue.mod", "module.cue"),
+		"module: \"example.com/demo@v0\"\nlanguage: version: \"v0.17.0\"\n")
+	write(filepath.Join(dir, "registries", "images.cue"), string(content))
+}
+
+// overlayFor resolves the embedded schema for dir, offline.
+func overlayFor(t *testing.T, dir string) map[string]load.Source {
+	t.Helper()
+	o, err := eval.Overlay(dir, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return o
+}
 
 func TestCheckOutdated(t *testing.T) {
 	now := time.Now()
@@ -144,6 +182,8 @@ func TestEmitImageRegistry(t *testing.T) {
 		{Key: "ha", Image: "ghcr.io/x/home-assistant:stable", Digest: "sha256:def", MinAge: "3d"},
 		{Key: "fresh", Image: "docker.io/x/y:1"},
 		{Key: "ranged", Image: "docker.io/x/z:8.25.0", Digest: "sha256:r", Range: "~8.25"},
+		{Key: "locked", Image: "docker.io/library/traefik:v3.6", Digest: "sha256:t",
+			Lock: &eval.ImageLock{Reason: "3.6 breaks websocket upgrades", Since: "2026-07-24"}},
 	}
 	out, err := emitImageRegistry(entries)
 	if err != nil {
@@ -158,9 +198,131 @@ func TestEmitImageRegistry(t *testing.T) {
 		`ha: {image: "ghcr.io/x/home-assistant:stable", digest: "sha256:def", minAge: "3d"}`,
 		`fresh: image: "docker.io/x/y:1"`,
 		`ranged: {image: "docker.io/x/z:8.25.0", digest: "sha256:r", range: "~8.25"}`,
+		// A lock expands the entry: the reason is prose meant to be read.
+		`reason: "3.6 breaks websocket upgrades"`,
+		`since:  "2026-07-24"`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("emit missing %q:\n%s", want, s)
+		}
+	}
+}
+
+// TestEmitDoesNotReorderCaller: emit must not sort the caller's slice. Callers
+// hold indexes into it (findImage's result, the picker's updateItem.idx) and
+// used across a write those indexes would silently address a different entry --
+// which reported the wrong image on `crei image lock` until emit sorted a copy.
+func TestEmitDoesNotReorderCaller(t *testing.T) {
+	entries := []eval.ImageEntry{
+		{Key: "zulu", Image: "docker.io/x/zulu:1", Digest: "sha256:abc"},
+		{Key: "alpha", Image: "docker.io/x/alpha:1", Digest: "sha256:def"},
+	}
+	if _, err := emitImageRegistry(entries); err != nil {
+		t.Fatal(err)
+	}
+	if entries[0].Key != "zulu" || entries[1].Key != "alpha" {
+		t.Fatalf("emit reordered the caller's slice: %q, %q", entries[0].Key, entries[1].Key)
+	}
+}
+
+// TestLockRoundTrip: a locked entry survives emit -> load unchanged. The
+// registry file is crei-rewritten wholesale on every pin/update, so a field the
+// emitter drops is a field silently deleted from the user's config.
+func TestLockRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	// Digests must be real hex: this loads through the schema, whose regex
+	// rejects anything else.
+	writeProject(t, dir, []eval.ImageEntry{
+		{Key: "traefik", Image: "docker.io/library/traefik:v3.6", Digest: "sha256:beef",
+			Lock: &eval.ImageLock{Reason: "3.6 breaks websocket upgrades", Since: "2026-07-24"}},
+		{Key: "plain", Image: "docker.io/x/y:1", Digest: "sha256:cafe"},
+	})
+
+	got, err := eval.LoadImageRegistry(dir, overlayFor(t, dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byKey := map[string]eval.ImageEntry{}
+	for _, e := range got {
+		byKey[e.Key] = e
+	}
+	l := byKey["traefik"].Lock
+	if l == nil {
+		t.Fatal("traefik lost its lock through emit -> load")
+	}
+	if l.Reason != "3.6 breaks websocket upgrades" || l.Since != "2026-07-24" {
+		t.Fatalf("lock round-tripped wrong: %+v", l)
+	}
+	if byKey["plain"].Lock != nil {
+		t.Fatalf("plain must stay unlocked, got %+v", byKey["plain"].Lock)
+	}
+}
+
+// TestUpdateSkipsLocked: the point of the feature. A locked entry with a
+// waiting update is reported as held, never offered for selection, and is not
+// rewritten.
+func TestUpdateSkipsLocked(t *testing.T) {
+	now := time.Now()
+	res := resolver{
+		digest:  func(string) (string, error) { return "sha256:new", nil },
+		created: func(string) (time.Time, error) { return now.Add(-100 * 24 * time.Hour), nil },
+		tags:    func(string) ([]string, error) { return []string{"v1"}, nil },
+	}
+	locked := eval.ImageEntry{Key: "traefik", Image: "docker.io/a/traefik:v1", Digest: "sha256:old",
+		Lock: &eval.ImageLock{Reason: "3.6 breaks websockets", Since: "2026-01-01"}}
+	free := eval.ImageEntry{Key: "other", Image: "docker.io/a/other:v1", Digest: "sha256:old"}
+
+	// checkOutdated: locked is reported, with what it holds back, and does not
+	// count as an available update (so outdated stays exit-zero).
+	rows, available := checkOutdated([]eval.ImageEntry{locked}, 0, now, res)
+	if available != 0 {
+		t.Fatalf("a locked entry must not count as available, got %d", available)
+	}
+	if rows[0].status != "locked" {
+		t.Fatalf("status = %q, want locked", rows[0].status)
+	}
+	for _, want := range []string{"3.6 breaks websockets", "holding back"} {
+		if !strings.Contains(rows[0].note, want) {
+			t.Fatalf("note %q missing %q", rows[0].note, want)
+		}
+	}
+
+	// The picker's own split: locked candidates go to held, never to items.
+	items, held, _ := splitCandidates([]eval.ImageEntry{locked, free}, nil, 0, now, res)
+	if len(items) != 1 || items[0].e.Key != "other" {
+		t.Fatalf("selectable = %+v, want only 'other'", items)
+	}
+	if len(held) != 1 || held[0].e.Key != "traefik" {
+		t.Fatalf("held = %+v, want only 'traefik'", held)
+	}
+
+	// Naming a locked entry does not override the lock, unlike a min-age
+	// marker. This is the load-bearing difference between the two.
+	items, held, _ = splitCandidates([]eval.ImageEntry{locked}, map[string]bool{"traefik": true}, 0, now, res)
+	if len(items) != 0 {
+		t.Fatalf("naming a locked entry must not offer it, got %+v", items)
+	}
+	if len(held) != 1 {
+		t.Fatalf("naming a locked entry should still report it held, got %+v", held)
+	}
+}
+
+func TestLockAge(t *testing.T) {
+	at := time.Date(2026, 7, 24, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		since   string
+		wantOK  bool
+		wantDur time.Duration
+	}{
+		{"2026-07-14", true, 10 * 24 * time.Hour},
+		{"", false, 0},
+		{"not-a-date", false, 0}, // hand-edited garbage degrades quietly
+		{"2027-01-01", true, 0},  // a future date reads as just-placed
+	}
+	for _, c := range cases {
+		got, ok := lockAge(&eval.ImageLock{Reason: "x", Since: c.since}, at)
+		if ok != c.wantOK || got != c.wantDur {
+			t.Fatalf("lockAge(%q) = %v,%v; want %v,%v", c.since, got, ok, c.wantDur, c.wantOK)
 		}
 	}
 }
