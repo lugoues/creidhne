@@ -164,6 +164,41 @@ app: q.#Quadlet & {
 	}
 }
 
+// TestDiagIncompleteSecretEntry: an incomplete #SecretName in a Secret list
+// (the shape a mixin input takes when its required field is left unset) makes
+// the secretStrings flattener collapse to "list.Concat: empty disjunction:
+// conflicting values string and [...]". That noise must be translated to name
+// the section and the likely cause, not shown verbatim.
+func TestDiagIncompleteSecretEntry(t *testing.T) {
+	err := loadSourceErr(t, `package naming
+
+import q "github.com/lugoues/creidhne@v0"
+
+app: q.#Quadlet & {
+	name: "app"
+	units: #container: Container: {
+		Image: "docker.io/x"
+		// An incomplete #SecretRef nested in a sub-list (the schema allows
+		// [...[...#SecretEntry]]): the outer list-shape check passes, so the
+		// missing required name bites only at the secretStrings flatten, whose
+		// disjunction then collapses to the cryptic "conflicting values string
+		// and [...]" the escalation reported.
+		Secret: [[{type: "env", target: "TOKEN"}]]
+	}
+}
+`)
+	if err == nil {
+		t.Fatal("an incomplete #SecretName must fail")
+	}
+	findings := err.Error()
+	if i := strings.Index(findings, "\nbuild "); i >= 0 {
+		findings = findings[:i]
+	}
+	if !strings.Contains(findings, "an entry in Secret is incomplete") {
+		t.Fatalf("incomplete secret entry not named:\n%v", err)
+	}
+}
+
 // TestDiagUnitInsteadOfSelfCollapses: a unit placed where its reference
 // belongs fans out into per-field closedness rejections from every
 // disjunction arm; they must collapse into one finding that names the fix.

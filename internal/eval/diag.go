@@ -143,7 +143,17 @@ func diagnose(root cue.Value, dir string, err error) ([]finding, bool) {
 			continue
 		}
 		f, rewrote := translate(root, dir, e)
-		if collapsed[key] {
+		// A *Strings flattener that fanned out into empty-disjunction /
+		// string-vs-list arms means a source entry (Secret, Volume, ...) never
+		// became concrete: a required input, often a mixin field, was left
+		// unset. cue's surviving arm is the bare "error in call to list.Concat"
+		// with the real cause scattered across sibling arms as noise; name the
+		// section and the likely fix instead. The decision is made over the
+		// whole group, since the informative arm is not itself the noisy one.
+		if sec, ok := flattenSection(e.Path()); ok && isIncompleteFlatten(groups[key]) {
+			f.msg = fmt.Sprintf("an entry in %s is incomplete: a required input is unset (often a mixin field like a #SecretName's name)", sec)
+			rewrote = true
+		} else if collapsed[key] {
 			f.msg = "matches no accepted form here: " + f.msg
 			if structInRefSlot(strings.Split(key, "."), msgOf(e)) {
 				f.msg += ` (a struct here is built from the unit's ".#self" handle)`
@@ -235,6 +245,43 @@ func bestArm(es []errors.Error) errors.Error {
 		}
 	}
 	return best
+}
+
+// flattenSection returns the source section name (Secret, Volume, ...) when
+// the error path runs through one of the schema's *Strings flatteners, scanning
+// from the leaf so the nearest flatten wins.
+func flattenSection(p []string) (string, bool) {
+	for i := len(p) - 1; i >= 0; i-- {
+		if src, ok := xStrings[p[i]]; ok {
+			return src, true
+		}
+	}
+	return "", false
+}
+
+// isIncompleteFlatten reports whether a *Strings group is the empty-disjunction
+// fan-out cue emits when a source entry is not concrete: at least one arm is the
+// `string | [...]` disjunction collapse ("empty disjunction" / "conflicting
+// values string and [...]"), and no arm carries an embedded bottom of its own.
+// A group with a located cause (e.g. a missing-field interpolation bottom) is
+// excluded: that one already resolves to an actionable position, and the normal
+// path keeps it.
+func isIncompleteFlatten(es []errors.Error) bool {
+	noise := false
+	for _, e := range es {
+		// The markers live in the child errors, which surface only in the full
+		// rendered text (e.Error()), not the top-line msgOf. A _|_ bottom
+		// anywhere means cue carried a locatable cause; defer to the normal path.
+		full := e.Error()
+		if bottomRe.MatchString(full) {
+			return false
+		}
+		if strings.Contains(full, "empty disjunction") ||
+			(strings.Contains(full, "conflicting values") && strings.Contains(full, "string")) {
+			noise = true
+		}
+	}
+	return noise
 }
 
 // xStrings maps the schema's rendering comprehensions back to the source
