@@ -206,6 +206,14 @@ func TestEmitImageRegistry(t *testing.T) {
 			t.Fatalf("emit missing %q:\n%s", want, s)
 		}
 	}
+	// CUE indents with tabs; a hand-built emitter that leaks spaces would make
+	// crei-written files fail `cue fmt`. format.Source guarantees tabs, so no
+	// indented line may begin with a space.
+	for i, line := range strings.Split(s, "\n") {
+		if strings.HasPrefix(line, " ") {
+			t.Fatalf("line %d is space-indented, want tabs: %q", i+1, line)
+		}
+	}
 }
 
 // TestEmitDoesNotReorderCaller: emit must not sort the caller's slice. Callers
