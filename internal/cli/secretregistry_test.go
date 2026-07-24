@@ -235,6 +235,46 @@ func TestCmdSecretRotate(t *testing.T) {
 	}
 }
 
+// TestCmdSecretCreateUsesPolicy: a secret with a generate policy is created
+// non-interactively per the policy (no prompt, value not echoed); one without
+// falls back to the interactive valuer.
+func TestCmdSecretCreateUsesPolicy(t *testing.T) {
+	dir := setupProject(t, testMain)
+	created := map[string][]byte{}
+	stubSecrets(t, nil, func(name string, value []byte, replace bool) error {
+		created[name] = value
+		return nil
+	}, func(name string) ([]byte, bool, error) {
+		return []byte("typed-" + name), false, nil // the interactive valuer
+	})
+
+	if _, err := runCmd(t, "--dir", dir, "secret", "add", "gen_pw", "--length", "48", "--charset", "hex"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCmd(t, "--dir", dir, "secret", "add", "manual_pw", "--manual"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runCmd(t, "--dir", dir, "secret", "create", "gen_pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created["gen_pw"]) != 48 {
+		t.Fatalf("policy secret should be 48 hex chars, got %d: %q", len(created["gen_pw"]), created["gen_pw"])
+	}
+	if strings.Contains(out, string(created["gen_pw"])) {
+		t.Fatalf("a policy-generated value must not be echoed:\n%s", out)
+	}
+
+	// The manual entry has no policy, so it goes through the interactive valuer.
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "manual_pw"); err != nil {
+		t.Fatal(err)
+	}
+	if string(created["manual_pw"]) != "typed-manual_pw" {
+		t.Fatalf("manual secret should use the valuer, got %q", created["manual_pw"])
+	}
+}
+
 // TestCmdSecretAddCollision: a duplicate name is refused without --force.
 func TestCmdSecretAddCollision(t *testing.T) {
 	dir := setupProject(t, testMain)

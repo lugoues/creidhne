@@ -321,8 +321,10 @@ func newSecretsCreateCmd() *cobra.Command {
 		Use:   "create [name]",
 		Short: "Create a podman secret (interactively), entering or generating its value",
 		Long: "create makes a podman secret. Pass a name to create one, or -a to walk\n" +
-			"through every registry secret missing from podman. For each, you can type a\n" +
-			"value (hidden) or generate a random one.",
+			"through every registry secret missing from podman. A secret whose\n" +
+			"crei-owned registry entry carries a generate policy (crei secret add\n" +
+			"--length ...) is generated from that policy automatically; otherwise\n" +
+			"you type a value (hidden) or generate a random one at the prompt.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if all == (len(args) == 1) {
@@ -334,6 +336,10 @@ func newSecretsCreateCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			existing, err := podmanListSecrets()
+			if err != nil {
+				return err
+			}
+			policies, err := secretPolicies(cfg)
 			if err != nil {
 				return err
 			}
@@ -362,15 +368,28 @@ func newSecretsCreateCmd() *cobra.Command {
 					fmt.Fprintf(out, "%s already exists, skipping (use --replace to overwrite)\n", name)
 					continue
 				}
-				value, generated, err := secretValuer(name)
-				if err != nil {
-					return err
+				// A registry generate policy synthesizes the value with no
+				// prompt; crei owns it, so (like rotate) the value is not echoed.
+				// Only a value the user chose to generate at the prompt is shown
+				// once, so they can save it.
+				var value []byte
+				var promptGenerated bool
+				if g := policies[name]; g != nil {
+					value, err = generateFromPolicy(g)
+					if err != nil {
+						return fmt.Errorf("%s: %w", name, err)
+					}
+				} else {
+					value, promptGenerated, err = secretValuer(name)
+					if err != nil {
+						return err
+					}
 				}
 				if err := podmanCreateSecret(name, value, replace); err != nil {
 					return err
 				}
 				fmt.Fprintf(out, "%s created\n", green(name))
-				if generated {
+				if promptGenerated {
 					fmt.Fprintln(out, dim("  save this value now; it will not be shown again:"))
 					fmt.Fprintf(out, "  %s\n", string(value))
 				}

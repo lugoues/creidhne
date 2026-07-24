@@ -118,6 +118,27 @@ func findSecret(entries []eval.SecretEntry, name string) (int, error) {
 	return -1, fmt.Errorf("no secret named %q in registries/secrets.cue (available: %s)", name, strings.Join(available, ", "))
 }
 
+// secretPolicies maps a podman secret name to its generate policy, for entries
+// in the crei-owned registry that carry one. Used by create/rotate to
+// synthesize a value non-interactively.
+func secretPolicies(cfg config) (map[string]*eval.SecretGenerate, error) {
+	overlay, err := buildOverlay(cfg.ProjectDir)
+	if err != nil {
+		return nil, err
+	}
+	reg, err := eval.LoadSecretRegistry(cfg.ProjectDir, overlay)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]*eval.SecretGenerate, len(reg))
+	for _, e := range reg {
+		if e.Generate != nil {
+			m[e.Name] = e.Generate
+		}
+	}
+	return m, nil
+}
+
 // declaredSecretNames is the union of every podman secret name the project
 // declares: the hand-authored top-level registry (cfg.SecretsField) plus the
 // crei-owned registries/secrets.cue. Deduplicated and sorted. This is what the

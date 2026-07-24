@@ -413,7 +413,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei config` | Show the resolved configuration and where each value came from. |
 | `crei secret add` | Register a secret in the crei-owned `registries/secrets.cue` (`--length`/`--charset` set the generate policy; `--manual` for a hand-entered one). |
 | `crei secret list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
-| `crei secret create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
+| `crei secret create` | Create a podman secret; a registry generate policy fills the value automatically, else you enter or generate it (`-a` walks every missing one). |
 | `crei secret rotate` | Regenerate crei-owned secrets (per their generate policy) and replace them in podman. |
 | `crei secret remove` | Unregister a secret from `registries/secrets.cue` (`--delete` also removes it from podman; alias: `rm`). |
 | `crei version` | Print version info. |
