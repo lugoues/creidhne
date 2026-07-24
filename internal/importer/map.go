@@ -153,18 +153,18 @@ func mapSecrets(m *model, p *types.Project) {
 		}
 		switch {
 		case bool(s.External):
-			m.stepf("secret %s: external; verify it exists (crei secrets list)", podmanName)
+			m.stepf("secret %s: external; verify it exists (crei secret list)", podmanName)
 		case s.File != "":
 			m.stepf("secret %s: load its value from %s (podman secret create %s %s)", podmanName, s.File, podmanName, s.File)
 		case s.Environment != "":
 			m.warnf("secrets.%s: environment-sourced compose secrets are not supported; create the podman secret manually", key)
-			m.stepf("secret %s: create it (crei secrets create %s)", podmanName, podmanName)
+			m.stepf("secret %s: create it (crei secret create %s)", podmanName, podmanName)
 		case s.Content != "":
 			// Inline secret material stays out of the emitted CUE and report.
 			m.warnf("secrets.%s: inline content is not imported (secret material does not belong in CUE)", key)
-			m.stepf("secret %s: create it with the inline value from the compose file (crei secrets create %s)", podmanName, podmanName)
+			m.stepf("secret %s: create it with the inline value from the compose file (crei secret create %s)", podmanName, podmanName)
 		default:
-			m.stepf("secret %s: create it (crei secrets create %s)", podmanName, podmanName)
+			m.stepf("secret %s: create it (crei secret create %s)", podmanName, podmanName)
 		}
 		if s.Driver != "" || s.TemplateDriver != "" {
 			m.warnf("secrets.%s: driver/template_driver are swarm-only; dropped", key)

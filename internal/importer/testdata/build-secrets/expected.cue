@@ -6,7 +6,7 @@ import "github.com/lugoues/creidhne"
 // conversion report, then crei validate && crei plan.
 
 // Podman secrets referenced by the containers. Values are never
-// imported: load them per the conversion report (crei secrets list
+// imported: load them per the conversion report (crei secret list
 // shows what is still missing).
 secrets: creidhne.#SecretRegistry & {
 	db_password: {name: "forge_db_password"}

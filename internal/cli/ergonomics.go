@@ -470,7 +470,7 @@ quadlet_dir = "~/.config/containers/systemd"
 # --reload-systemd[=false].
 # reload_systemd = true
 
-# Top-level CUE field 'crei secrets' reads the #SecretRegistry from.
+# Top-level CUE field 'crei secret' reads the #SecretRegistry from.
 # secrets_field = "secrets"
 
 # Per-rule severity overrides for crei's named lint rules ("error", "warn",

@@ -54,7 +54,7 @@ func TestCmdSecretsList(t *testing.T) {
 		return map[string]podman.SecretInfo{"app-db": {Managed: true, CreatedAt: created, UpdatedAt: created}}, nil
 	}
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "list")
+	out, err := runCmd(t, "--dir", dir, "secret", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestCmdSecretsNoRegistry(t *testing.T) {
 	stubSecrets(t, nil, nil, nil)
 	podmanListSecrets = func() (map[string]bool, error) { called = true; return nil, nil }
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "list")
+	out, err := runCmd(t, "--dir", dir, "secret", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestCmdSecretsHelp(t *testing.T) {
 	stubSecrets(t, nil, nil, nil)
 	podmanListSecrets = func() (map[string]bool, error) { called = true; return nil, nil }
 
-	out, err := runCmd(t, "--dir", t.TempDir(), "secrets")
+	out, err := runCmd(t, "--dir", t.TempDir(), "secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,8 +107,21 @@ func TestCmdSecretsHelp(t *testing.T) {
 
 	// An unknown subcommand errors (matches podman), rather than printing help
 	// with a success exit code.
-	if _, err := runCmd(t, "--dir", t.TempDir(), "secrets", "bogus"); err == nil {
-		t.Error("`crei secrets bogus` should error on an unknown subcommand")
+	if _, err := runCmd(t, "--dir", t.TempDir(), "secret", "bogus"); err == nil {
+		t.Error("`crei secret bogus` should error on an unknown subcommand")
+	}
+}
+
+// TestSecretsAliasResolves: the old plural `secrets` still routes to the
+// renamed `secret` group, so existing scripts keep working.
+func TestSecretsAliasResolves(t *testing.T) {
+	stubSecrets(t, nil, nil, nil)
+	out, err := runCmd(t, "--dir", t.TempDir(), "secrets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "list") {
+		t.Errorf("`crei secrets` (alias) should print the group help:\n%s", out)
 	}
 }
 
@@ -121,7 +134,7 @@ func TestCmdSecretsCreateAll(t *testing.T) {
 		func(name string) ([]byte, bool, error) { return []byte("v-" + name), false, nil },
 	)
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "create", "-a")
+	out, err := runCmd(t, "--dir", dir, "secret", "create", "-a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +156,7 @@ func TestCmdSecretsCreateSkipsExisting(t *testing.T) {
 		func(string) ([]byte, bool, error) { return []byte("x"), false, nil },
 	)
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "create", "app-db")
+	out, err := runCmd(t, "--dir", dir, "secret", "create", "app-db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,10 +175,10 @@ func TestCmdSecretsCreateArgs(t *testing.T) {
 		func(string, []byte, bool) error { return nil },
 		func(string) ([]byte, bool, error) { return nil, false, nil },
 	)
-	if _, err := runCmd(t, "--dir", dir, "secrets", "create"); err == nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create"); err == nil {
 		t.Error("create with neither a name nor -a should error")
 	}
-	if _, err := runCmd(t, "--dir", dir, "secrets", "create", "-a", "app-db"); err == nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "-a", "app-db"); err == nil {
 		t.Error("create with both a name and -a should error")
 	}
 }
@@ -209,7 +222,7 @@ func TestCmdSecretsPrune(t *testing.T) {
 	var removed []string
 	podmanRemoveSecret = func(name string) error { removed = append(removed, name); return nil }
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "prune", "-y")
+	out, err := runCmd(t, "--dir", dir, "secret", "prune", "-y")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
@@ -232,7 +245,7 @@ func TestCmdSecretsPruneNothing(t *testing.T) {
 		return map[string]podman.SecretInfo{"app-db": {Managed: true}, "stray": {}}, nil
 	}
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "prune", "-y")
+	out, err := runCmd(t, "--dir", dir, "secret", "prune", "-y")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +271,7 @@ func TestCmdSecretsAdopt(t *testing.T) {
 	}
 	podmanReadSecret = func(name string) ([]byte, error) { return []byte("value-of-" + name + "\n"), nil }
 
-	out, err := runCmd(t, "--dir", dir, "secrets", "adopt")
+	out, err := runCmd(t, "--dir", dir, "secret", "adopt")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}

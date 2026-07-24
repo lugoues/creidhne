@@ -38,7 +38,7 @@ func emit(m *model) ([]byte, error) {
 	if len(m.secrets) > 0 {
 		w("")
 		w("// Podman secrets referenced by the containers. Values are never")
-		w("// imported: load them per the conversion report (crei secrets list")
+		w("// imported: load them per the conversion report (crei secret list")
 		w("// shows what is still missing).")
 		w("secrets: creidhne.#SecretRegistry & {")
 		for _, s := range m.secrets {

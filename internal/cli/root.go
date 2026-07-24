@@ -147,7 +147,7 @@ type config struct {
 	// matching `podman quadlet install --reload-systemd`, unless the config sets
 	// it false); the --reload-systemd flag overrides it per-run.
 	ReloadSystemd bool
-	// SecretsField is the top-level CUE field `crei secrets` reads the
+	// SecretsField is the top-level CUE field `crei secret` reads the
 	// #SecretRegistry from (default "secrets").
 	SecretsField string
 	// Lint holds the [lint] severity overrides (rule name -> error/warn/off),

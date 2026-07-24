@@ -302,14 +302,15 @@ app: creidhne.#Quadlet & {
 }
 ```
 
-`crei secrets` reconciles that registry against podman's secret store:
+`crei secret` reconciles that registry against podman's secret store (the old
+`crei secrets` spelling still works as an alias):
 
 ```sh
-crei secrets list               # present/missing, crei-managed, created/updated
-crei secrets create db_password # create one, typing (hidden) or generating its value
-crei secrets create -a          # walk through every secret missing from podman
-crei secrets adopt              # label pre-existing registry secrets as crei-managed
-crei secrets prune              # delete crei-created secrets nothing references
+crei secret list                # present/missing, crei-managed, created/updated
+crei secret create db_password  # create one, typing (hidden) or generating its value
+crei secret create -a           # walk through every secret missing from podman
+crei secret adopt               # label pre-existing registry secrets as crei-managed
+crei secret prune               # delete crei-created secrets nothing references
 ```
 
 `create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The registry is read from the top-level `secrets` field by default; override with `secrets_field` in `.crei/config.toml`.
@@ -398,8 +399,8 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei import compose [file...]` | Convert a docker-compose project into a creidhne CUE file (see below). |
 | `crei vendor [module[@ref]]` | Vendor a git-hosted CUE helper module into `cue.mod/usr` for offline use (`--check` verifies against the lock). |
 | `crei config` | Show the resolved configuration and where each value came from. |
-| `crei secrets list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
-| `crei secrets create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
+| `crei secret list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
+| `crei secret create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
 | `crei version` | Print version info. |
 
 ### Migrating from docker-compose
@@ -439,7 +440,7 @@ result from a checkout.
   Files that interpolate inside structured fields (like `ports:`) cannot be
   preserved symbolically; the error tells you which resolve mode to use.
 - Compose secrets map onto the secret registry; values are never imported.
-  The conversion report lists how to load each one (`crei secrets list` shows
+  The conversion report lists how to load each one (`crei secret list` shows
   what is still missing).
 - Anything unmappable is listed in the report, never dropped silently, and
   the source compose file is embedded at the bottom of the emitted CUE as a

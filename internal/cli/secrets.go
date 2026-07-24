@@ -77,12 +77,14 @@ func printSecretTable(out io.Writer, rows [][]string) {
 }
 
 func newSecretsCmd() *cobra.Command {
-	// A command group: bare `crei secrets` prints help (like `podman secret`),
-	// and an unknown subcommand errors rather than silently succeeding.
+	// A command group: bare `crei secret` prints help (matching `podman
+	// secret`), and an unknown subcommand errors rather than silently
+	// succeeding. `secrets` stays as an alias so existing scripts keep working.
 	cmd := &cobra.Command{
-		Use:   "secrets",
-		Short: "Inspect and create podman secrets from the registry",
-		Long: "secrets works with the #SecretRegistry declared in your CUE (the\n" +
+		Use:     "secret",
+		Aliases: []string{"secrets"},
+		Short:   "Inspect and create podman secrets from the registry",
+		Long: "secret works with the #SecretRegistry declared in your CUE (the\n" +
 			"top-level \"secrets\" field by default). 'list' shows which registry\n" +
 			"secrets exist in podman; 'create' adds the missing ones; 'prune'\n" +
 			"deletes crei-created secrets nothing references anymore; 'adopt'\n" +
@@ -308,7 +310,7 @@ func newSecretsListCmd() *cobra.Command {
 				case exists && info.Managed:
 					rows = append(rows, []string{name, "present", "yes", secretAge(info.CreatedAt), secretAge(info.UpdatedAt)})
 				case exists:
-					rows = append(rows, []string{name, "present", "no (crei secrets adopt)", secretAge(info.CreatedAt), secretAge(info.UpdatedAt)})
+					rows = append(rows, []string{name, "present", "no (crei secret adopt)", secretAge(info.CreatedAt), secretAge(info.UpdatedAt)})
 				default:
 					missing++
 					rows = append(rows, []string{name, "missing", "-", "-", "-"})
@@ -317,7 +319,7 @@ func newSecretsListCmd() *cobra.Command {
 			printSecretTable(out, rows)
 			fmt.Fprintf(out, "\n%d secret(s): %d present, %d missing\n", len(declared), len(declared)-missing, missing)
 			if missing > 0 {
-				fmt.Fprintln(out, dim("Create the missing ones with: crei secrets create -a"))
+				fmt.Fprintln(out, dim("Create the missing ones with: crei secret create -a"))
 			}
 			return nil
 		},
