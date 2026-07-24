@@ -31,6 +31,7 @@ var (
 	flagProjectDir string
 	flagQuadletDir string
 	flagDiffTool   string
+	flagRawErrors  bool
 )
 
 // errSilent makes Execute exit non-zero without printing an "Error:" line, for
@@ -101,6 +102,7 @@ func newRootCmd() *cobra.Command {
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			fc, _, _ := loadConfigFile(flagProjectDir)
 			applyStyles(fc.Style)
+			eval.RawErrors = flagRawErrors
 			return nil
 		},
 	}
@@ -108,6 +110,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVarP(&flagProjectDir, "dir", "C", ".", "project directory containing CUE files")
 	pf.StringVar(&flagQuadletDir, "quadlet-dir", "", "target quadlet directory (overrides $QUADLET_DIR and config)")
 	pf.StringVar(&flagDiffTool, "diff-tool", "", "external diff tool to use (default: built-in unified diff)")
+	pf.BoolVar(&flagRawErrors, "raw-errors", false, "print cue's untranslated errors (bypass crei's error translation)")
 	root.AddCommand(
 		newRenderCmd(),
 		newPlanCmd(),

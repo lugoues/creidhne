@@ -41,6 +41,11 @@ func (e *DiagnosticError) Error() string {
 	return e.Findings + "\n\n" + e.Detail
 }
 
+// RawErrors disables error translation: diagError returns cue's untranslated
+// output verbatim. The escape hatch for the day a translation is actively
+// misleading; the CLI sets it from --raw-errors.
+var RawErrors bool
+
 // diagError renders translated findings; the raw detail is carried only
 // when translation was lossy (arms dropped, messages rewritten, positions
 // withheld). A faithful pass-through stands alone, so a plain error is
@@ -48,6 +53,9 @@ func (e *DiagnosticError) Error() string {
 func diagError(root cue.Value, dir, context string, err error) error {
 	if err == nil {
 		return nil
+	}
+	if RawErrors {
+		return cueError(context, err)
 	}
 	findings, lossy := diagnose(root, dir, err)
 	if len(findings) == 0 {
@@ -332,21 +340,26 @@ func translate(root cue.Value, dir string, e errors.Error) (finding, bool) {
 	return f, rewrote
 }
 
-// constraintFor names the schema's load-bearing constraints when their
-// literal appears in the message.
+// constraintFor names the schema's load-bearing constraints when their regex
+// bound appears in the message. The regex->name table is derived from the
+// embedded schema (constraintTable), so it never drifts from the .cue source;
+// only the human hint is hand-kept, keyed by the stable definition name. When
+// several bounds match (a value can violate more than one), the longest wins:
+// the most specific pattern is the one worth naming.
 func constraintFor(msg string) (name, hint string, ok bool) {
-	for _, c := range []struct{ needle, name, hint string }{
-		{`=~"^[^=]+=.*$"`, "#KeyValue", `a "key=value" pair`},
-		{`(service|socket|target|timer|path|mount|automount|device|swap|slice|scope)$`, "#ServiceName", "a systemd unit name (*.service, *.target, ...)"},
-		{`(/(tcp|udp|sctp))?$`, "#PortMapping", "a port mapping ([ip:]host[:container][/proto])"},
-		{`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`, "#UnitName", "a safe unit name (letters, digits, _ . -)"},
-		{`=(-1|[0-9]+)(:(-1|[0-9]+))?$`, "#Ulimit", `"name=soft[:hard]" or "host"`},
-	} {
-		if strings.Contains(msg, c.needle) {
-			return c.name, c.hint, true
+	best := ""
+	for regex, def := range constraintTable() {
+		if constraintHints[def] == "" || !strings.Contains(msg, regex) {
+			continue
+		}
+		if len(regex) > len(best) {
+			best, name = regex, def
 		}
 	}
-	return "", "", false
+	if name == "" {
+		return "", "", false
+	}
+	return name, constraintHints[name], true
 }
 
 // bottomRe matches a bottom embedded in a printed value:

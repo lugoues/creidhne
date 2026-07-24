@@ -153,6 +153,34 @@ z: q.#Quadlet & {name: "z", units: #container: Container: {ContainerName: "z"}}
 	}
 }
 
+// TestCmdRawErrors: --raw-errors bypasses crei's translation, printing cue's
+// output verbatim; without it, the same failure is translated.
+func TestCmdRawErrors(t *testing.T) {
+	dir := setupProject(t, `package config
+import q "github.com/lugoues/creidhne@v0"
+app: q.#Quadlet & {name: "app", units: #container: Container: {Image: "x", Secret: [[{type: "env", target: "T"}]]}}
+`)
+
+	_, err := runCmd(t, "--dir", dir, "validate")
+	if err == nil {
+		t.Fatal("expected failure")
+	}
+	if !strings.Contains(err.Error(), "an entry in Secret is incomplete") {
+		t.Fatalf("default run should translate:\n%v", err)
+	}
+
+	_, raw := runCmd(t, "--dir", dir, "validate", "--raw-errors")
+	if raw == nil {
+		t.Fatal("expected failure")
+	}
+	if !strings.Contains(raw.Error(), "list.Concat") {
+		t.Fatalf("--raw-errors should show cue's untranslated output:\n%v", raw)
+	}
+	if strings.Contains(raw.Error(), "an entry in Secret is incomplete") {
+		t.Fatalf("--raw-errors must not translate:\n%v", raw)
+	}
+}
+
 func TestCmdConfig(t *testing.T) {
 	dir := setupProject(t, testMain)
 	out, err := runCmd(t, "--dir", dir, "--quadlet-dir", "/srv/q", "config")
