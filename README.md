@@ -302,8 +302,7 @@ app: creidhne.#Quadlet & {
 }
 ```
 
-`crei secret` reconciles that registry against podman's secret store (the old
-`crei secrets` spelling still works as an alias):
+`crei secret` reconciles that registry against podman's secret store:
 
 ```sh
 crei secret list                # present/missing, crei-managed, created/updated

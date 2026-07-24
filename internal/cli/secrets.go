@@ -79,11 +79,10 @@ func printSecretTable(out io.Writer, rows [][]string) {
 func newSecretsCmd() *cobra.Command {
 	// A command group: bare `crei secret` prints help (matching `podman
 	// secret`), and an unknown subcommand errors rather than silently
-	// succeeding. `secrets` stays as an alias so existing scripts keep working.
+	// succeeding.
 	cmd := &cobra.Command{
-		Use:     "secret",
-		Aliases: []string{"secrets"},
-		Short:   "Inspect and create podman secrets from the registry",
+		Use:   "secret",
+		Short: "Inspect and create podman secrets from the registry",
 		Long: "secret works with the #SecretRegistry declared in your CUE (the\n" +
 			"top-level \"secrets\" field by default). 'list' shows which registry\n" +
 			"secrets exist in podman; 'create' adds the missing ones; 'prune'\n" +

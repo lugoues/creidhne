@@ -112,19 +112,6 @@ func TestCmdSecretsHelp(t *testing.T) {
 	}
 }
 
-// TestSecretsAliasResolves: the old plural `secrets` still routes to the
-// renamed `secret` group, so existing scripts keep working.
-func TestSecretsAliasResolves(t *testing.T) {
-	stubSecrets(t, nil, nil, nil)
-	out, err := runCmd(t, "--dir", t.TempDir(), "secrets")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "list") {
-		t.Errorf("`crei secrets` (alias) should print the group help:\n%s", out)
-	}
-}
-
 // TestCmdSecretsCreateAll: -a creates every registry secret missing from podman.
 func TestCmdSecretsCreateAll(t *testing.T) {
 	dir := setupProject(t, secretsRegistryMain)
