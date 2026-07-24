@@ -257,7 +257,10 @@ func newImageUpdateCmd() *cobra.Command {
 				r, _ := registry.Parse(it.e.Image)
 				entries[it.idx].Image = r.Repo + ":" + it.c.Tag
 				entries[it.idx].Digest = it.c.Digest
-				fmt.Fprintf(out, "  %s %s: %s -> %s\n", green("~"), it.e.Key, it.c.Reason, short(it.c.Digest))
+				// Reason is already "old -> new" for a tag advance; a second
+				// arrow before the digest doubles it. A colon reads cleanly for
+				// both that and the "digest moved" case.
+				fmt.Fprintf(out, "  %s %s: %s: %s\n", green("~"), it.e.Key, it.c.Reason, short(it.c.Digest))
 			}
 			content, err := emitImageRegistry(entries)
 			if err != nil {
