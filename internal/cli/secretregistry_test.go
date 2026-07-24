@@ -105,6 +105,50 @@ func TestCmdSecretAdd(t *testing.T) {
 	}
 }
 
+// TestCmdSecretRemove: remove unregisters from the crei-owned registry, and
+// with --delete also removes the value from podman (confirmed via -y).
+func TestCmdSecretRemove(t *testing.T) {
+	dir := setupProject(t, testMain)
+	stubSecrets(t, map[string]bool{"db_password": true}, nil, nil)
+
+	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db_password"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCmd(t, "--dir", dir, "secret", "add", "keep_me"); err != nil {
+		t.Fatal(err)
+	}
+
+	// An unknown name errors before writing anything (checked while the
+	// registry is non-empty; an empty registry reports "nothing to remove").
+	if _, err := runCmd(t, "--dir", dir, "secret", "remove", "nope"); err == nil {
+		t.Fatal("removing an unknown secret should error")
+	}
+
+	// Plain remove: unregisters, never touches podman (the stub's RemoveSecret
+	// fails the test if called).
+	if _, err := runCmd(t, "--dir", dir, "secret", "remove", "keep_me"); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := eval.LoadSecretRegistry(dir, overlayFor(t, dir))
+	if len(entries) != 1 || entries[0].Key != "db_password" {
+		t.Fatalf("after remove, want only db_password, got %+v", entries)
+	}
+
+	// --delete -y removes from podman too.
+	removed := ""
+	podmanRemoveSecret = func(name string) error { removed = name; return nil }
+	if _, err := runCmd(t, "--dir", dir, "secret", "remove", "db_password", "--delete", "-y"); err != nil {
+		t.Fatal(err)
+	}
+	if removed != "db_password" {
+		t.Fatalf("--delete should remove from podman, got %q", removed)
+	}
+	entries, _ = eval.LoadSecretRegistry(dir, overlayFor(t, dir))
+	if len(entries) != 0 {
+		t.Fatalf("registry should be empty after removing both, got %+v", entries)
+	}
+}
+
 // TestCmdSecretAddCollision: a duplicate name is refused without --force.
 func TestCmdSecretAddCollision(t *testing.T) {
 	dir := setupProject(t, testMain)

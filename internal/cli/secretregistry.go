@@ -105,6 +105,19 @@ func writeSecretRegistry(projectDir string, entries []eval.SecretEntry) error {
 	return nil
 }
 
+// findSecret returns the index of the named entry in the crei-owned registry,
+// or an error listing what is available so a typo fails loudly.
+func findSecret(entries []eval.SecretEntry, name string) (int, error) {
+	var available []string
+	for i := range entries {
+		if entries[i].Key == name {
+			return i, nil
+		}
+		available = append(available, entries[i].Key)
+	}
+	return -1, fmt.Errorf("no secret named %q in registries/secrets.cue (available: %s)", name, strings.Join(available, ", "))
+}
+
 // declaredSecretNames is the union of every podman secret name the project
 // declares: the hand-authored top-level registry (cfg.SecretsField) plus the
 // crei-owned registries/secrets.cue. Deduplicated and sorted. This is what the

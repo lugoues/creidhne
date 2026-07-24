@@ -86,8 +86,9 @@ func newSecretsCmd() *cobra.Command {
 			"registries/secrets.cue ('add' registers a secret there); the hand-\n" +
 			"authored top-level \"secrets\" field is also read. 'list' shows which\n" +
 			"registry secrets exist in podman; 'create' adds the missing ones;\n" +
-			"'prune' deletes crei-created secrets nothing references anymore;\n" +
-			"'adopt' labels pre-existing registry secrets as crei-managed.",
+			"'remove' unregisters one; 'prune' deletes crei-created secrets\n" +
+			"nothing references anymore; 'adopt' labels pre-existing registry\n" +
+			"secrets as crei-managed.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -96,7 +97,7 @@ func newSecretsCmd() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(newSecretAddCmd(), newSecretsListCmd(), newSecretsCreateCmd(),
-		newSecretsPruneCmd(), newSecretsAdoptCmd())
+		newSecretRemoveCmd(), newSecretsPruneCmd(), newSecretsAdoptCmd())
 	return cmd
 }
 
