@@ -15,7 +15,7 @@ const (
 )
 
 // ruleDefaults registers every named rule crei enforces in Go, with its
-// default severity. The [lint] table in crei.toml overrides per name:
+// default severity. The [lint] table in .crei/config.toml overrides per name:
 //
 //	[lint]
 //	"graph/orphan-network" = "off"

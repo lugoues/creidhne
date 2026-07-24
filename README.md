@@ -312,7 +312,7 @@ crei secrets adopt              # label pre-existing registry secrets as crei-ma
 crei secrets prune              # delete crei-created secrets nothing references
 ```
 
-`create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The registry is read from the top-level `secrets` field by default; override with `secrets_field` in `crei.toml`.
+`create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The registry is read from the top-level `secrets` field by default; override with `secrets_field` in `.crei/config.toml`.
 
 Everything `create` makes carries a `creidhne.managed=true` label, and `prune`
 only ever considers labeled secrets: what crei didn't create, it never
@@ -392,7 +392,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei render` | Render all unit files to stdout. |
 | `crei plan` | Show what `apply` would add/update/remove, as an inline diff (`--no-diff` for the compact list). |
 | `crei diff` | Show detailed diffs against the live files. |
-| `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `crei.toml`, else on); `-y` skips the prompt. |
+| `crei apply` | Write/remove files. `--reload-systemd` runs `daemon-reload` (default from `reload_systemd` in `.crei/config.toml`, else on); `-y` skips the prompt. |
 | `crei status [quadlet...]` | One table of desired vs recorded vs disk vs runtime state per unit; name quadlets to drill in. `--problems` shows only rows needing attention, `--format json` for scripts, `--check` for cron/CI exit codes. Read-only. |
 | `crei validate` | Type-check the CUE without rendering. |
 | `crei import compose [file...]` | Convert a docker-compose project into a creidhne CUE file (see below). |
@@ -471,9 +471,9 @@ no systemd just blanks the runtime columns), and `--check` exits non-zero
 unless everything is synced, loaded, and healthy. Reconciliation itself never
 consults runtime state: files are the substrate, systemd is observability.
 
-Configuration is resolved as **flags > environment > `crei.toml` > defaults**:
+Configuration is resolved as **flags > environment > `.crei/config.toml` > defaults**:
 
-| Setting | Flag | Env | `crei.toml` | Default |
+| Setting | Flag | Env | `.crei/config.toml` | Default |
 |---|---|---|---|---|
 | Project dir | `-C`, `--dir` | n/a | n/a | `.` |
 | Quadlet dir | `--quadlet-dir` | `QUADLET_DIR` | `quadlet_dir` | `~/.config/containers/systemd` |
@@ -492,7 +492,7 @@ Writing to a system path like `/etc/containers/systemd` requires elevated privil
 
 `plan`, `diff`, and `apply` render a Terraform-style inline diff of each change: a bold `# <file>` header, a `+`/`-` gutter, collapsed unchanged regions (`# (N unmodified lines hidden)`), and highlighting of what changed within a line. Pass `--no-diff` to `plan`/`apply` for just the compact `+`/`~`/`-` change list.
 
-How a *modified* line renders is set by `diff_style` in `crei.toml`:
+How a *modified* line renders is set by `diff_style` in `.crei/config.toml`:
 
 | `diff_style` | A modified line shows as |
 |---|---|

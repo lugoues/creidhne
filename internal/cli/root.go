@@ -95,7 +95,7 @@ func newRootCmd() *cobra.Command {
 			"`import \"github.com/lugoues/creidhne\"` offline.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		// Theme the output from crei.toml [style] before any command runs.
+		// Theme the output from the config's [style] table before any command runs.
 		// Best-effort: a malformed file is ignored here (resolveConfig reports it
 		// for real commands) so defaults apply and `version` never fails on it.
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
@@ -130,7 +130,12 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
-// --- configuration: flags > env > crei.toml > defaults ---
+// --- configuration: flags > env > .crei/config.toml > defaults ---
+
+// configRelPath is the config file's location relative to the project dir. It
+// doubles as the source label `crei config` reports and the name used in help
+// text and errors, so the documented path can never drift from the loaded one.
+const configRelPath = ".crei/config.toml"
 
 type config struct {
 	ProjectDir string
@@ -139,7 +144,7 @@ type config struct {
 	// DiffStyle selects how modified lines render: highlight, plain, or inline.
 	DiffStyle string
 	// ReloadSystemd is the default for `apply`'s systemctl daemon-reload (on,
-	// matching `podman quadlet install --reload-systemd`, unless crei.toml sets
+	// matching `podman quadlet install --reload-systemd`, unless the config sets
 	// it false); the --reload-systemd flag overrides it per-run.
 	ReloadSystemd bool
 	// SecretsField is the top-level CUE field `crei secrets` reads the
@@ -155,7 +160,7 @@ type config struct {
 	diffStyleSource     string
 	reloadSystemdSource string
 	secretsFieldSource  string
-	configFilePath      string // crei.toml path if present, else ""
+	configFilePath      string // config file path if present, else ""
 }
 
 type fileConfig struct {
@@ -175,7 +180,7 @@ const (
 	diffStyleInline    = "inline"    // single "~" line, word-diff: removed run struck (remove color), added run (add color)
 )
 
-// styleConfig overrides the output styles from crei.toml's [style] table. Each
+// styleConfig overrides the output styles from the config's [style] table. Each
 // element is either a bare color string (foreground only) or an inline table
 // (fg/bg + attribute toggles); an unset element keeps its built-in default.
 type styleConfig struct {
@@ -189,7 +194,7 @@ type styleConfig struct {
 	RemoveChar    styleSpec `toml:"remove_char"`    // removed inline span (defaults to remove's color)
 }
 
-// styleSpec is a configurable lipgloss style. In crei.toml it unmarshals from
+// styleSpec is a configurable lipgloss style. In the config it unmarshals from
 // either a color string (foreground only) or an inline table with fg/bg and
 // attribute toggles. Colors are hex ("#3FB950"), an ANSI index ("0".."255"), or
 // "" for the terminal default; lipgloss degrades them to the terminal's profile.
@@ -358,7 +363,7 @@ func resolveConfig() (config, error) {
 	qd := pickSourced(
 		sourcedValue{flagQuadletDir, "--quadlet-dir flag"},
 		sourcedValue{os.Getenv("QUADLET_DIR"), "$QUADLET_DIR"},
-		sourcedValue{fc.QuadletDir, "crei.toml"},
+		sourcedValue{fc.QuadletDir, configRelPath},
 		sourcedValue{"~/.config/containers/systemd", "default"},
 	)
 	expanded, err := expandHome(qd.value)
@@ -368,25 +373,25 @@ func resolveConfig() (config, error) {
 	dt := pickSourced(
 		sourcedValue{flagDiffTool, "--diff-tool flag"},
 		sourcedValue{os.Getenv("DIFF_TOOL"), "$DIFF_TOOL"},
-		sourcedValue{fc.DiffTool, "crei.toml"},
+		sourcedValue{fc.DiffTool, configRelPath},
 		sourcedValue{"", "built-in"},
 	)
 	ds := pickSourced(
-		sourcedValue{fc.DiffStyle, "crei.toml"},
+		sourcedValue{fc.DiffStyle, configRelPath},
 		sourcedValue{diffStyleHighlight, "default"},
 	)
 	switch ds.value {
 	case diffStyleHighlight, diffStylePlain, diffStyleInline:
 	default:
-		return config{}, fmt.Errorf("invalid diff_style %q in crei.toml (want %q, %q, or %q)",
-			ds.value, diffStyleHighlight, diffStylePlain, diffStyleInline)
+		return config{}, fmt.Errorf("invalid diff_style %q in %s (want %q, %q, or %q)",
+			ds.value, configRelPath, diffStyleHighlight, diffStylePlain, diffStyleInline)
 	}
 	reload, reloadSource := true, "default" // matches podman quadlet install
 	if fc.ReloadSystemd != nil {
-		reload, reloadSource = *fc.ReloadSystemd, "crei.toml"
+		reload, reloadSource = *fc.ReloadSystemd, configRelPath
 	}
 	sf := pickSourced(
-		sourcedValue{fc.SecretsField, "crei.toml"},
+		sourcedValue{fc.SecretsField, configRelPath},
 		sourcedValue{"secrets", "default"},
 	)
 	return config{
@@ -406,14 +411,14 @@ func resolveConfig() (config, error) {
 	}, nil
 }
 
-// loadConfigFile reads the config from projectDir/.crei/config.toml. A missing
+// loadConfigFile reads the config from projectDir/<configRelPath>. A missing
 // file is fine (zero config, empty path); a present-but-malformed file is a hard
 // error rather than being silently ignored. Otherwise a typo would route apply to
 // the default directory with no warning. The returned path (when the file exists)
 // lets `crei config` report which file was loaded.
 func loadConfigFile(projectDir string) (fileConfig, string, error) {
 	var fc fileConfig
-	path := filepath.Join(projectDir, ".crei", "config.toml")
+	path := filepath.Join(projectDir, filepath.FromSlash(configRelPath))
 	if _, err := os.Stat(path); err != nil {
 		return fc, "", nil
 	}

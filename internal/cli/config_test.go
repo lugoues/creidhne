@@ -25,7 +25,7 @@ func writeConfig(t *testing.T, dir, body string) {
 }
 
 // TestResolveConfigProvenance checks the precedence chain (flag > env >
-// crei.toml > default) and that the winning source is recorded for `crei config`.
+// .crei/config.toml > default) and that the winning source is recorded for `crei config`.
 func TestResolveConfigProvenance(t *testing.T) {
 	dir := t.TempDir()
 	writeConfig(t, dir, "quadlet_dir = \"/srv/from-toml\"\n")
@@ -36,22 +36,22 @@ func TestResolveConfigProvenance(t *testing.T) {
 	t.Setenv("QUADLET_DIR", "")
 	t.Setenv("DIFF_TOOL", "")
 
-	// crei.toml wins for quadlet_dir; diff tool falls back to built-in.
+	// The config file wins for quadlet_dir; diff tool falls back to built-in.
 	cfg, err := resolveConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.QuadletDir != "/srv/from-toml" || cfg.quadletDirSource != "crei.toml" {
+	if cfg.QuadletDir != "/srv/from-toml" || cfg.quadletDirSource != configRelPath {
 		t.Fatalf("toml: dir=%q source=%q", cfg.QuadletDir, cfg.quadletDirSource)
 	}
 	if cfg.DiffTool != "" || cfg.diffToolSource != "built-in" {
 		t.Fatalf("diff: tool=%q source=%q", cfg.DiffTool, cfg.diffToolSource)
 	}
 	if cfg.configFilePath == "" {
-		t.Fatal("configFilePath should be set when crei.toml exists")
+		t.Fatal("configFilePath should be set when the config file exists")
 	}
 
-	// env overrides crei.toml.
+	// env overrides the config file.
 	t.Setenv("QUADLET_DIR", "/srv/from-env")
 	if cfg, _ = resolveConfig(); cfg.QuadletDir != "/srv/from-env" || cfg.quadletDirSource != "$QUADLET_DIR" {
 		t.Fatalf("env: dir=%q source=%q", cfg.QuadletDir, cfg.quadletDirSource)
@@ -64,7 +64,7 @@ func TestResolveConfigProvenance(t *testing.T) {
 	}
 }
 
-// TestResolveConfigReloadSystemd: reload defaults on, is taken from crei.toml
+// TestResolveConfigReloadSystemd: reload defaults on, is taken from the config
 // when set (true or false), with the source recorded.
 func TestResolveConfigReloadSystemd(t *testing.T) {
 	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
@@ -74,13 +74,13 @@ func TestResolveConfigReloadSystemd(t *testing.T) {
 
 	cases := []struct {
 		name       string
-		toml       string // "" => no crei.toml
+		toml       string // "" => no config file
 		wantReload bool
 		wantSource string
 	}{
 		{"default", "", true, "default"}, // on, matching podman quadlet install
-		{"toml true", "reload_systemd = true\n", true, "crei.toml"},
-		{"toml false", "reload_systemd = false\n", false, "crei.toml"},
+		{"toml true", "reload_systemd = true\n", true, configRelPath},
+		{"toml false", "reload_systemd = false\n", false, configRelPath},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -100,9 +100,9 @@ func TestResolveConfigReloadSystemd(t *testing.T) {
 	}
 }
 
-// TestResolveConfigMalformedToml: a present-but-unparseable crei.toml is a hard
+// TestResolveConfigMalformedToml: a present-but-unparseable config file is a hard
 // error (not silently ignored, which would route apply to the default dir),
-// while a missing crei.toml is fine.
+// while a missing config file is fine.
 func TestResolveConfigMalformedToml(t *testing.T) {
 	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
 	flagQuadletDir, flagDiffTool = "", ""
@@ -113,12 +113,12 @@ func TestResolveConfigMalformedToml(t *testing.T) {
 	writeConfig(t, bad, "quadlet_dir = /unquoted\n")
 	flagProjectDir = bad
 	if _, err := resolveConfig(); err == nil {
-		t.Fatal("malformed crei.toml should error, not be silently ignored")
+		t.Fatal("malformed config should error, not be silently ignored")
 	}
 
-	flagProjectDir = t.TempDir() // no crei.toml
+	flagProjectDir = t.TempDir() // no config file
 	if _, err := resolveConfig(); err != nil {
-		t.Fatalf("missing crei.toml should be fine, got %v", err)
+		t.Fatalf("missing config file should be fine, got %v", err)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestResolveConfigDefaults(t *testing.T) {
 		t.Fatalf("default dir not expanded: %q", cfg.QuadletDir)
 	}
 	if cfg.configFilePath != "" {
-		t.Fatalf("no crei.toml expected, got %q", cfg.configFilePath)
+		t.Fatalf("no config file expected, got %q", cfg.configFilePath)
 	}
 }
 

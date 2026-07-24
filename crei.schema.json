@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/lugoues/creidhne/v0/crei.schema.json",
   "title": "Creidhne configuration",
-  "description": "Schema for crei.toml. See https://github.com/lugoues/creidhne.",
+  "description": "Schema for .crei/config.toml. See https://github.com/lugoues/creidhne.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

@@ -92,8 +92,8 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Show the resolved configuration and where each value came from",
 		Long: "config prints the effective settings after applying precedence\n" +
-			"(flags > env > crei.toml > defaults), annotated with the source of\n" +
-			"each value. It evaluates no CUE and writes nothing.",
+			"(flags > env > " + configRelPath + " > defaults), annotated with the\n" +
+			"source of each value. It evaluates no CUE and writes nothing.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig()

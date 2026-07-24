@@ -251,7 +251,7 @@ func newApplyCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "\nApplied: %d added, %d updated, %d removed\n", s.Added, s.Changed, s.Removed)
 			userScope := underHome(dir)
-			// Reload default comes from crei.toml (reload_systemd, default on to
+			// Reload default comes from the config (reload_systemd, default on to
 			// match podman quadlet install); an explicit --reload-systemd flag
 			// overrides it for this run.
 			reload := cfg.ReloadSystemd
@@ -269,7 +269,7 @@ func newApplyCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&reloadSystemd, "reload-systemd", false, "run systemctl daemon-reload after applying (default: reload_systemd in crei.toml, else on)")
+	cmd.Flags().BoolVar(&reloadSystemd, "reload-systemd", false, "run systemctl daemon-reload after applying (default: reload_systemd in "+configRelPath+", else on)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
 	cmd.Flags().BoolVar(&noDiff, "no-diff", false, "show only the change list, not inline diffs")
 	return cmd
