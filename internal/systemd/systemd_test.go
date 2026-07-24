@@ -29,6 +29,32 @@ NeedDaemonReload=no
 ActiveEnterTimestamp=
 `
 
+func TestParseJobs(t *testing.T) {
+	// list-jobs --no-legend, with an unrelated job and a plausible leading
+	// marker on the running row, to prove field-matching (not column index).
+	out := []byte(`  12 app.service      restart running
+  13 db.service       restart waiting
+* 14 other.service    start   running
+`)
+	got := parseJobs(out, []string{"app.service", "db.service", "gone.service"})
+	if len(got) != 2 {
+		t.Fatalf("want 2 pending (app, db), got %v", got)
+	}
+	if got["app.service"] != "running" || got["db.service"] != "waiting" {
+		t.Fatalf("states wrong: %v", got)
+	}
+	if _, ok := got["gone.service"]; ok {
+		t.Fatal("gone.service has no job; must be absent (done)")
+	}
+	if _, ok := got["other.service"]; ok {
+		t.Fatal("other.service was not requested; must be excluded")
+	}
+	// Empty output = no pending jobs = everything done.
+	if len(parseJobs(nil, []string{"app.service"})) != 0 {
+		t.Fatal("empty output should yield no pending jobs")
+	}
+}
+
 func TestParseShow(t *testing.T) {
 	got := parseShow([]byte(canned), []string{"app.service", "db.service", "gone.service"})
 	if len(got) != 3 {

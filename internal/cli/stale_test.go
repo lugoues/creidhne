@@ -121,7 +121,7 @@ func staleFixture(t *testing.T) (proj, qd, recDir string) {
 
 	recDir = t.TempDir()
 	bin := t.TempDir()
-	systemctl := "#!/bin/sh\nif [ \"$1\" = \"restart\" ] || [ \"$2\" = \"restart\" ]; then\n  echo \"$@\" > " + recDir + "/restart.args\n  exit 0\nfi\ncat <<'EOF'\n" + show + "EOF\n"
+	systemctl := "#!/bin/sh\nif [ \"$1\" = \"restart\" ] || [ \"$2\" = \"restart\" ]; then\n  echo \"$@\" > " + recDir + "/restart.args\n  exit 0\nfi\nif [ \"$1\" = \"list-jobs\" ] || [ \"$2\" = \"list-jobs\" ]; then\n  exit 0\nfi\ncat <<'EOF'\n" + show + "EOF\n"
 	journalctl := "#!/bin/sh\necho \"$@\" > " + recDir + "/journalctl.args\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(bin, "systemctl"), []byte(systemctl), 0o755); err != nil {
 		t.Fatal(err)

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -15,6 +16,141 @@ import (
 
 	"github.com/lugoues/creidhne/internal/systemd"
 )
+
+// restartPoll is how often trackedRestart re-checks the systemd job queue, and
+// restartSleep the wait itself; the systemd calls are indirected too. All are
+// package vars so tests can drive the poll loop without a real systemctl or
+// real delays.
+var (
+	restartPoll     = 400 * time.Millisecond
+	restartSleep    = time.Sleep
+	restartAsyncFn  = systemd.RestartAsync
+	pendingJobsFn   = systemd.PendingJobs
+	restartStatusFn = systemd.Show
+)
+
+// trackedRestart enqueues a non-blocking restart (--no-block, so systemd still
+// orders the jobs by their dependencies) and then polls the job queue, checking
+// off each unit as its job clears. It turns systemctl restart's silent,
+// multi-minute wait into a live checklist that also reveals which unit is the
+// straggler, then confirms final state and reports anything that came back
+// failed.
+func trackedRestart(out io.Writer, userScope bool, units []string) error {
+	if len(units) == 0 {
+		return nil
+	}
+	if err := restartAsyncFn(userScope, units); err != nil {
+		return err
+	}
+	remaining := make(map[string]bool, len(units))
+	for _, u := range units {
+		remaining[u] = true
+	}
+	spin := newRestartSpinner(out) // animates only on a terminal
+	for len(remaining) > 0 {
+		pending, err := pendingJobsFn(userScope, units)
+		if err != nil {
+			spin.clear()
+			return err
+		}
+		// Check off completions in the stable input order, not map order.
+		for _, u := range units {
+			if remaining[u] {
+				if _, still := pending[u]; !still {
+					spin.clear() // lift the spinner line before printing above it
+					fmt.Fprintf(out, "  %s %s\n", green("✓"), u)
+					delete(remaining, u)
+				}
+			}
+		}
+		if len(remaining) == 0 {
+			break
+		}
+		// Spin through one poll interval so a slow unit reads as working, not
+		// hung, and names what is still pending.
+		spin.wait(restartPoll, waitingLabel(units, remaining))
+	}
+	spin.clear()
+	// A cleared job is not proof of success; name anything that ended failed.
+	var failed []string
+	if statuses, err := restartStatusFn(userScope, units); err == nil {
+		for _, u := range units {
+			if st, ok := statuses[u]; ok && st.ActiveState == "failed" {
+				failed = append(failed, u)
+			}
+		}
+	}
+	if len(failed) > 0 {
+		for _, u := range failed {
+			fmt.Fprintf(out, "  %s %s failed\n", red("✗"), u)
+		}
+		return fmt.Errorf("%d unit(s) failed to restart: %s", len(failed), strings.Join(failed, ", "))
+	}
+	fmt.Fprintf(out, "%s Restarted.\n", green("✓"))
+	return nil
+}
+
+// spinFrames is the braille cycle huh's spinner uses; reused so restart's
+// hand-rolled spinner matches the rest of the CLI.
+var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// spinInterval is the animation tick (a poll interval spans several frames);
+// a package var so a test could drive it without real time.
+var spinInterval = 100 * time.Millisecond
+
+// restartSpinner draws an in-place "waiting on …" line during the poll gaps.
+// It animates only to a terminal; off a terminal (pipe, CI, tests) it is inert
+// and the plain per-unit checklist stands on its own.
+type restartSpinner struct {
+	w      io.Writer
+	active bool
+	frame  int
+}
+
+func newRestartSpinner(out io.Writer) *restartSpinner {
+	active := false
+	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		active = true
+	}
+	return &restartSpinner{w: out, active: active}
+}
+
+// clear erases the current spinner line so text can be printed above it.
+func (s *restartSpinner) clear() {
+	if s.active {
+		fmt.Fprint(s.w, "\r\033[K")
+	}
+}
+
+// wait animates the spinner for d, labelling what it is waiting on. When inert
+// it just sleeps the whole interval once (the poll cadence).
+func (s *restartSpinner) wait(d time.Duration, label string) {
+	if !s.active {
+		restartSleep(d)
+		return
+	}
+	for waited := time.Duration(0); waited < d; waited += spinInterval {
+		fmt.Fprintf(s.w, "\r\033[K%s restarting, waiting on %s", green(spinFrames[s.frame%len(spinFrames)]), label)
+		s.frame++
+		restartSleep(spinInterval)
+	}
+}
+
+// waitingLabel names the units still pending, in input order, capping the list
+// so a wide fan-out stays one line.
+func waitingLabel(units []string, remaining map[string]bool) string {
+	var names []string
+	for _, u := range units {
+		if remaining[u] {
+			names = append(names, u)
+		}
+	}
+	const shown = 3
+	if len(names) > shown {
+		return fmt.Sprintf("%s +%d more", strings.Join(names[:shown], ", "), len(names)-shown)
+	}
+	return strings.Join(names, ", ")
+}
 
 // stdinIsTTY reports whether in is an interactive terminal (the same check
 // confirm uses to pick prompt style).
@@ -92,7 +228,10 @@ func newRestartCmd() *cobra.Command {
 			"last applied config change (what status flags as stale), making the\n" +
 			"applied changes take effect. Stale units whose change a restart cannot\n" +
 			"apply (volumes; networks without NetworkDeleteOnStop) are skipped with\n" +
-			"a warning; see 'crei diff --stale' for what each restart would change.",
+			"a warning; see 'crei diff --stale' for what each restart would change.\n\n" +
+			"The restart runs as one ordered systemctl transaction (dependencies are\n" +
+			"honored); crei then tracks the job queue and checks off each unit as it\n" +
+			"finishes, so a slow unit is visible rather than a silent wait.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 && !staleOnly {
@@ -182,11 +321,7 @@ func newRestartCmd() *cobra.Command {
 					return nil
 				}
 			}
-			if err := systemd.Restart(underHome(cfg.QuadletDir), units); err != nil {
-				return err
-			}
-			fmt.Fprintln(out, "Restarted.")
-			return nil
+			return trackedRestart(out, underHome(cfg.QuadletDir), units)
 		},
 	}
 	cmd.Flags().BoolVar(&staleOnly, "stale", false, "restart only units whose running process predates the last applied config")

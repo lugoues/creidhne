@@ -51,20 +51,68 @@ var run = func(args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// Restart restarts the named units in one systemctl call. userScope selects
-// `systemctl --user`.
-func Restart(userScope bool, units []string) error {
+// RestartAsync enqueues a restart of the named units in one systemctl call and
+// returns without waiting (--no-block). It is still a single transaction, so
+// systemd orders the jobs by their After=/Before= dependencies; the caller
+// tracks completion with PendingJobs. userScope selects `systemctl --user`.
+func RestartAsync(userScope bool, units []string) error {
 	if len(units) == 0 {
 		return nil
 	}
-	args := make([]string, 0, len(units)+2)
+	args := make([]string, 0, len(units)+3)
 	if userScope {
 		args = append(args, "--user")
 	}
-	args = append(args, "restart")
+	args = append(args, "restart", "--no-block")
 	args = append(args, units...)
 	_, err := run(args...)
 	return err
+}
+
+// PendingJobs returns the still-queued jobs among units, mapping unit -> job
+// state ("running"/"waiting"), by parsing `systemctl list-jobs`. A unit absent
+// from the result has no pending job: its restart has finished (successfully or
+// not; PendingJobs does not judge, the caller checks final state with Show).
+func PendingJobs(userScope bool, units []string) (map[string]string, error) {
+	if len(units) == 0 {
+		return map[string]string{}, nil
+	}
+	args := make([]string, 0, len(units)+3)
+	if userScope {
+		args = append(args, "--user")
+	}
+	args = append(args, "list-jobs", "--no-legend")
+	args = append(args, units...)
+	out, err := run(args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseJobs(out, units), nil
+}
+
+// parseJobs reads `systemctl list-jobs` output (JOB UNIT TYPE STATE per line)
+// into unit -> state, keeping only the requested units. It matches the unit as
+// a whole field and reads the last field as the state, so a leading marker
+// column or extra spacing across systemd versions cannot misalign it.
+func parseJobs(out []byte, units []string) map[string]string {
+	want := make(map[string]bool, len(units))
+	for _, u := range units {
+		want[u] = true
+	}
+	res := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			continue
+		}
+		for _, tok := range f {
+			if want[tok] {
+				res[tok] = f[len(f)-1]
+				break
+			}
+		}
+	}
+	return res
 }
 
 // Show fetches runtime state for the named units in one systemctl call.
