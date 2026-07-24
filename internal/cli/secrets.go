@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 
-	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/podman"
 )
 
@@ -83,11 +82,12 @@ func newSecretsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "secret",
 		Short: "Inspect and create podman secrets from the registry",
-		Long: "secret works with the #SecretRegistry declared in your CUE (the\n" +
-			"top-level \"secrets\" field by default). 'list' shows which registry\n" +
-			"secrets exist in podman; 'create' adds the missing ones; 'prune'\n" +
-			"deletes crei-created secrets nothing references anymore; 'adopt'\n" +
-			"labels pre-existing registry secrets as crei-managed.",
+		Long: "secret works with the #SecretRegistry declared in your CUE. crei owns\n" +
+			"registries/secrets.cue ('add' registers a secret there); the hand-\n" +
+			"authored top-level \"secrets\" field is also read. 'list' shows which\n" +
+			"registry secrets exist in podman; 'create' adds the missing ones;\n" +
+			"'prune' deletes crei-created secrets nothing references anymore;\n" +
+			"'adopt' labels pre-existing registry secrets as crei-managed.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cmd.Help()
@@ -95,7 +95,8 @@ func newSecretsCmd() *cobra.Command {
 			return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
 		},
 	}
-	cmd.AddCommand(newSecretsListCmd(), newSecretsCreateCmd(), newSecretsPruneCmd(), newSecretsAdoptCmd())
+	cmd.AddCommand(newSecretAddCmd(), newSecretsListCmd(), newSecretsCreateCmd(),
+		newSecretsPruneCmd(), newSecretsAdoptCmd())
 	return cmd
 }
 
@@ -104,11 +105,7 @@ func newSecretsCmd() *cobra.Command {
 // string reference never registered still counts). Secrets inside .kube YAML
 // are not parsed; declare those in the registry to protect them.
 func referencedSecretNames(cfg config) (map[string]bool, error) {
-	overlay, err := buildOverlay(cfg.ProjectDir)
-	if err != nil {
-		return nil, err
-	}
-	declared, err := eval.SecretRegistry(cfg.ProjectDir, overlay, cfg.SecretsField)
+	declared, err := declaredSecretNames(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -237,11 +234,7 @@ func newSecretsAdoptCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			overlay, err := buildOverlay(cfg.ProjectDir)
-			if err != nil {
-				return err
-			}
-			declared, err := eval.SecretRegistry(cfg.ProjectDir, overlay, cfg.SecretsField)
+			declared, err := declaredSecretNames(cfg)
 			if err != nil {
 				return err
 			}
@@ -284,17 +277,13 @@ func newSecretsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			overlay, err := buildOverlay(cfg.ProjectDir)
-			if err != nil {
-				return err
-			}
-			declared, err := eval.SecretRegistry(cfg.ProjectDir, overlay, cfg.SecretsField)
+			declared, err := declaredSecretNames(cfg)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			if len(declared) == 0 {
-				fmt.Fprintf(out, "No secrets declared in the %q registry.\n", cfg.SecretsField)
+				fmt.Fprintf(out, "No secrets declared (%q field or registries/secrets.cue).\n", cfg.SecretsField)
 				return nil
 			}
 			infos, err := podmanSecretInfos()
@@ -350,11 +339,7 @@ func newSecretsCreateCmd() *cobra.Command {
 
 			var targets []string
 			if all {
-				overlay, err := buildOverlay(cfg.ProjectDir)
-				if err != nil {
-					return err
-				}
-				declared, err := eval.SecretRegistry(cfg.ProjectDir, overlay, cfg.SecretsField)
+				declared, err := declaredSecretNames(cfg)
 				if err != nil {
 					return err
 				}

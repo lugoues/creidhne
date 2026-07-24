@@ -196,13 +196,20 @@ func runInit(out io.Writer, projectDir string) error {
 		fmt.Fprintf(out, "  %s main.cue (existing .cue files present, sample skipped)\n", dim("-"))
 	}
 
-	// The registries package is crei-owned (managed image pins). Always
-	// scaffold it so 'crei image' has a home; existing entries are kept.
+	// The registries package is crei-owned (managed image pins and secret
+	// metadata). Always scaffold both so 'crei image' and 'crei secret add'
+	// have a home; existing entries are kept.
 	created, err = writeIfAbsent(filepath.Join(projectDir, "registries", "images.cue"), sampleRegistries)
 	if err != nil {
 		return err
 	}
 	report(out, created, "registries/images.cue")
+
+	created, err = writeIfAbsent(filepath.Join(projectDir, "registries", "secrets.cue"), sampleSecretRegistry)
+	if err != nil {
+		return err
+	}
+	report(out, created, "registries/secrets.cue")
 
 	// Config and its JSON Schema live under .crei/ to keep the project root clean.
 	// The "#:schema ./config.schema.json" directive in the sample resolves within
@@ -436,6 +443,19 @@ hello: creidhne.#Quadlet & {
 }
 `, base)
 }
+
+// sampleSecretRegistry is the starter registries/secrets.cue (crei-owned).
+const sampleSecretRegistry = `package registries
+
+import "github.com/lugoues/creidhne"
+
+// crei-owned secret registry. 'crei secret add <name>' registers a secret and
+// how to generate it; 'crei secret create' makes the value in podman. Secret
+// material never lives here. Reference an entry from a container, adding
+// consumption details: Secret: [reg.secrets.<name> & {type: "env", target: "X"}]
+secrets: creidhne.#SecretRegistry & {
+}
+`
 
 // sampleRegistries is the starter registries/images.cue (crei-owned).
 const sampleRegistries = `package registries

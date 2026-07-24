@@ -302,7 +302,20 @@ app: creidhne.#Quadlet & {
 }
 ```
 
-`crei secret` reconciles that registry against podman's secret store:
+crei can also own the registry for you. `crei secret add <name>` registers a
+secret in `registries/secrets.cue` (the crei-owned counterpart to
+`registries/images.cue`), recording how to generate its value; secret material
+never lives in CUE. Reference a crei-owned entry the same way, through the
+`registries` import:
+
+```sh
+crei secret add db_password --length 40   # register a generated secret
+crei secret add tls_cert --manual          # register a hand-entered one (no generate policy)
+```
+
+`crei secret` reconciles the registry (the crei-owned `registries/secrets.cue`
+and the hand-authored top-level `secrets` field, unioned) against podman's
+secret store:
 
 ```sh
 crei secret list                # present/missing, crei-managed, created/updated
@@ -312,7 +325,7 @@ crei secret adopt               # label pre-existing registry secrets as crei-ma
 crei secret prune               # delete crei-created secrets nothing references
 ```
 
-`create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The registry is read from the top-level `secrets` field by default; override with `secrets_field` in `.crei/config.toml`.
+`create` prompts for a value (hidden input) or generates a random one; a generated value is shown once so you can save it. Use `--replace` to overwrite an existing secret. The hand-authored registry is read from the top-level `secrets` field by default; override with `secrets_field` in `.crei/config.toml`.
 
 Everything `create` makes carries a `creidhne.managed=true` label, and `prune`
 only ever considers labeled secrets: what crei didn't create, it never
@@ -398,6 +411,7 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei import compose [file...]` | Convert a docker-compose project into a creidhne CUE file (see below). |
 | `crei vendor [module[@ref]]` | Vendor a git-hosted CUE helper module into `cue.mod/usr` for offline use (`--check` verifies against the lock). |
 | `crei config` | Show the resolved configuration and where each value came from. |
+| `crei secret add` | Register a secret in the crei-owned `registries/secrets.cue` (`--length`/`--charset` set the generate policy; `--manual` for a hand-entered one). |
 | `crei secret list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
 | `crei secret create` | Create a podman secret, entering or generating its value (`-a` walks every missing one). |
 | `crei version` | Print version info. |
