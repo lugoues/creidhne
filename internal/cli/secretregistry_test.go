@@ -149,6 +149,92 @@ func TestCmdSecretRemove(t *testing.T) {
 	}
 }
 
+// TestGenerateFromPolicy: each charset yields a value of the requested length
+// drawn from the right alphabet.
+func TestGenerateFromPolicy(t *testing.T) {
+	cases := []struct {
+		charset string
+		length  int
+		allowed func(rune) bool
+	}{
+		{"", 32, func(r rune) bool { return strings.ContainsRune(passwordCharset, r) }},
+		{"alphanumeric", 17, func(r rune) bool { return strings.ContainsRune(passwordCharset, r) }},
+		{"hex", 40, func(r rune) bool { return strings.ContainsRune("0123456789abcdef", r) }},
+		{"base64", 43, func(r rune) bool {
+			return strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_", r)
+		}},
+	}
+	for _, c := range cases {
+		v, err := generateFromPolicy(&eval.SecretGenerate{Length: c.length, Charset: c.charset})
+		if err != nil {
+			t.Fatalf("%s: %v", c.charset, err)
+		}
+		if len(v) != c.length {
+			t.Fatalf("%s: len %d, want %d", c.charset, len(v), c.length)
+		}
+		for _, r := range string(v) {
+			if !c.allowed(r) {
+				t.Fatalf("%s: value %q has out-of-alphabet rune %q", c.charset, v, r)
+			}
+		}
+	}
+	// Two draws differ (crypto/rand, not a fixed seed).
+	a, _ := generateFromPolicy(&eval.SecretGenerate{Length: 32})
+	b, _ := generateFromPolicy(&eval.SecretGenerate{Length: 32})
+	if string(a) == string(b) {
+		t.Fatal("two generated values should differ")
+	}
+}
+
+// TestCmdSecretRotate: rotate regenerates generate-policy entries into podman
+// (replace=true) and skips manual ones.
+func TestCmdSecretRotate(t *testing.T) {
+	dir := setupProject(t, testMain)
+	created := map[string][]byte{}
+	replaced := map[string]bool{}
+	stubSecrets(t, nil, func(name string, value []byte, replace bool) error {
+		created[name] = value
+		replaced[name] = replace
+		return nil
+	}, nil)
+
+	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db_password", "--length", "40"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCmd(t, "--dir", dir, "secret", "add", "tls_cert", "--manual"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rotate everything (-y): db_password rotates, tls_cert (manual) is skipped.
+	out, err := runCmd(t, "--dir", dir, "secret", "rotate", "-y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created["db_password"]) != 40 || !replaced["db_password"] {
+		t.Fatalf("db_password should be replaced with a 40-char value, got %d chars replace=%v", len(created["db_password"]), replaced["db_password"])
+	}
+	if _, ok := created["tls_cert"]; ok {
+		t.Fatal("a manual secret must not be auto-rotated")
+	}
+	if !strings.Contains(out, "tls_cert") || !strings.Contains(out, "manual") {
+		t.Errorf("rotate should note the skipped manual entry:\n%s", out)
+	}
+
+	// Rotating a manual entry by name surfaces it as skipped, not an error.
+	out, err = runCmd(t, "--dir", dir, "secret", "rotate", "tls_cert", "-y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Nothing to rotate") {
+		t.Errorf("rotating only a manual entry should rotate nothing:\n%s", out)
+	}
+
+	// An unknown name errors.
+	if _, err := runCmd(t, "--dir", dir, "secret", "rotate", "nope", "-y"); err == nil {
+		t.Fatal("rotating an unknown secret should error")
+	}
+}
+
 // TestCmdSecretAddCollision: a duplicate name is refused without --force.
 func TestCmdSecretAddCollision(t *testing.T) {
 	dir := setupProject(t, testMain)
