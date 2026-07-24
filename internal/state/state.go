@@ -47,11 +47,11 @@ type Unit struct {
 // config a still-running unit was created from stays diffable after later
 // applies (staleness diffs); images/ artifacts carry neither.
 type File struct {
-	Path      string    `json:"path"`
-	SHA256    string    `json:"sha256"`
-	Mode      string    `json:"mode"`
-	AppliedAt time.Time `json:"appliedAt"`
-	Content   string    `json:"content,omitempty"`
+	Path      string     `json:"path"`
+	SHA256    string     `json:"sha256"`
+	Mode      string     `json:"mode"`
+	AppliedAt time.Time  `json:"appliedAt"`
+	Content   string     `json:"content,omitempty"`
 	History   []Revision `json:"history,omitempty"`
 }
 

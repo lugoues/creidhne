@@ -111,10 +111,10 @@ func TestPickVersion(t *testing.T) {
 	cases := []struct{ current, constraint, want string }{
 		{"8.25.0", "~8.25", "8.25.3"},
 		{"8.25.0", "^8.25", "8.26.1"},
-		{"8.25.0", "", "v9.0.0"},       // implicit >= current: newest overall
-		{"8.25.0", "=8.25.0", ""},      // frozen: nothing strictly newer in range
-		{"8.26.1", "~8.25", ""},        // already past the range: no downgrade
-		{"v9.0.0", "", ""},             // newest already
+		{"8.25.0", "", "v9.0.0"},  // implicit >= current: newest overall
+		{"8.25.0", "=8.25.0", ""}, // frozen: nothing strictly newer in range
+		{"8.26.1", "~8.25", ""},   // already past the range: no downgrade
+		{"v9.0.0", "", ""},        // newest already
 	}
 	for _, c := range cases {
 		got, err := PickVersion(tags, mustV(c.current), c.constraint)

@@ -13,14 +13,14 @@ func quadletWith(container string) string {
 // and must validate.
 func TestValidatorsAcceptPodmanValues(t *testing.T) {
 	accept := map[string]string{
-		"ipv6 publish port":  `Container: {Image: "img", PublishPort: ["[::1]:80:90"]}`,
-		"ipv6 range + proto": `Container: {Image: "img", PublishPort: ["[2001:db8::1]:1234:1234/udp"]}`,
-		"bare signal":        `Container: {Image: "img", StopSignal: "TERM"}`,
-		"numeric signal":     `Container: {Image: "img", StopSignal: "9"}`,
-		"realtime signal":    `Container: {Image: "img", StopSignal: "SIGRTMIN+3"}`,
-		"fractional second":  `Container: {Image: "img", HealthInterval: "0.5s"}`,
+		"ipv6 publish port":   `Container: {Image: "img", PublishPort: ["[::1]:80:90"]}`,
+		"ipv6 range + proto":  `Container: {Image: "img", PublishPort: ["[2001:db8::1]:1234:1234/udp"]}`,
+		"bare signal":         `Container: {Image: "img", StopSignal: "TERM"}`,
+		"numeric signal":      `Container: {Image: "img", StopSignal: "9"}`,
+		"realtime signal":     `Container: {Image: "img", StopSignal: "SIGRTMIN+3"}`,
+		"fractional second":   `Container: {Image: "img", HealthInterval: "0.5s"}`,
 		"fractional compound": `Container: {Image: "img", HealthInterval: "1.5h30m"}`,
-		"3-digit octal mode": `Container: {Image: "img", Secret: [{name: "s", type: "mount", mode: "400"}]}`,
+		"3-digit octal mode":  `Container: {Image: "img", Secret: [{name: "s", type: "mount", mode: "400"}]}`,
 	}
 	for desc, cu := range accept {
 		t.Run(desc, func(t *testing.T) {

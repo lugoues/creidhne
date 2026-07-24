@@ -181,7 +181,6 @@ func anchorOf(key string) string {
 	return ""
 }
 
-
 // hasNamedSegment reports whether a path contains at least one identifier
 // segment (not just list indexes).
 func hasNamedSegment(p []string) bool {
