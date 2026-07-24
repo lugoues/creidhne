@@ -18,9 +18,18 @@ real cause (incomplete input) never appears.
   keeping the raw error below. `diagnose` decides over the whole error
   group (the informative arm is the bare list.Concat; the markers live in
   sibling arms, read via each arm's full text). See `isIncompleteFlatten`.
-- Still open: name the *incomplete leaf* itself. Walk the failed value for
-  the non-concrete required field and print `auth_config.name`, not just
-  the section. The section message is the floor; the leaf is the ceiling.
+- Still open: name the *incomplete leaf* itself (print `Secret[0].name`,
+  not just the section). BLOCKER found 2026-07-24: the failing entry
+  evaluates to bottom (`_|_`) — the same incompleteness that triggers the
+  error poisons the value — so `.List()`/`.Fields()` on it dead-end and a
+  structural walk from `root` finds nothing (verified: the section value
+  resolves via an optional-aware field scan, but its entries are `_|_`).
+  Naming the leaf therefore can't read the evaluated value; it needs a
+  different route: parse the user's source syntax for the entry, unify it
+  against the section's entry definition (#SecretRef/#VolumeMount/...) in
+  isolation, and `Validate(cue.Concrete(true))` that to name the missing
+  required field. Schema-coupled and fragile; deferred as low-ROI over the
+  section message, which already points at the cause.
 - Existing sub-items from the earlier diagnostics entry:
   - `checkFailures` maps any error whose path traverses `#checks."<name>"`
     into a `check failed` line; map only genuine assert conflicts (see
