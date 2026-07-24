@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -172,31 +173,138 @@ func Tags(repo string) ([]string, error) {
 	return tags, nil
 }
 
-// PickVersion selects the highest tag satisfying a semver constraint (e.g.
-// "^1.2", "~8.25", "8.x") from a repository's tag list. Tags that do not
-// parse as semver (latest, stable, sha-…) are ignored; a v prefix is
-// tolerated and the returned tag keeps its literal registry form. Returns
-// ("", nil) when nothing in the list satisfies the constraint.
-func PickVersion(tags []string, constraint string) (string, error) {
-	c, err := semver.NewConstraint(constraint)
-	if err != nil {
-		return "", fmt.Errorf("invalid semver range %q: %w", constraint, err)
+// Version is a parsed version-shaped tag: an optional "v", dotted numerics
+// of any component count (semver and CalVer alike: "8.25.3", "2026.7.7.2"),
+// and an optional "-suffix". Per the container convention (and Renovate's
+// rule) a suffix means compatibility ("1.2.0-alpine"), not pre-release:
+// candidates must carry the identical suffix and the suffix never changes.
+type Version struct {
+	Raw    string // literal registry form
+	Parts  []int
+	Suffix string // "" or e.g. "alpine"
+}
+
+var versionTag = regexp.MustCompile(`^v?([0-9]+(?:\.[0-9]+)*)(?:-([0-9A-Za-z.]+))?$`)
+
+// ParseVersion reports whether a tag is version-shaped, and parses it.
+func ParseVersion(tag string) (Version, bool) {
+	m := versionTag.FindStringSubmatch(tag)
+	if m == nil {
+		return Version{}, false
 	}
-	best := ""
-	var bestV *semver.Version
-	for _, t := range tags {
-		v, err := semver.NewVersion(t)
+	v := Version{Raw: tag, Suffix: m[2]}
+	for _, p := range strings.Split(m[1], ".") {
+		n, err := strconv.Atoi(p)
 		if err != nil {
-			continue // non-semver tag
+			return Version{}, false // component overflow etc.
 		}
-		if !c.Check(v) {
+		v.Parts = append(v.Parts, n)
+	}
+	// A suffix that itself parses as a bare number is more likely a version
+	// component oddity than a compatibility name; still treated as suffix —
+	// same-suffix comparison keeps it safe either way.
+	return v, true
+}
+
+// Compare orders by numeric tuple, shorter tuples padded with zeros
+// ("2026.7.7.2" > "2026.7.7"; "8.25" == "8.25.0"). Suffixes do not order
+// (callers compare only same-suffix versions).
+func (v Version) Compare(o Version) int {
+	n := max(len(v.Parts), len(o.Parts))
+	for i := 0; i < n; i++ {
+		a, b := 0, 0
+		if i < len(v.Parts) {
+			a = v.Parts[i]
+		}
+		if i < len(o.Parts) {
+			b = o.Parts[i]
+		}
+		if a != b {
+			if a < b {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+// truncated returns the version cut to at most n components (for comparing a
+// deeper candidate at the current tag's precision).
+func (v Version) truncated(n int) Version {
+	if len(v.Parts) <= n {
+		return v
+	}
+	return Version{Raw: v.Raw, Parts: v.Parts[:n], Suffix: v.Suffix}
+}
+
+// inRange checks a Masterminds semver constraint against the first three
+// tuple components (missing ones zero). Components past the third rank in
+// Compare but are invisible to constraints — full constraint algebra over
+// arbitrary tuples is not worth reimplementing.
+func (v Version) inRange(c *semver.Constraints) bool {
+	p := func(i int) uint64 {
+		if i < len(v.Parts) {
+			return uint64(v.Parts[i])
+		}
+		return 0
+	}
+	return c.Check(semver.New(p(0), p(1), p(2), "", ""))
+}
+
+// PickVersion selects the best upgrade candidate from a tag list: the
+// highest version-shaped tag with the same suffix as current, strictly
+// newer than current, and (when constraint is non-empty) inside the range.
+// "" when there is no such candidate. The implicit rangeless behavior is
+// therefore ">= current": the tag itself states the floor, the range (if
+// any) states the ceiling, and "=x.y.z" freezes.
+func PickVersion(tags []string, current Version, constraint string) (string, error) {
+	var c *semver.Constraints
+	if constraint != "" {
+		var err error
+		if c, err = semver.NewConstraint(constraint); err != nil {
+			return "", fmt.Errorf("invalid semver range %q: %w", constraint, err)
+		}
+	}
+	best := Version{}
+	found := false
+	for _, t := range tags {
+		v, ok := ParseVersion(t)
+		if !ok || v.Suffix != current.Suffix {
 			continue
 		}
-		if bestV == nil || v.GreaterThan(bestV) {
-			best, bestV = t, v
+		// Precision guard (Renovate-informed): a candidate less precise than
+		// current is a different scheme, not an upgrade ("3.20" must never
+		// jump to alpine's date-stamp "20260127"); more precise is fine (a
+		// CalVer hotfix "2026.7.7.2" over "2026.7.7").
+		if len(v.Parts) < len(current.Parts) {
+			continue
+		}
+		// Date-tag guard: a first component leaping into 5+ digits when the
+		// current one is small is a date stamp (20260127), not a major.
+		if v.Parts[0] >= 10000 && current.Parts[0] < 1000 {
+			continue
+		}
+		// The candidate truncated to the current tag's precision must be
+		// strictly newer. A deeper tag refining the same version is an alias
+		// narrowing, not an upgrade (debian:13-slim -> 13.6-slim is the same
+		// image; taking it would silently stop floating on the major), while
+		// a genuinely newer deep tag still passes (2026.7.7.2 over
+		// 2026.6.19: 2026.7.7 > 2026.6.19).
+		if v.truncated(len(current.Parts)).Compare(current) <= 0 {
+			continue
+		}
+		if c != nil && !v.inRange(c) {
+			continue
+		}
+		if !found || v.Compare(best) > 0 {
+			best, found = v, true
 		}
 	}
-	return best, nil
+	if !found {
+		return "", nil
+	}
+	return best.Raw, nil
 }
 
 // Created returns an image's build time (its config's Created), used for the

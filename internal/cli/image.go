@@ -121,16 +121,19 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 				row.note = "lookup failed: " + firstLine(err.Error())
 				break
 			}
-			switch {
-			case c.Reason == "":
+			if c.Reason == "" {
 				row.note = "up to date"
-			case c.Held != "":
-				row.note = c.Held
-			default:
-				row.update = true
-				row.note = "update available: " + c.Reason + " " + short(c.Digest)
-				available++
+				break
 			}
+			row.update = true
+			row.note = "update available: " + c.Reason + " " + short(c.Digest)
+			if c.HasAge {
+				row.note += " (released " + humanDuration(c.Age) + " ago)"
+			}
+			if c.Young {
+				row.note += " ! younger than min-age"
+			}
+			available++
 		}
 		rows = append(rows, row)
 	}

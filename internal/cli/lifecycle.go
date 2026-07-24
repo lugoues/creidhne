@@ -1,32 +1,57 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/lugoues/creidhne/internal/systemd"
 )
+
+// stdinIsTTY reports whether in is an interactive terminal (the same check
+// confirm uses to pick prompt style).
+func stdinIsTTY(in io.Reader) bool {
+	f, ok := in.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+// staleOptionLabel renders a picker entry: bold unit name, the staleness
+// delta beneath it (the update picker's multiline shape).
+func staleOptionLabel(r statusRow) string {
+	note := "stale"
+	if r.StaleNote != "" {
+		note = "stale: " + r.StaleNote
+	}
+	return fmt.Sprintf("%s\n  %s", bold(r.Service), note)
+}
 
 // lifecycleRows selects the units acted on by restart/logs: every unit of
 // the named quadlets, narrowed to stale ones by staleOnly. skipUnrestartable
 // drops (with a warning) stale units whose change a restart cannot apply.
 // Rows are returned (not just service names) so callers can show why a unit
-// is in the set (the staleness delta).
-func lifecycleRows(out io.Writer, cfg config, args []string, staleOnly, skipUnrestartable bool) ([]statusRow, error) {
+// is in the set (the staleness delta). pending counts files whose desired
+// content differs from disk: staleness only begins at apply, so a
+// nothing-to-restart answer can explain an update-but-no-apply workflow gap.
+func lifecycleRows(out io.Writer, cfg config, args []string, staleOnly, skipUnrestartable bool) (rows []statusRow, pending int, err error) {
 	in, notes, err := gatherStatus(cfg, args)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, n := range notes {
 		fmt.Fprintln(out, yellow("! "+n))
 	}
-	var rows []statusRow
 	for _, r := range classifyRows(in) {
+		if r.Disk == diskPending || r.Disk == diskMissing {
+			pending++
+		}
 		if r.Service == "" {
 			continue
 		}
@@ -44,7 +69,7 @@ func lifecycleRows(out io.Writer, cfg config, args []string, staleOnly, skipUnre
 		}
 		rows = append(rows, r)
 	}
-	return rows, nil
+	return rows, pending, nil
 }
 
 // serviceNames extracts the systemd unit names from lifecycle rows.
@@ -78,14 +103,51 @@ func newRestartCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			rows, err := lifecycleRows(out, cfg, args, staleOnly, true)
+			rows, pending, err := lifecycleRows(out, cfg, args, staleOnly, true)
 			if err != nil {
 				return err
 			}
 			if len(rows) == 0 {
 				fmt.Fprintln(out, "Nothing to restart.")
+				if staleOnly && pending > 0 {
+					fmt.Fprintln(out, yellow(fmt.Sprintf("! %d file(s) have unapplied changes — staleness begins after 'crei apply'", pending)))
+				}
 				return nil
 			}
+			// Interactive --stale: pick which stale units to restart (like
+			// crei image update), all unselected — restarting is an explicit
+			// choice. -y (or no TTY) keeps the list+confirm-all flow.
+			if staleOnly && !yes && stdinIsTTY(cmd.InOrStdin()) {
+				var chosen []int
+				opts := make([]huh.Option[int], len(rows))
+				for k, r := range rows {
+					opts[k] = huh.NewOption(staleOptionLabel(r), k)
+				}
+				err := huh.NewForm(huh.NewGroup(
+					huh.NewMultiSelect[int]().
+						Title("Stale units").
+						Description("space toggles, enter restarts the selection").
+						Options(opts...).
+						Value(&chosen),
+				)).Run()
+				if errors.Is(err, huh.ErrUserAborted) {
+					fmt.Fprintln(out, "Aborted.")
+					return nil
+				}
+				if err != nil {
+					return fmt.Errorf("interactive selection unavailable (%v); use -y to restart all stale units", err)
+				}
+				if len(chosen) == 0 {
+					fmt.Fprintln(out, "Nothing selected.")
+					return nil
+				}
+				picked := make([]statusRow, 0, len(chosen))
+				for _, k := range chosen {
+					picked = append(picked, rows[k])
+				}
+				rows = picked
+			}
+
 			units := serviceNames(rows)
 			fmt.Fprintf(out, "Restarting %d unit(s):\n", len(rows))
 			// The staleness delta on each line (like status) shows what the
@@ -108,7 +170,9 @@ func newRestartCmd() *cobra.Command {
 				}
 				fmt.Fprintln(out, line)
 			}
-			if !yes {
+			// The picker's selection is the consent; only the non-picker
+			// paths (plain restart, -y off with no TTY) still confirm.
+			if !yes && (!staleOnly || !stdinIsTTY(cmd.InOrStdin())) {
 				ok, err := confirm(cmd.InOrStdin(), out, "Restart?")
 				if err != nil {
 					return err
@@ -149,7 +213,7 @@ func newLogsCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			rows, err := lifecycleRows(out, cfg, args, staleOnly, false)
+			rows, _, err := lifecycleRows(out, cfg, args, staleOnly, false)
 			if err != nil {
 				return err
 			}

@@ -1,36 +1,59 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/registry"
 )
 
-// candidate is an entry's policy-approved next state, computed by nextPin.
-type candidate struct {
-	Tag    string // the tag to track (advanced within range when one is set)
-	Digest string // that tag's current digest
-	Held   string // non-empty: human reason the candidate is withheld (min-age)
-	Reason string // what changed: "digest", "tag 8.25.3 -> 8.26.0", "" if current
+// withSpinner runs a long fetch under huh's spinner when out is a terminal,
+// plainly otherwise (piped/CI output stays clean).
+func withSpinner(out io.Writer, title string, action func()) {
+	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		if err := spinner.New().Title(title).Output(f).Action(action).Run(); err == nil {
+			return
+		}
+		// Spinner failure must never eat the work: tea errors leave the
+		// action unrun only before it started; fall through defensively.
+	}
+	action()
 }
 
-// nextPin resolves a managed entry's next pin: advance the tag within the
-// semver range (when set), resolve its digest, and apply min-age policy.
-// The caller guarantees the entry has a tag.
-func nextPin(e eval.ImageEntry, r registry.Ref, defAge time.Duration, now time.Time, res resolver) (candidate, error) {
+// candidate is an entry's available upgrade, computed by nextPin. There is no
+// hold machinery: min-age is information (Age + Young), and the picker's
+// selection is the judgment.
+type candidate struct {
+	Tag    string        // the tag to track (advanced for version-shaped tags)
+	Digest string        // that tag's current digest
+	Reason string        // "digest moved" or "v1 -> v2"; "" when current
+	Age    time.Duration // time since the candidate image was created
+	HasAge bool
+	Young  bool // younger than the effective min-age (marker, not a gate)
+}
+
+// nextPin resolves a managed entry's upgrade candidate. Version-shaped tags
+// advance within the implicit ">= current" (narrowed by an explicit range;
+// "=x.y.z" freezes); float tags follow their own digest. The caller
+// guarantees the entry has a tag.
+func nextPin(e eval.ImageEntry, r registry.Ref, minAge time.Duration, now time.Time, res resolver) (candidate, error) {
 	c := candidate{Tag: r.Tag}
-	if e.Range != "" {
+	if cur, ok := registry.ParseVersion(r.Tag); ok {
 		tags, err := res.tags(r.Repo)
 		if err != nil {
 			return c, fmt.Errorf("%s: %w", e.Key, err)
 		}
-		pick, err := registry.PickVersion(tags, e.Range)
+		pick, err := registry.PickVersion(tags, cur, e.Range)
 		if err != nil {
 			return c, fmt.Errorf("%s: %w", e.Key, err)
 		}
@@ -46,25 +69,43 @@ func nextPin(e eval.ImageEntry, r registry.Ref, defAge time.Duration, now time.T
 	if c.Tag == r.Tag && digest == e.Digest {
 		return c, nil // current
 	}
-	switch {
-	case c.Tag != r.Tag:
-		c.Reason = fmt.Sprintf("tag %s -> %s", r.Tag, c.Tag)
-	default:
-		c.Reason = "digest"
+	if c.Tag != r.Tag {
+		c.Reason = fmt.Sprintf("%s -> %s", r.Tag, c.Tag)
+	} else {
+		c.Reason = "digest moved"
 	}
 
-	effAge := defAge
 	if e.MinAge != "" {
-		effAge, _ = registry.ParseAge(e.MinAge) // schema regex already validated
+		minAge, _ = registry.ParseAge(e.MinAge) // schema regex already validated
 	}
-	if effAge > 0 {
-		if created, err := res.created(r.Repo + "@" + digest); err == nil {
-			if age := now.Sub(created); age < effAge {
-				c.Held = fmt.Sprintf("held: candidate is %s old (min-age %s)", humanDuration(age), humanDuration(effAge))
-			}
-		}
+	if created, err := res.created(r.Repo + "@" + digest); err == nil && !created.IsZero() {
+		c.Age = now.Sub(created)
+		c.HasAge = true
+		c.Young = minAge > 0 && c.Age < minAge
 	}
 	return c, nil
+}
+
+// updateItem pairs an entry index with its candidate for the picker.
+type updateItem struct {
+	idx int
+	e   eval.ImageEntry
+	c   candidate
+}
+
+// label is multiline: the entry name (bold) carries the checkbox line,
+// details (change, release age, digest) flow indented beneath it — long
+// image names stop crowding a columnar layout.
+func (it updateItem) label() string {
+	name := bold(it.e.Key)
+	if it.c.Young {
+		name += "  ! younger than min-age"
+	}
+	age := "age unknown"
+	if it.c.HasAge {
+		age = "released " + humanDuration(it.c.Age) + " ago"
+	}
+	return fmt.Sprintf("%s\n  %s\n  %s\n  %s", name, it.c.Reason, age, short(it.c.Digest))
 }
 
 func newImageUpdateCmd() *cobra.Command {
@@ -72,14 +113,17 @@ func newImageUpdateCmd() *cobra.Command {
 	var minAgeFlag string
 	cmd := &cobra.Command{
 		Use:   "update [name...]",
-		Short: "Advance pinned digests (and ranged tags) through the config",
-		Long: "update moves managed entries forward: each tracked tag is resolved to\n" +
-			"its current digest, entries with a semver range first advance the tag\n" +
-			"itself to the highest in-range version, and candidates younger than the\n" +
-			"min-age policy are held. Changes are written back to\n" +
+		Short: "Pick and apply image updates (tags and digests) through the config",
+		Long: "update finds what moved — version-shaped tags advance within their\n" +
+			"implicit '>= current' (an explicit range narrows it; '=x.y.z' freezes),\n" +
+			"floating tags follow their digest — and presents the candidates for\n" +
+			"selection. Everything starts unselected: applying is an explicit\n" +
+			"choice. Candidates younger than min-age (per-entry minAge, else\n" +
+			"--min-age) carry a ! marker. The selection is written back to\n" +
 			"registries/images.cue — a reviewable config edit; apply follows\n" +
-			"normally. Given names, only those entries are updated. (pin only fills\n" +
-			"missing digests; update is the verb that moves existing pins.)",
+			"normally.\n\n" +
+			"-y skips the picker and applies every aged candidate; naming entries\n" +
+			"restricts (and pre-selects) just those.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defAge, err := registry.ParseAge(minAgeFlag)
@@ -100,65 +144,93 @@ func newImageUpdateCmd() *cobra.Command {
 				only[a] = true
 			}
 			res := liveResolver()
-			changed := 0
-			for i := range entries {
-				e := entries[i]
-				if len(only) > 0 && !only[e.Key] {
-					continue
+			var items []updateItem
+			var warns []string
+			withSpinner(out, "Image updates: fetching versions", func() {
+				for i := range entries {
+					e := entries[i]
+					if len(only) > 0 && !only[e.Key] {
+						continue
+					}
+					r, err := registry.Parse(e.Image)
+					if err != nil || r.Tag == "" {
+						continue // invalid/unmanaged surface in outdated, not here
+					}
+					c, err := nextPin(e, r, defAge, time.Now(), res)
+					if err != nil {
+						warns = append(warns, firstLine(err.Error()))
+						continue
+					}
+					if c.Reason != "" {
+						items = append(items, updateItem{idx: i, e: e, c: c})
+					}
 				}
-				r, err := registry.Parse(e.Image)
+			})
+			for _, w := range warns {
+				fmt.Fprintln(out, yellow("! "+w))
+			}
+			if len(items) == 0 {
+				fmt.Fprintln(out, "Everything up to date.")
+				return nil
+			}
+
+			var chosen []int
+			if yes {
+				// Non-interactive: aged candidates, plus anything explicitly
+				// named (naming is the young-override).
+				for k, it := range items {
+					if !it.c.Young || only[it.e.Key] {
+						chosen = append(chosen, k)
+					}
+				}
+			} else {
+				// Everything starts unselected: applying an update is an
+				// explicit choice, not an opt-out. Named entries are the
+				// exception (naming them was the choice).
+				opts := make([]huh.Option[int], len(items))
+				for k, it := range items {
+					opts[k] = huh.NewOption(it.label(), k).Selected(only[it.e.Key])
+				}
+				err := huh.NewForm(huh.NewGroup(
+					huh.NewMultiSelect[int]().
+						Title("Image updates").
+						Description("space toggles, enter applies; ! items are younger than min-age").
+						Options(opts...).
+						Value(&chosen),
+				)).Run()
+				if errors.Is(err, huh.ErrUserAborted) {
+					fmt.Fprintln(out, "Aborted.")
+					return nil
+				}
 				if err != nil {
-					fmt.Fprintln(out, yellow("! "+e.Key+": "+err.Error()))
-					continue
-				}
-				if r.Tag == "" {
-					fmt.Fprintf(out, "  %s %s (no tag, unchanged)\n", dim("-"), e.Key)
-					continue
-				}
-				c, err := nextPin(e, r, defAge, time.Now(), res)
-				if err != nil {
-					fmt.Fprintln(out, yellow("! "+firstLine(err.Error())))
-					continue
-				}
-				switch {
-				case c.Reason == "":
-					fmt.Fprintf(out, "  %s %s (up to date)\n", dim("-"), e.Key)
-				case c.Held != "":
-					fmt.Fprintf(out, "  %s %s (%s)\n", dim("-"), e.Key, c.Held)
-				default:
-					fmt.Fprintf(out, "  %s %s: %s -> %s\n", green("~"), e.Key, c.Reason, short(c.Digest))
-					entries[i].Image = r.Repo + ":" + c.Tag
-					entries[i].Digest = c.Digest
-					changed++
+					return fmt.Errorf("interactive selection unavailable (%v); use -y or name entries", err)
 				}
 			}
-			if changed == 0 {
-				fmt.Fprintln(out, "Nothing to update.")
+			if len(chosen) == 0 {
+				fmt.Fprintln(out, "Nothing selected.")
 				return nil
+			}
+
+			for _, k := range chosen {
+				it := items[k]
+				r, _ := registry.Parse(it.e.Image)
+				entries[it.idx].Image = r.Repo + ":" + it.c.Tag
+				entries[it.idx].Digest = it.c.Digest
+				fmt.Fprintf(out, "  %s %s: %s -> %s\n", green("~"), it.e.Key, it.c.Reason, short(it.c.Digest))
 			}
 			content, err := emitImageRegistry(entries)
 			if err != nil {
 				return err
 			}
-			if !yes {
-				ok, err := confirm(cmd.InOrStdin(), out, fmt.Sprintf("Write %d update(s) to registries/images.cue?", changed))
-				if err != nil {
-					return err
-				}
-				if !ok {
-					fmt.Fprintln(out, "Aborted.")
-					return nil
-				}
-			}
 			path := filepath.Join(projectDir, "registries", "images.cue")
 			if err := os.WriteFile(path, content, 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", path, err)
 			}
-			fmt.Fprintf(out, "\nWrote %d update(s). Run 'crei plan' to see the change.\n", changed)
+			fmt.Fprintf(out, "\nWrote %d update(s). Run 'crei plan' to see the change.\n", len(chosen))
 			return nil
 		},
 	}
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")
-	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "hold candidates younger than this (e.g. 7d); per-entry minAge overrides")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the picker; apply all aged candidates")
+	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "mark candidates younger than this (e.g. 7d) and exclude them from -y; per-entry minAge overrides")
 	return cmd
 }
