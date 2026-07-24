@@ -29,127 +29,206 @@ var (
 	restartStatusFn = systemd.Show
 )
 
+// spinFrames is the braille cycle huh's spinner uses; reused so restart's
+// per-unit spinner matches the rest of the CLI.
+var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// spinInterval is the animation tick; a poll interval spans several frames.
+// Both are package vars so tests drive the loop without real time.
+var spinInterval = 100 * time.Millisecond
+
+// restartLive reports whether out is an interactive terminal, so restart can
+// redraw its unit block in place. A package var so tests exercise both paths.
+var restartLive = func(out io.Writer) bool {
+	f, ok := out.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+// restartTracker renders a restart's progress: each unit's line carries a
+// leading glyph, spinner while its job is pending, check when it clears, cross
+// if it came back failed.
+type restartTracker struct {
+	out       io.Writer
+	rows      []statusRow
+	units     []string
+	userScope bool
+	width     int             // widest service name, for note alignment
+	done      map[string]bool // units whose job has left the queue
+}
+
 // trackedRestart enqueues a non-blocking restart (--no-block, so systemd still
-// orders the jobs by their dependencies) and then polls the job queue, checking
-// off each unit as its job clears. It turns systemctl restart's silent,
-// multi-minute wait into a live checklist that also reveals which unit is the
-// straggler, then confirms final state and reports anything that came back
-// failed.
-func trackedRestart(out io.Writer, userScope bool, units []string) error {
+// orders the jobs by their dependencies), then shows each unit's line with a
+// leading spinner while its job is pending, flipping it to a check as it
+// clears. On a terminal the block updates in place; elsewhere each unit prints
+// once as it completes. A unit that comes back failed is marked and turns the
+// command non-zero.
+func trackedRestart(out io.Writer, rows []statusRow, userScope bool) error {
+	units := serviceNames(rows)
 	if len(units) == 0 {
 		return nil
 	}
 	if err := restartAsyncFn(userScope, units); err != nil {
 		return err
 	}
-	remaining := make(map[string]bool, len(units))
-	for _, u := range units {
-		remaining[u] = true
-	}
-	spin := newRestartSpinner(out) // animates only on a terminal
-	for len(remaining) > 0 {
-		pending, err := pendingJobsFn(userScope, units)
-		if err != nil {
-			spin.clear()
-			return err
-		}
-		// Check off completions in the stable input order, not map order.
-		for _, u := range units {
-			if remaining[u] {
-				if _, still := pending[u]; !still {
-					spin.clear() // lift the spinner line before printing above it
-					fmt.Fprintf(out, "  %s %s\n", green("✓"), u)
-					delete(remaining, u)
-				}
-			}
-		}
-		if len(remaining) == 0 {
-			break
-		}
-		// Spin through one poll interval so a slow unit reads as working, not
-		// hung, and names what is still pending.
-		spin.wait(restartPoll, waitingLabel(units, remaining))
-	}
-	spin.clear()
-	// A cleared job is not proof of success; name anything that ended failed.
-	var failed []string
-	if statuses, err := restartStatusFn(userScope, units); err == nil {
-		for _, u := range units {
-			if st, ok := statuses[u]; ok && st.ActiveState == "failed" {
-				failed = append(failed, u)
-			}
+	t := &restartTracker{out: out, rows: rows, units: units, userScope: userScope, done: map[string]bool{}}
+	for _, r := range rows {
+		if len(r.Service) > t.width {
+			t.width = len(r.Service)
 		}
 	}
-	if len(failed) > 0 {
-		for _, u := range failed {
-			fmt.Fprintf(out, "  %s %s failed\n", red("✗"), u)
-		}
-		return fmt.Errorf("%d unit(s) failed to restart: %s", len(failed), strings.Join(failed, ", "))
+	fmt.Fprintf(out, "Restarting %d unit(s):\n", len(rows))
+	if restartLive(out) {
+		return t.live()
 	}
-	fmt.Fprintf(out, "%s Restarted.\n", green("✓"))
+	return t.plain()
+}
+
+// poll refreshes the done set: a unit absent from the job queue has finished.
+func (t *restartTracker) poll() error {
+	pending, err := pendingJobsFn(t.userScope, t.units)
+	if err != nil {
+		return err
+	}
+	for _, u := range t.units {
+		if _, still := pending[u]; !still {
+			t.done[u] = true
+		}
+	}
 	return nil
 }
 
-// spinFrames is the braille cycle huh's spinner uses; reused so restart's
-// hand-rolled spinner matches the rest of the CLI.
-var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
-// spinInterval is the animation tick (a poll interval spans several frames);
-// a package var so a test could drive it without real time.
-var spinInterval = 100 * time.Millisecond
-
-// restartSpinner draws an in-place "waiting on …" line during the poll gaps.
-// It animates only to a terminal; off a terminal (pipe, CI, tests) it is inert
-// and the plain per-unit checklist stands on its own.
-type restartSpinner struct {
-	w      io.Writer
-	active bool
-	frame  int
+func (t *restartTracker) allDone() bool {
+	for _, u := range t.units {
+		if !t.done[u] {
+			return false
+		}
+	}
+	return true
 }
 
-func newRestartSpinner(out io.Writer) *restartSpinner {
-	active := false
-	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		active = true
+// label renders a unit's line body (after the glyph): the service name plus its
+// staleness note, padded so notes align. Padding is measured on the plain name
+// so ANSI styling never skews the column.
+func (t *restartTracker) label(r statusRow) string {
+	s := r.Service
+	if r.Stale {
+		note := "stale"
+		if r.StaleNote != "" {
+			note = "stale: " + r.StaleNote
+		}
+		s += strings.Repeat(" ", t.width-len(r.Service)+2) + yellow("("+note+")")
 	}
-	return &restartSpinner{w: out, active: active}
+	return s
 }
 
-// clear erases the current spinner line so text can be printed above it.
-func (s *restartSpinner) clear() {
-	if s.active {
-		fmt.Fprint(s.w, "\r\033[K")
+// failures returns the units that cleared the queue but ended failed; a cleared
+// job is not proof of success.
+func (t *restartTracker) failures() map[string]bool {
+	failed := map[string]bool{}
+	if statuses, err := restartStatusFn(t.userScope, t.units); err == nil {
+		for _, u := range t.units {
+			if st, ok := statuses[u]; ok && st.ActiveState == "failed" {
+				failed[u] = true
+			}
+		}
 	}
+	return failed
 }
 
-// wait animates the spinner for d, labelling what it is waiting on. When inert
-// it just sleeps the whole interval once (the poll cadence).
-func (s *restartSpinner) wait(d time.Duration, label string) {
-	if !s.active {
-		restartSleep(d)
-		return
-	}
-	for waited := time.Duration(0); waited < d; waited += spinInterval {
-		fmt.Fprintf(s.w, "\r\033[K%s restarting, waiting on %s", green(spinFrames[s.frame%len(spinFrames)]), label)
-		s.frame++
-		restartSleep(spinInterval)
-	}
-}
-
-// waitingLabel names the units still pending, in input order, capping the list
-// so a wide fan-out stays one line.
-func waitingLabel(units []string, remaining map[string]bool) string {
+// failedError names the failed units for a non-zero exit, or nil if none.
+func (t *restartTracker) failedError(failed map[string]bool) error {
 	var names []string
-	for _, u := range units {
-		if remaining[u] {
+	for _, u := range t.units {
+		if failed[u] {
 			names = append(names, u)
 		}
 	}
-	const shown = 3
-	if len(names) > shown {
-		return fmt.Sprintf("%s +%d more", strings.Join(names[:shown], ", "), len(names)-shown)
+	if len(names) == 0 {
+		return nil
 	}
-	return strings.Join(names, ", ")
+	return fmt.Errorf("%d unit(s) failed to restart: %s", len(names), strings.Join(names, ", "))
+}
+
+// glyph is a unit's leading status marker: cross if failed, check if done, else
+// the current spinner frame.
+func (t *restartTracker) glyph(svc string, frame int, failed map[string]bool) string {
+	switch {
+	case failed[svc]:
+		return red("✗")
+	case t.done[svc]:
+		return green("✓")
+	default:
+		return yellow(spinFrames[frame%len(spinFrames)])
+	}
+}
+
+// live draws the unit block once, then redraws it in place each frame: pending
+// units animate a spinner, completed ones show a check. It polls the job queue
+// every pollEvery frames so a slow unit reads as working, not hung.
+func (t *restartTracker) live() error {
+	pollEvery := int(restartPoll / spinInterval)
+	if pollEvery < 1 {
+		pollEvery = 1
+	}
+	// Initial block: everything pending.
+	for _, r := range t.rows {
+		fmt.Fprintf(t.out, "  %s %s\n", yellow(spinFrames[0]), t.label(r))
+	}
+	for frame := 0; ; frame++ {
+		if frame%pollEvery == 0 {
+			if err := t.poll(); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintf(t.out, "\033[%dA", len(t.rows)) // cursor to the block top
+		for _, r := range t.rows {
+			fmt.Fprintf(t.out, "\r\033[K  %s %s\n", t.glyph(r.Service, frame, nil), t.label(r))
+		}
+		if t.allDone() {
+			break
+		}
+		restartSleep(spinInterval)
+	}
+	// Final pass: overlay failures onto the settled block.
+	failed := t.failures()
+	if len(failed) > 0 {
+		fmt.Fprintf(t.out, "\033[%dA", len(t.rows))
+		for _, r := range t.rows {
+			fmt.Fprintf(t.out, "\r\033[K  %s %s\n", t.glyph(r.Service, 0, failed), t.label(r))
+		}
+	}
+	return t.failedError(failed)
+}
+
+// plain renders without cursor control (pipe, CI): each unit prints once as its
+// job clears, in the order they finish.
+func (t *restartTracker) plain() error {
+	printed := map[string]bool{}
+	emit := func() {
+		for _, r := range t.rows {
+			if t.done[r.Service] && !printed[r.Service] {
+				printed[r.Service] = true
+				fmt.Fprintf(t.out, "  %s %s\n", green("✓"), t.label(r))
+			}
+		}
+	}
+	for {
+		if err := t.poll(); err != nil {
+			return err
+		}
+		emit()
+		if t.allDone() {
+			break
+		}
+		restartSleep(restartPoll)
+	}
+	failed := t.failures()
+	for _, r := range t.rows {
+		if failed[r.Service] {
+			fmt.Fprintf(t.out, "  %s %s\n", red("✗"), r.Service)
+		}
+	}
+	return t.failedError(failed)
 }
 
 // stdinIsTTY reports whether in is an interactive terminal (the same check
@@ -289,32 +368,11 @@ func newRestartCmd() *cobra.Command {
 				rows = picked
 			}
 
-			units := serviceNames(rows)
-			fmt.Fprintf(out, "Restarting %d unit(s):\n", len(rows))
-			// The staleness delta on each line (like status) shows what the
-			// restart is for; padding is computed on plain strings so ANSI
-			// styling never skews the column.
-			width := 0
-			for _, r := range rows {
-				if len(r.Service) > width {
-					width = len(r.Service)
-				}
-			}
-			for _, r := range rows {
-				line := "  " + r.Service
-				if r.Stale {
-					note := "(stale)"
-					if r.StaleNote != "" {
-						note = "(stale: " + r.StaleNote + ")"
-					}
-					line += strings.Repeat(" ", width-len(r.Service)+2) + yellow(note)
-				}
-				fmt.Fprintln(out, line)
-			}
 			// The picker's selection is the consent; only the non-picker
-			// paths (plain restart, -y off with no TTY) still confirm.
+			// paths (plain restart, -y off with no TTY) still confirm. The
+			// per-unit detail is shown by the live block that follows.
 			if !yes && (!staleOnly || !stdinIsTTY(cmd.InOrStdin())) {
-				ok, err := confirm(cmd.InOrStdin(), out, "Restart?")
+				ok, err := confirm(cmd.InOrStdin(), out, fmt.Sprintf("Restart %d unit(s)?", len(rows)))
 				if err != nil {
 					return err
 				}
@@ -323,7 +381,7 @@ func newRestartCmd() *cobra.Command {
 					return nil
 				}
 			}
-			return trackedRestart(out, underHome(cfg.QuadletDir), units)
+			return trackedRestart(out, rows, underHome(cfg.QuadletDir))
 		},
 	}
 	cmd.Flags().BoolVar(&staleOnly, "stale", false, "restart only units whose running process predates the last applied config")

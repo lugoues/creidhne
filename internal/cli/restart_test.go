@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -10,8 +11,8 @@ import (
 )
 
 // stubRestart swaps the systemd boundary trackedRestart calls, restoring the
-// real functions after the test. restartSleep is neutralized so the poll loop
-// runs at full speed.
+// real functions after. restartSleep is neutralized so the loop runs at full
+// speed; forceLive optionally pins the terminal/plain branch.
 func stubRestart(t *testing.T,
 	async func(bool, []string) error,
 	pending func(bool, []string) (map[string]string, error),
@@ -24,10 +25,26 @@ func stubRestart(t *testing.T,
 	restartSleep = func(time.Duration) {}
 }
 
-// TestTrackedRestartStraggler: the checklist fills in over successive polls —
-// the fast unit clears on the first, the slow one only after it drops from the
-// job queue — and the run ends with the completion line.
-func TestTrackedRestartStraggler(t *testing.T) {
+// forceRestartLive pins whether trackedRestart takes the in-place terminal path.
+func forceRestartLive(t *testing.T, live bool) {
+	t.Helper()
+	old := restartLive
+	t.Cleanup(func() { restartLive = old })
+	restartLive = func(io.Writer) bool { return live }
+}
+
+func rowsOf(names ...string) []statusRow {
+	rows := make([]statusRow, len(names))
+	for i, n := range names {
+		rows[i] = statusRow{Service: n}
+	}
+	return rows
+}
+
+// TestPlainRestartStraggler (pipe/CI path): each unit prints once as its job
+// clears, fast before slow, and there is no summary footer.
+func TestPlainRestartStraggler(t *testing.T) {
+	forceRestartLive(t, false)
 	enqueued := false
 	poll := 0
 	stubRestart(t,
@@ -48,75 +65,71 @@ func TestTrackedRestartStraggler(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, false, []string{"fast.service", "slow.service"}); err != nil {
+	if err := trackedRestart(&buf, rowsOf("fast.service", "slow.service"), false); err != nil {
 		t.Fatal(err)
 	}
 	if !enqueued {
 		t.Fatal("restart was never enqueued")
 	}
 	out := buf.String()
-	for _, want := range []string{"fast.service", "slow.service", "Restarted."} {
+	for _, want := range []string{"Restarting 2 unit(s):", "fast.service", "slow.service"} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("checklist missing %q:\n%s", want, out)
+			t.Fatalf("output missing %q:\n%s", want, out)
 		}
 	}
-	// fast must be checked off before slow (it cleared first).
+	if strings.Contains(out, "Restarted.") {
+		t.Fatalf("the summary footer should be gone:\n%s", out)
+	}
 	if strings.Index(out, "fast.service") > strings.Index(out, "slow.service") {
 		t.Fatalf("fast should complete before slow:\n%s", out)
 	}
 }
 
-// TestWaitingLabel: the pending list is shown in input order and capped so a
-// wide fan-out stays one line.
-func TestWaitingLabel(t *testing.T) {
-	units := []string{"a.service", "b.service", "c.service", "d.service", "e.service"}
-	rem := map[string]bool{"b.service": true, "d.service": true, "e.service": true, "a.service": true}
-	got := waitingLabel(units, rem)
-	if got != "a.service, b.service, d.service +1 more" {
-		t.Fatalf("waitingLabel = %q", got)
-	}
-	if s := waitingLabel(units, map[string]bool{"c.service": true}); s != "c.service" {
-		t.Fatalf("single pending = %q", s)
-	}
-}
-
-// TestRestartSpinnerRenders: an active spinner draws an animated, in-place line
-// (carriage-return + clear, a frame, the label) and clear erases it; an inert
-// one writes nothing.
-func TestRestartSpinnerRenders(t *testing.T) {
-	old := restartSleep
-	defer func() { restartSleep = old }()
-	restartSleep = func(time.Duration) {}
+// TestLiveRestartRedraws (terminal path): the block is drawn with a spinner and
+// redrawn in place (cursor-up + line-clear) until each unit shows a check.
+func TestLiveRestartRedraws(t *testing.T) {
+	forceRestartLive(t, true)
+	poll := 0
+	stubRestart(t,
+		func(bool, []string) error { return nil },
+		func(bool, []string) (map[string]string, error) {
+			poll++
+			if poll >= 2 {
+				return map[string]string{}, nil
+			}
+			return map[string]string{"b.service": "running"}, nil
+		},
+		func(bool, []string) (map[string]systemd.UnitStatus, error) {
+			return map[string]systemd.UnitStatus{
+				"a.service": {ActiveState: "active"},
+				"b.service": {ActiveState: "active"},
+			}, nil
+		},
+	)
 
 	var buf bytes.Buffer
-	s := &restartSpinner{w: &buf, active: true}
-	s.wait(250*time.Millisecond, "slow.service") // spans a few frames
+	if err := trackedRestart(&buf, rowsOf("a.service", "b.service"), false); err != nil {
+		t.Fatal(err)
+	}
 	out := buf.String()
-	if !strings.Contains(out, "\r\033[K") || !strings.Contains(out, "slow.service") {
-		t.Fatalf("spinner did not render an in-place labelled line:\n%q", out)
+	if !strings.Contains(out, "\033[2A") { // cursor up 2 (the block height)
+		t.Fatalf("block was not redrawn in place:\n%q", out)
 	}
-	if !strings.Contains(out, spinFrames[0]) {
-		t.Fatalf("spinner drew no frame glyph:\n%q", out)
+	if !strings.Contains(out, "\r\033[K") { // per-line clear
+		t.Fatalf("lines were not cleared before redraw:\n%q", out)
 	}
-	buf.Reset()
-	s.clear()
-	if buf.String() != "\r\033[K" {
-		t.Fatalf("clear = %q, want the erase sequence", buf.String())
+	if !strings.Contains(out, spinFrames[0]) { // a spinner frame appeared
+		t.Fatalf("no spinner frame rendered:\n%q", out)
 	}
-
-	// Inert spinner (non-terminal) writes nothing.
-	var inert bytes.Buffer
-	is := &restartSpinner{w: &inert, active: false}
-	is.wait(time.Second, "x")
-	is.clear()
-	if inert.Len() != 0 {
-		t.Fatalf("inert spinner wrote %q", inert.String())
+	if !strings.Contains(out, "✓") { // units settle to checks
+		t.Fatalf("units never checked off:\n%q", out)
 	}
 }
 
-// TestTrackedRestartReportsFailed: a unit whose job clears but ends in the
-// failed state is reported and turns the command non-zero.
-func TestTrackedRestartReportsFailed(t *testing.T) {
+// TestRestartReportsFailed: a unit whose job clears but ends failed is marked
+// with a cross and turns the command non-zero. (plain path for a clean buffer)
+func TestRestartReportsFailed(t *testing.T) {
+	forceRestartLive(t, false)
 	stubRestart(t,
 		func(bool, []string) error { return nil },
 		func(bool, []string) (map[string]string, error) { return map[string]string{}, nil },
@@ -126,11 +139,14 @@ func TestTrackedRestartReportsFailed(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	err := trackedRestart(&buf, false, []string{"bad.service"})
+	err := trackedRestart(&buf, rowsOf("bad.service"), false)
 	if err == nil {
 		t.Fatal("a unit that came back failed must return an error")
 	}
-	if !strings.Contains(buf.String(), "bad.service failed") {
-		t.Fatalf("failure not reported:\n%s", buf.String())
+	if !strings.Contains(err.Error(), "bad.service") {
+		t.Fatalf("error should name the failed unit: %v", err)
+	}
+	if !strings.Contains(buf.String(), "✗") || !strings.Contains(buf.String(), "bad.service") {
+		t.Fatalf("failure not marked:\n%s", buf.String())
 	}
 }
