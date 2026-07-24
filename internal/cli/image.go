@@ -48,9 +48,10 @@ func newImageOutdatedCmd() *cobra.Command {
 		Short: "Report managed images whose tracked tag has a newer digest",
 		Long: "outdated resolves each managed entry's tag to its current registry\n" +
 			"digest and reports the ones whose pin is behind. A candidate younger\n" +
-			"than the min-age (per-entry minAge, else --min-age) is held, not\n" +
-			"reported as available. Read-only; exits non-zero when updates are\n" +
-			"available.",
+			"than the min-age (per-entry minAge, else --min-age) is still reported,\n" +
+			"marked '! younger than min-age' (min-age is information, not a gate).\n" +
+			"A locked entry is reported as locked and never counts as an available\n" +
+			"update. Read-only; exits non-zero when an update is available.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defAge, err := registry.ParseAge(minAgeFlag)
@@ -74,7 +75,7 @@ func newImageOutdatedCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "hold updates younger than this (e.g. 7d); per-entry minAge overrides")
+	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "mark updates younger than this (e.g. 7d); per-entry minAge overrides")
 	return cmd
 }
 
