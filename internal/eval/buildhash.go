@@ -20,15 +20,22 @@ const buildHashAnnotation = "creidhne.build-hash"
 // scope), so cross-quadlet image references resolve and every render subset
 // sees identical, already-stamped data.
 func injectBuildHashes(quads []Quadlet) {
-	// Pass 1: hash each build's pristine inputs (before any stamping), keyed
-	// by the build's ref/filename. The hash covers the entire build data
-	// (Containerfile, context, BuildArg, ImageTag, ...), so any change that
-	// would produce a different image moves it.
+	// Pass 1: hash each build's pristine inputs (before any stamping). The hash
+	// covers the entire build data (Containerfile, context, BuildArg, ImageTag,
+	// ...), so any change that would produce a different image moves it. Key it
+	// by every string a consumer might use for Image=: the build's own
+	// ref/filename (Image=<stem>.build) and each ImageTag (Image=<tag>, the
+	// natural form, and the only one that works cross-quadlet where the .build
+	// unit is not referenceable).
 	hashes := map[string]string{}
 	for _, q := range quads {
 		for _, u := range q.Units {
 			if u.Kind == "build" {
-				hashes[u.Filename] = hashData(u.Data)
+				h := hashData(u.Data)
+				hashes[u.Filename] = h
+				for _, tag := range buildImageTags(u.Data) {
+					hashes[tag] = h
+				}
 			}
 		}
 	}
@@ -52,6 +59,35 @@ func injectBuildHashes(quads []Quadlet) {
 			}
 		}
 	}
+}
+
+// buildImageTags extracts a build's ImageTag values from its data. The schema
+// types ImageTag as [...(string | [...string])], so entries are strings or
+// nested string lists; both are flattened. These are the image names a consumer
+// references with Image=<tag>.
+func buildImageTags(data map[string]any) []string {
+	build, ok := data["Build"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	raw, ok := build["ImageTag"].([]any)
+	if !ok {
+		return nil
+	}
+	var tags []string
+	for _, e := range raw {
+		switch v := e.(type) {
+		case string:
+			tags = append(tags, v)
+		case []any:
+			for _, s := range v {
+				if str, ok := s.(string); ok {
+					tags = append(tags, str)
+				}
+			}
+		}
+	}
+	return tags
 }
 
 // hashData is a stable short hash of a unit's data. json.Marshal sorts map

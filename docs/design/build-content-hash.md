@@ -32,7 +32,11 @@ stamps `Annotation=creidhne.build-hash=<12hex>` onto:
   or arg change moves it too.
 - every **container** whose `Image=` resolves to that build — so a rebuild
   changes the `.container` file and flags the consumer, with no runtime
-  image-digest inspection.
+  image-digest inspection. A consumer is matched by either reference form:
+  the build unit (`Image=<stem>.build`) or any of the build's `ImageTag`s
+  (`Image=<tag>`). The tag form is the natural one and the only one that
+  works cross-quadlet, where the `.build` unit is not referenceable; the
+  hash map is keyed by both so neither is missed.
 
 The stamp is an OCI annotation, so it is also visible on the built image
 and the running container (`podman inspect`).

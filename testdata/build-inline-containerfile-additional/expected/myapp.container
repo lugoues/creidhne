@@ -2,6 +2,7 @@
 [Container]
 Image=localhost/myapp:latest
 ContainerName=myapp
+Annotation=creidhne.build-hash=b2b7f67afdd6
 
 [Install]
 WantedBy=default.target
