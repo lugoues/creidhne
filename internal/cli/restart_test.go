@@ -65,7 +65,7 @@ func TestPlainRestartStraggler(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, rowsOf("fast.service", "slow.service"), false); err != nil {
+	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("fast.service", "slow.service"), false, false); err != nil {
 		t.Fatal(err)
 	}
 	if !enqueued {
@@ -108,7 +108,7 @@ func TestLiveRestartRedraws(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, rowsOf("a.service", "b.service"), false); err != nil {
+	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("a.service", "b.service"), false, false); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -126,6 +126,66 @@ func TestLiveRestartRedraws(t *testing.T) {
 	}
 }
 
+// TestLiveRestartConfirmInPlace: with a confirm, the block is printed once
+// (pending dots), the prompt sits below it, and on "yes" the prompt is erased
+// (save/restore + clear-to-end) and the same lines animate — one list, not two.
+func TestLiveRestartConfirmInPlace(t *testing.T) {
+	forceRestartLive(t, true)
+	enqueued := false
+	stubRestart(t,
+		func(bool, []string) error { enqueued = true; return nil },
+		func(bool, []string) (map[string]string, error) { return map[string]string{}, nil },
+		func(bool, []string) (map[string]systemd.UnitStatus, error) {
+			return map[string]systemd.UnitStatus{"a.service": {ActiveState: "active"}}, nil
+		},
+	)
+
+	var buf bytes.Buffer
+	if err := trackedRestart(&buf, strings.NewReader("y\n"), rowsOf("a.service"), false, true); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !enqueued {
+		t.Fatal("a yes answer must enqueue the restart")
+	}
+	for _, want := range []string{
+		"Restart? [y/N]", // prompt shown below the block
+		"\033[s",         // cursor saved before the prompt
+		"\033[u\033[J",   // restored and cleared after (prompt erased)
+		"\033[1A",        // block animated in place (single unit -> up 1)
+		"✓",              // settled to a check
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in live-confirm output:\n%q", want, out)
+		}
+	}
+	// The unit is listed once as a block line, not a second time as a preview.
+	if strings.Contains(out, "will restart:") {
+		t.Fatalf("live path must not print the plain preview list:\n%q", out)
+	}
+}
+
+// TestLiveRestartConfirmAborts: "no" aborts without enqueuing.
+func TestLiveRestartConfirmAborts(t *testing.T) {
+	forceRestartLive(t, true)
+	enqueued := false
+	stubRestart(t,
+		func(bool, []string) error { enqueued = true; return nil },
+		func(bool, []string) (map[string]string, error) { return map[string]string{}, nil },
+		func(bool, []string) (map[string]systemd.UnitStatus, error) { return nil, nil },
+	)
+	var buf bytes.Buffer
+	if err := trackedRestart(&buf, strings.NewReader("n\n"), rowsOf("a.service"), false, true); err != nil {
+		t.Fatal(err)
+	}
+	if enqueued {
+		t.Fatal("a no answer must not enqueue")
+	}
+	if !strings.Contains(buf.String(), "Aborted.") {
+		t.Fatalf("expected Aborted.:\n%q", buf.String())
+	}
+}
+
 // TestRestartReportsFailed: a unit whose job clears but ends failed is marked
 // with a cross and turns the command non-zero. (plain path for a clean buffer)
 func TestRestartReportsFailed(t *testing.T) {
@@ -139,7 +199,7 @@ func TestRestartReportsFailed(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	err := trackedRestart(&buf, rowsOf("bad.service"), false)
+	err := trackedRestart(&buf, strings.NewReader(""), rowsOf("bad.service"), false, false)
 	if err == nil {
 		t.Fatal("a unit that came back failed must return an error")
 	}

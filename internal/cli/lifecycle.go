@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -56,31 +57,40 @@ type restartTracker struct {
 	done      map[string]bool // units whose job has left the queue
 }
 
-// trackedRestart enqueues a non-blocking restart (--no-block, so systemd still
-// orders the jobs by their dependencies), then shows each unit's line with a
-// leading spinner while its job is pending, flipping it to a check as it
-// clears. On a terminal the block updates in place; elsewhere each unit prints
-// once as it completes. A unit that comes back failed is marked and turns the
-// command non-zero.
-func trackedRestart(out io.Writer, rows []statusRow, userScope bool) error {
+// trackedRestart lists the units, optionally confirms, then enqueues a
+// non-blocking restart (--no-block, so systemd still orders the jobs by their
+// dependencies) and tracks completion. On a terminal it prints the unit block
+// once and updates those same lines in place — a spinner while a job is
+// pending, a check when it clears, a cross if it came back failed — with the
+// confirm prompt sitting below the block and erased before the animation, so
+// there is a single list. Off a terminal each unit prints once as it completes.
+// needConfirm asks before restarting; a failed unit turns the command non-zero.
+func trackedRestart(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool) error {
 	units := serviceNames(rows)
 	if len(units) == 0 {
 		return nil
 	}
-	if err := restartAsyncFn(userScope, units); err != nil {
-		return err
-	}
 	t := &restartTracker{out: out, rows: rows, units: units, userScope: userScope, done: map[string]bool{}}
-	for _, r := range rows {
-		if len(r.Service) > t.width {
-			t.width = len(r.Service)
-		}
-	}
-	fmt.Fprintf(out, "Restarting %d unit(s):\n", len(rows))
+	t.width = maxServiceWidth(rows)
 	if restartLive(out) {
-		return t.live()
+		return t.liveFlow(in, needConfirm)
 	}
-	return t.plain()
+	return t.plainFlow(in, needConfirm)
+}
+
+// readYesNo prints prompt and reads a y/N answer from in. Inline (no huh) so the
+// caller keeps full control of the terminal, which the in-place block needs.
+func readYesNo(in io.Reader, out io.Writer, prompt string) (bool, error) {
+	fmt.Fprint(out, prompt)
+	sc := bufio.NewScanner(in)
+	if !sc.Scan() {
+		if err := sc.Err(); err != nil {
+			return false, err
+		}
+		return false, fmt.Errorf("no confirmation read from stdin; re-run with -y to restart non-interactively")
+	}
+	ans := strings.ToLower(strings.TrimSpace(sc.Text()))
+	return ans == "y" || ans == "yes", nil
 }
 
 // poll refreshes the done set: a unit absent from the job queue has finished.
@@ -189,17 +199,42 @@ func (t *restartTracker) glyph(svc string, frame int, failed map[string]bool) st
 	}
 }
 
-// live draws the unit block once, then redraws it in place each frame: pending
-// units animate a spinner, completed ones show a check. It polls the job queue
-// every pollEvery frames so a slow unit reads as working, not hung.
-func (t *restartTracker) live() error {
+// liveFlow (terminal): print the header and unit block once, prompt below it
+// when needed (erasing the prompt so the block stays the bottom-most content),
+// then enqueue and animate those same lines in place.
+func (t *restartTracker) liveFlow(in io.Reader, needConfirm bool) error {
+	fmt.Fprintf(t.out, "Restarting %d unit(s):\n", len(t.rows))
+	for _, r := range t.rows {
+		fmt.Fprintf(t.out, "  %s %s\n", dim("·"), t.label(r)) // pending
+	}
+	if needConfirm {
+		// Save the cursor (just below the block), prompt, then restore and
+		// clear to end of screen — wiping the prompt and its echo regardless of
+		// how many lines they took, so the block is bottom-most for animating.
+		fmt.Fprint(t.out, "\033[s")
+		ok, err := readYesNo(in, t.out, "Restart? [y/N] ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(t.out, "\033[u\033[J")
+		if !ok {
+			fmt.Fprintln(t.out, "Aborted.")
+			return nil
+		}
+	}
+	if err := restartAsyncFn(t.userScope, t.units); err != nil {
+		return err
+	}
+	return t.animate()
+}
+
+// animate redraws the already-printed unit block in place each frame: pending
+// units show a spinner, completed ones a check. Polls the job queue every
+// pollEvery frames so a slow unit reads as working, not hung.
+func (t *restartTracker) animate() error {
 	pollEvery := int(restartPoll / spinInterval)
 	if pollEvery < 1 {
 		pollEvery = 1
-	}
-	// Initial block: everything pending.
-	for _, r := range t.rows {
-		fmt.Fprintf(t.out, "  %s %s\n", yellow(spinFrames[0]), t.label(r))
 	}
 	for frame := 0; ; frame++ {
 		if frame%pollEvery == 0 {
@@ -227,9 +262,24 @@ func (t *restartTracker) live() error {
 	return t.failedError(failed)
 }
 
-// plain renders without cursor control (pipe, CI): each unit prints once as its
-// job clears, in the order they finish.
-func (t *restartTracker) plain() error {
+// plainFlow (pipe, CI): no cursor control, so list the units for the confirm,
+// then print each once as its job clears in the order they finish.
+func (t *restartTracker) plainFlow(in io.Reader, needConfirm bool) error {
+	if needConfirm {
+		printRestartPreview(t.out, t.rows)
+		ok, err := readYesNo(in, t.out, "Restart? [y/N] ")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(t.out, "Aborted.")
+			return nil
+		}
+	}
+	fmt.Fprintf(t.out, "Restarting %d unit(s):\n", len(t.rows))
+	if err := restartAsyncFn(t.userScope, t.units); err != nil {
+		return err
+	}
 	printed := map[string]bool{}
 	emit := func() {
 		for _, r := range t.rows {
@@ -397,20 +447,10 @@ func newRestartCmd() *cobra.Command {
 
 			// The picker's selection is the consent (and already shows the
 			// units); only the non-picker paths (plain restart, -y off with no
-			// TTY) still confirm, so list the units first so the prompt isn't
-			// blind.
-			if !yes && (!staleOnly || !stdinIsTTY(cmd.InOrStdin())) {
-				printRestartPreview(out, rows)
-				ok, err := confirm(cmd.InOrStdin(), out, "Restart?")
-				if err != nil {
-					return err
-				}
-				if !ok {
-					fmt.Fprintln(out, "Aborted.")
-					return nil
-				}
-			}
-			return trackedRestart(out, rows, underHome(cfg.QuadletDir))
+			// TTY) still confirm. trackedRestart lists the units and prompts, so
+			// the confirm isn't blind.
+			needConfirm := !yes && (!staleOnly || !stdinIsTTY(cmd.InOrStdin()))
+			return trackedRestart(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), needConfirm)
 		},
 	}
 	cmd.Flags().BoolVar(&staleOnly, "stale", false, "restart only units whose running process predates the last applied config")
