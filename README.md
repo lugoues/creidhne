@@ -354,7 +354,13 @@ LogOpt=label=IMAGE_DIGEST=sha256:6339…
 them with `journalctl QUADLET=bookorbit`. `LogDriver` defaults to `journald`
 because the label option is journald-only; set it explicitly (e.g.
 `LogDriver: "k8s-file"`) to opt a container out — the labels only render under
-journald. See [docs/design/telemetry-log-labels.md](docs/design/telemetry-log-labels.md).
+journald.
+
+The field reaches journald only on **podman >= 6.0.2** (podman#26203) with a
+matching conmon; on older versions the label is written to the `.container` file
+and shows in `podman inspect`, but conmon doesn't emit it, so `journalctl
+QUADLET=…` stays empty until the runtime catches up. See
+[docs/design/telemetry-log-labels.md](docs/design/telemetry-log-labels.md).
 
 ### Inline Containerfile & Context
 Craei supports inlining Containerfiles and their context within a Build unit. Context files will be placed next to the Containerfile when being build so `COPY . /` is all you need to pull your context in. This is useful when you want only minor changes to the original image (such as installing packages).

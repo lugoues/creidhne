@@ -43,6 +43,18 @@ by `#Units`), and `imageString`. So it lives in `container.cue` +
 the golden harness renders (and tests) it directly, rather than a Go
 injection whose output the fixtures wouldn't see.
 
+## Runtime requirement
+
+Emitting a custom `--log-opt label` field into journald needs podman >= 6.0.2
+(podman#26203) *and* a conmon with matching support (conmon#562, "add container
+labels to log entries on journald"). conmon writes the container's log lines, so
+the field only appears once conmon knows to emit it. On older stacks the option
+is still valid — it lands in the `.container` file and shows in `podman inspect`
+— but conmon never writes the field, so `journalctl QUADLET=…` returns nothing.
+The field name is emitted verbatim (no prefix), so `journalctl QUADLET=bookorbit`
+works once the runtime is new enough. The directive is harmless on older podman,
+so crei emits it unconditionally rather than gating on a runtime probe.
+
 ## Notes / limits
 
 - A container referencing a `.build` image gets `IMAGE=<the reference>`
