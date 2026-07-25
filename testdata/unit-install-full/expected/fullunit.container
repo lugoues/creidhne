@@ -26,6 +26,10 @@ AssertPathExists=/opt/app/bin
 
 [Container]
 Image=docker.io/fullunit:latest
+LogDriver=journald
+LogOpt=label=QUADLET=fullunit
+LogOpt=label=QUADLET_UNIT_NAME=fullunit
+LogOpt=label=IMAGE=docker.io/fullunit:latest
 
 [Install]
 Alias=myapp.service

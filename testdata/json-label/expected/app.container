@@ -3,3 +3,7 @@
 Image=docker.io/app:latest
 Label=plain=1
 Label='app.spec={"kind":"container","note":"it\u0027s \u003cb\u003e \u0026 safe"}'
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/app:latest

@@ -1,0 +1,7 @@
+
+[Container]
+Image=docker.io/library/redis:7.2
+LogDriver=journald
+LogOpt=label=QUADLET=web
+LogOpt=label=QUADLET_UNIT_NAME=web-worker
+LogOpt=label=IMAGE=docker.io/library/redis:7.2

@@ -2,3 +2,7 @@
 [Container]
 Image=docker.io/app:latest
 PublishPort=8080:80
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/app:latest

@@ -4,3 +4,7 @@ Image=docker.io/app:latest
 Tmpfs=/run:rw,size=64m
 Tmpfs=/tmp
 Tmpfs=/var/cache:rw,nosuid,nodev,noexec,size=128m,mode=1777
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/app:latest

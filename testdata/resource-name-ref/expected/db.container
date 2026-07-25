@@ -2,6 +2,10 @@
 [Container]
 Image=docker.io/postgres:16
 ContainerName=postgres
+LogDriver=journald
+LogOpt=label=QUADLET=db
+LogOpt=label=QUADLET_UNIT_NAME=db
+LogOpt=label=IMAGE=docker.io/postgres:16
 
 [Install]
 WantedBy=default.target

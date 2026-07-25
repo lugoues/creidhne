@@ -2,6 +2,10 @@
 [Container]
 Image=docker.io/myapp:latest
 ContainerName=webapp-app
+LogDriver=journald
+LogOpt=label=QUADLET=webapp
+LogOpt=label=QUADLET_UNIT_NAME=webapp
+LogOpt=label=IMAGE=docker.io/myapp:latest
 Pod=webapp.pod
 
 [Install]

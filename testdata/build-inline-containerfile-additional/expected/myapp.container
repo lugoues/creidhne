@@ -3,6 +3,10 @@
 Image=localhost/myapp:latest
 ContainerName=myapp
 Annotation=creidhne.build-hash=b2b7f67afdd6
+LogDriver=journald
+LogOpt=label=QUADLET=myapp
+LogOpt=label=QUADLET_UNIT_NAME=myapp
+LogOpt=label=IMAGE=localhost/myapp:latest
 
 [Install]
 WantedBy=default.target

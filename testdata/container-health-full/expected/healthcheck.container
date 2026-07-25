@@ -15,6 +15,10 @@ HealthStartupInterval=5s
 HealthStartupRetries=5
 HealthStartupSuccess=2
 HealthStartupTimeout=10s
+LogDriver=journald
+LogOpt=label=QUADLET=healthcheck
+LogOpt=label=QUADLET_UNIT_NAME=healthcheck
+LogOpt=label=IMAGE=docker.io/healthapp:latest
 
 [Install]
 WantedBy=default.target

@@ -1,6 +1,10 @@
 
 [Container]
 Image=docker.io/standalone:latest
+LogDriver=journald
+LogOpt=label=QUADLET=nodeps
+LogOpt=label=QUADLET_UNIT_NAME=nodeps
+LogOpt=label=IMAGE=docker.io/standalone:latest
 
 [Quadlet]
 DefaultDependencies=false

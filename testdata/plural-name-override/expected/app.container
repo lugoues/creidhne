@@ -7,6 +7,10 @@ ContainerName=app
 Network=app-internal.network
 Volume=app-cache.volume:/cache
 Volume=app-logs.volume:/logs
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/myapp:latest
 
 [Install]
 WantedBy=multi-user.target

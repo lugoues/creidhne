@@ -1,11 +1,18 @@
 package creidhne
 
-import "list"
+import (
+	"list"
+	"strings"
+)
 
 #Container: {
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
-	_stem:    string
+	_stem: string
+	// _quadlet is the owning quadlet's name, injected by #Units. Used for the
+	// QUADLET telemetry log label (the stem alone can't recover it for the
+	// plural "<quadlet>-<name>" form).
+	_quadlet: string
 	#ref:     "\(_stem).container"
 	#service: "\(_stem).service"
 
@@ -172,8 +179,10 @@ import "list"
 		// The maximum time a startup healthcheck command has to complete before it is marked failed.
 		HealthStartupTimeout?: #GoDuration
 
-		// Set the log-driver used by Podman when running the container.
-		LogDriver?: #LogDriver
+		// Set the log-driver used by Podman when running the container. Defaults
+		// to journald so the telemetry log labels (below) are honored; override
+		// to opt out (the labels only take effect under journald).
+		LogDriver: *"journald" | #LogDriver
 		// Set the logging options used by Podman when running the container.
 		LogOpt?: [...(#KeyValue | [...#KeyValue])]
 
@@ -277,6 +286,31 @@ import "list"
 	if Container.Image != _|_ {
 		imageString: (Container.Image & string) | (Container.Image & {#rendered: _}).#rendered
 	}
+
+	// _img resolves the container's image into a name and (when pinned) a
+	// digest, for the telemetry labels below. Unconditional (empty when Rootfs
+	// is used instead of Image) so telemetryLogOpt never depends on a
+	// conditionally-present sibling.
+	_img: {
+		_ref: [if Container.Image != _|_ {(Container.Image & string) | (Container.Image & {#rendered: _}).#rendered}, ""][0]
+		_parts: strings.SplitN(_ref, "@", 2)
+		name:   [if _ref != "" {_parts[0]}, ""][0]
+		digest: [if len(_parts) > 1 {_parts[1]}, ""][0]
+	}
+
+	// telemetryLogOpt: journald log labels crei injects so a container's logs
+	// carry queryable metadata journald doesn't expose on its own — the quadlet
+	// and unit it belongs to, and the exact image (name and, when pinned, the
+	// digest). The template emits each as LogOpt=label="…" under the journald
+	// driver.
+	telemetryLogOpt: list.Concat([
+		[
+			"label=QUADLET=\(_quadlet)",
+			"label=QUADLET_UNIT_NAME=\(_stem)",
+		],
+		[if _img.name != "" {"label=IMAGE=\(_img.name)"}],
+		[if _img.digest != "" {"label=IMAGE_DIGEST=\(_img.digest)"}],
+	])
 
 	// Resolved mounts: flattens #MountRef structs to type=...,source=... strings;
 	// raw mount strings pass through unchanged.

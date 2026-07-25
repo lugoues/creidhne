@@ -2,6 +2,10 @@
 [Container]
 Image=docker.io/envoy:latest
 ContainerName=webapp-sidecar
+LogDriver=journald
+LogOpt=label=QUADLET=webapp
+LogOpt=label=QUADLET_UNIT_NAME=webapp-sidecar
+LogOpt=label=IMAGE=docker.io/envoy:latest
 Pod=webapp.pod
 
 [Install]

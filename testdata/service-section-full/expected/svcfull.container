@@ -1,6 +1,10 @@
 
 [Container]
 Image=docker.io/app:latest
+LogDriver=journald
+LogOpt=label=QUADLET=svcfull
+LogOpt=label=QUADLET_UNIT_NAME=svcfull
+LogOpt=label=IMAGE=docker.io/app:latest
 
 [Service]
 ExecStartPre=/usr/bin/check-prereqs

@@ -2,6 +2,10 @@
 [Container]
 Image=docker.io/nginx:latest
 ContainerName=nginx
+LogDriver=journald
+LogOpt=label=QUADLET=nginx
+LogOpt=label=QUADLET_UNIT_NAME=nginx
+LogOpt=label=IMAGE=docker.io/nginx:latest
 
 [Install]
 WantedBy=default.target

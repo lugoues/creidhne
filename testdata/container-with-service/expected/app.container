@@ -12,6 +12,10 @@ HealthCmd=curl -f http://localhost/health
 HealthInterval=30s
 HealthRetries=3
 HealthTimeout=5s
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/myapp:v2
 
 [Service]
 Restart=always

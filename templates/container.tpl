@@ -130,6 +130,10 @@
 {{ end -}}
 {{ range .Container.LogOpt -}}LogOpt={{ . }}
 {{ end -}}
+{{ if eq .Container.LogDriver "journald" -}}
+{{ range .telemetryLogOpt -}}LogOpt={{ . }}
+{{ end -}}
+{{ end -}}
 {{ if .Container.StopSignal -}}StopSignal={{ .Container.StopSignal }}
 {{ end -}}
 {{ if isset .Container "StopTimeout" -}}StopTimeout={{ .Container.StopTimeout }}

@@ -336,6 +336,26 @@ value preserved byte-exact (read via `inspect --showsecret`, piped straight
 back). Secrets referenced only inside `.kube` YAML aren't parsed; declare
 them in the registry to protect them.
 
+### Telemetry log labels
+
+Every container is rendered with journald log labels so its logs carry
+queryable metadata journald doesn't expose on its own:
+
+```ini
+LogDriver=journald
+LogOpt=label=QUADLET=bookorbit
+LogOpt=label=QUADLET_UNIT_NAME=bookorbit-web
+LogOpt=label=IMAGE=ghcr.io/bookorbit/bookorbit:2.3.0
+LogOpt=label=IMAGE_DIGEST=sha256:6339…
+```
+
+`QUADLET_UNIT_NAME` is the clean unit name behind journald's `systemd-`-prefixed
+`CONTAINER_NAME`; `IMAGE_DIGEST` appears only when the image is pinned. Query
+them with `journalctl QUADLET=bookorbit`. `LogDriver` defaults to `journald`
+because the label option is journald-only; set it explicitly (e.g.
+`LogDriver: "k8s-file"`) to opt a container out — the labels only render under
+journald. See [docs/design/telemetry-log-labels.md](docs/design/telemetry-log-labels.md).
+
 ### Inline Containerfile & Context
 Craei supports inlining Containerfiles and their context within a Build unit. Context files will be placed next to the Containerfile when being build so `COPY . /` is all you need to pull your context in. This is useful when you want only minor changes to the original image (such as installing packages).
 ```

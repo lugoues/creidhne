@@ -9,4 +9,7 @@ LogDriver=journald
 LogOpt=tag=app
 LogOpt=max-size=10mb
 LogOpt=max-file=3
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/app:latest
 UserNS=keep-id:uid=1000,gid=1000

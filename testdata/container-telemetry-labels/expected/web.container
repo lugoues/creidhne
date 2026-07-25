@@ -1,0 +1,9 @@
+
+[Container]
+Image=ghcr.io/acme/web:2.3.0@sha256:6339abc0000000000000000000000000000000000000000000000000000000ff
+ContainerName=web
+LogDriver=journald
+LogOpt=label=QUADLET=web
+LogOpt=label=QUADLET_UNIT_NAME=web
+LogOpt=label=IMAGE=ghcr.io/acme/web:2.3.0
+LogOpt=label=IMAGE_DIGEST=sha256:6339abc0000000000000000000000000000000000000000000000000000000ff

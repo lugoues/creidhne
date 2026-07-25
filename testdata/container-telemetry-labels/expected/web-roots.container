@@ -1,0 +1,6 @@
+
+[Container]
+Rootfs=/var/lib/x
+LogDriver=journald
+LogOpt=label=QUADLET=web
+LogOpt=label=QUADLET_UNIT_NAME=web-roots

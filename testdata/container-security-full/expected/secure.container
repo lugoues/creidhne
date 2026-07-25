@@ -13,6 +13,10 @@ ReadOnly=true
 ReadOnlyTmpfs=true
 Mask=/proc/latency_stats
 Unmask=/proc/acpi
+LogDriver=journald
+LogOpt=label=QUADLET=secure
+LogOpt=label=QUADLET_UNIT_NAME=secure
+LogOpt=label=IMAGE=docker.io/secure:latest
 Pod=mypod.pod
 StartWithPod=true
 

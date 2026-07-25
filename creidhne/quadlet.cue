@@ -12,7 +12,7 @@ package creidhne
 	let _qn = #quadletName
 
 	// Primary units (singular): name and stem are the quadlet name (not overridable).
-	#container?: #Container & {name: _qn, _stem: _qn}
+	#container?: #Container & {name: _qn, _stem: _qn, _quadlet: _qn}
 	#pod?: #Pod & {name: _qn, _stem: _qn}
 	#volume?: #Volume & {name: _qn, _stem: _qn}
 	#network?: #Network & {name: _qn, _stem: _qn}
@@ -24,7 +24,7 @@ package creidhne
 	// Additional units (plural, keyed): stem is "<quadlet>-<name>" (name defaults
 	// to the key). name is constrained to #UnitName, which also rejects an unsafe
 	// map key (a key that isn't a valid name fails when it defaults into name).
-	containers: [Key=string]: #Container & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
+	containers: [Key=string]: #Container & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)", _quadlet: _qn}
 	pods: [Key=string]: #Pod & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
 	volumes: [Key=string]: #Volume & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}
 	networks: [Key=string]: #Network & {name: #UnitName & (*Key | string), _stem: "\(_qn)-\(name)"}

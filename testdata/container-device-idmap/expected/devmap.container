@@ -4,6 +4,10 @@ Image=docker.io/app:latest
 AddDevice=/dev/fuse
 AddDevice=-/dev/kvm
 AddDevice=/dev/net/tun:/dev/net/tun:rwm
+LogDriver=journald
+LogOpt=label=QUADLET=devmap
+LogOpt=label=QUADLET_UNIT_NAME=devmap
+LogOpt=label=IMAGE=docker.io/app:latest
 UIDMap=0:100000:65536
 UIDMap=+1:@1000:1
 GIDMap=0:100000:65536

@@ -1,6 +1,10 @@
 
 [Container]
 Image=docker.io/redis:7
+LogDriver=journald
+LogOpt=label=QUADLET=cache
+LogOpt=label=QUADLET_UNIT_NAME=cache
+LogOpt=label=IMAGE=docker.io/redis:7
 
 [Install]
 WantedBy=default.target

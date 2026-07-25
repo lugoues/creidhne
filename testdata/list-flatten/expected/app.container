@@ -18,3 +18,7 @@ Label=n=2
 Label=o=3
 Label=p=4
 Label=q=5
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=docker.io/app:latest

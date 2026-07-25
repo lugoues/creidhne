@@ -1,0 +1,4 @@
+
+[Container]
+Image=docker.io/x:1
+LogDriver=k8s-file

@@ -6,6 +6,10 @@ After=app.service
 Image=docker.io/haproxy:latest
 ContainerName=proxy
 Network=proxy-backend.network
+LogDriver=journald
+LogOpt=label=QUADLET=proxy
+LogOpt=label=QUADLET_UNIT_NAME=proxy
+LogOpt=label=IMAGE=docker.io/haproxy:latest
 
 [Install]
 WantedBy=multi-user.target
