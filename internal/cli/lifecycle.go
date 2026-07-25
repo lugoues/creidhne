@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -76,21 +75,6 @@ func trackedRestart(out io.Writer, in io.Reader, rows []statusRow, userScope boo
 		return t.liveFlow(in, needConfirm)
 	}
 	return t.plainFlow(in, needConfirm)
-}
-
-// readYesNo prints prompt and reads a y/N answer from in. Inline (no huh) so the
-// caller keeps full control of the terminal, which the in-place block needs.
-func readYesNo(in io.Reader, out io.Writer, prompt string) (bool, error) {
-	fmt.Fprint(out, prompt)
-	sc := bufio.NewScanner(in)
-	if !sc.Scan() {
-		if err := sc.Err(); err != nil {
-			return false, err
-		}
-		return false, fmt.Errorf("no confirmation read from stdin; re-run with -y to restart non-interactively")
-	}
-	ans := strings.ToLower(strings.TrimSpace(sc.Text()))
-	return ans == "y" || ans == "yes", nil
 }
 
 // poll refreshes the done set: a unit absent from the job queue has finished.
@@ -208,15 +192,17 @@ func (t *restartTracker) liveFlow(in io.Reader, needConfirm bool) error {
 		fmt.Fprintf(t.out, "  %s %s\n", dim("·"), t.label(r)) // pending
 	}
 	if needConfirm {
-		// Save the cursor (just below the block), prompt, then restore and
-		// clear to end of screen — wiping the prompt and its echo regardless of
-		// how many lines they took, so the block is bottom-most for animating.
+		// Save the cursor (just below the block), run the huh confirm below it,
+		// then restore and clear to end of screen — wiping the prompt whatever
+		// it left (huh renders below the saved spot), so the block is bottom-
+		// most for animating. bubbletea uses relative moves, not \033[s, so the
+		// saved position survives it.
 		fmt.Fprint(t.out, "\033[s")
-		ok, err := readYesNo(in, t.out, "Restart? [y/N] ")
+		ok, err := confirm(in, t.out, "Restart?")
+		fmt.Fprint(t.out, "\033[u\033[J")
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(t.out, "\033[u\033[J")
 		if !ok {
 			fmt.Fprintln(t.out, "Aborted.")
 			return nil
@@ -267,7 +253,7 @@ func (t *restartTracker) animate() error {
 func (t *restartTracker) plainFlow(in io.Reader, needConfirm bool) error {
 	if needConfirm {
 		printRestartPreview(t.out, t.rows)
-		ok, err := readYesNo(in, t.out, "Restart? [y/N] ")
+		ok, err := confirm(in, t.out, "Restart?")
 		if err != nil {
 			return err
 		}
