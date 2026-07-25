@@ -192,6 +192,20 @@ func TestRestartRequiresSelection(t *testing.T) {
 	}
 }
 
+// TestRestartPreviewBeforeConfirm: a named restart (no -y) lists the units it
+// will affect before prompting, so the confirm isn't blind. (Non-TTY stdin: the
+// confirm then fails on EOF, but the preview is already printed.)
+func TestRestartPreviewBeforeConfirm(t *testing.T) {
+	proj, qd, _ := staleFixture(t)
+	out, err := runCmd(t, "--dir", proj, "--quadlet-dir", qd, "restart", "app")
+	if err == nil {
+		t.Fatal("restart without -y and no stdin answer must error at the prompt")
+	}
+	if !strings.Contains(out, "will restart:") || !strings.Contains(out, "app.service") {
+		t.Fatalf("preview should list the units before the prompt:\n%s", out)
+	}
+}
+
 // TestLogsStale: journalctl gets every stale unit (volumes included; reading
 // logs is harmless) without prompting.
 func TestLogsStale(t *testing.T) {

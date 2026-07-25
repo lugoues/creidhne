@@ -106,19 +106,46 @@ func (t *restartTracker) allDone() bool {
 	return true
 }
 
-// label renders a unit's line body (after the glyph): the service name plus its
-// staleness note, padded so notes align. Padding is measured on the plain name
-// so ANSI styling never skews the column.
+// label renders a unit's line body (after the glyph).
 func (t *restartTracker) label(r statusRow) string {
+	return restartLabel(r, t.width)
+}
+
+// maxServiceWidth is the widest service name, for aligning the staleness notes.
+func maxServiceWidth(rows []statusRow) int {
+	w := 0
+	for _, r := range rows {
+		if len(r.Service) > w {
+			w = len(r.Service)
+		}
+	}
+	return w
+}
+
+// restartLabel renders a unit line body: the service name plus its staleness
+// note, padded to width so notes align. Padding is measured on the plain name
+// so ANSI styling never skews the column.
+func restartLabel(r statusRow, width int) string {
 	s := r.Service
 	if r.Stale {
 		note := "stale"
 		if r.StaleNote != "" {
 			note = "stale: " + r.StaleNote
 		}
-		s += strings.Repeat(" ", t.width-len(r.Service)+2) + yellow("("+note+")")
+		s += strings.Repeat(" ", width-len(r.Service)+2) + yellow("("+note+")")
 	}
 	return s
+}
+
+// printRestartPreview lists the units a restart will affect, so the confirm
+// prompt isn't blind. A distinct header from the live block's "Restarting …"
+// keeps it reading as plan -> confirm -> progress, not a repeated line.
+func printRestartPreview(out io.Writer, rows []statusRow) {
+	width := maxServiceWidth(rows)
+	fmt.Fprintf(out, "%d unit(s) will restart:\n", len(rows))
+	for _, r := range rows {
+		fmt.Fprintf(out, "  %s\n", restartLabel(r, width))
+	}
 }
 
 // failures returns the units that cleared the queue but ended failed; a cleared
@@ -368,11 +395,13 @@ func newRestartCmd() *cobra.Command {
 				rows = picked
 			}
 
-			// The picker's selection is the consent; only the non-picker
-			// paths (plain restart, -y off with no TTY) still confirm. The
-			// per-unit detail is shown by the live block that follows.
+			// The picker's selection is the consent (and already shows the
+			// units); only the non-picker paths (plain restart, -y off with no
+			// TTY) still confirm, so list the units first so the prompt isn't
+			// blind.
 			if !yes && (!staleOnly || !stdinIsTTY(cmd.InOrStdin())) {
-				ok, err := confirm(cmd.InOrStdin(), out, fmt.Sprintf("Restart %d unit(s)?", len(rows)))
+				printRestartPreview(out, rows)
+				ok, err := confirm(cmd.InOrStdin(), out, "Restart?")
 				if err != nil {
 					return err
 				}
