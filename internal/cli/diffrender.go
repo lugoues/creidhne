@@ -32,12 +32,39 @@ const diffIndent = "  "
 // bodyln writes one indented diff body line (the header is not indented).
 func bodyln(w io.Writer, s string) { fmt.Fprintln(w, diffIndent+s) }
 
+// truncRun visits a run of n same-kind diff entries, capping it at maxRun head
+// + maxRun tail (emit is called with each kept index, in order) with a
+// hidden-count marker between the halves. maxRun 0 shows everything, as does a
+// run short enough that truncating would hide fewer than a marker's worth —
+// hiding 1 line behind a 1-line marker helps nobody, so a few lines of slack
+// are required before the cap engages. linesPer converts hidden entries to
+// displayed lines for the marker (a "pair" entry renders as 2 lines).
+func truncRun(w io.Writer, n, maxRun, linesPer int, emit func(int)) {
+	const slack = 3
+	if maxRun <= 0 || n <= 2*maxRun+slack {
+		for i := 0; i < n; i++ {
+			emit(i)
+		}
+		return
+	}
+	for i := 0; i < maxRun; i++ {
+		emit(i)
+	}
+	hidden := (n - 2*maxRun) * linesPer
+	bodyln(w, diffHiddenStyle.Render(fmt.Sprintf("# (%d more lines; --verbose shows all)", hidden)))
+	for i := n - maxRun; i < n; i++ {
+		emit(i)
+	}
+}
+
 // renderInlineDiff writes a unified-style line diff of old vs new: the +/- sign
 // sits in its own gutter column, changed lines are highlighted inline (the
 // differing span between the common prefix and suffix is emphasized), and runs
 // of unchanged lines outside the context window collapse to a gray
-// "# (N unmodified lines hidden)" marker.
-func renderInlineDiff(w io.Writer, old, new []byte, style string) {
+// "# (N unmodified lines hidden)" marker. Long added/removed runs are capped at
+// maxRun head/tail lines (0 = unlimited), so a 9k-line asset doesn't flood the
+// plan.
+func renderInlineDiff(w io.Writer, old, new []byte, style string, maxRun int) {
 	a, b := splitLines(string(old)), splitLines(string(new))
 	prevEnd := 0
 	emitHidden := func(n int) {
@@ -54,15 +81,13 @@ func renderInlineDiff(w io.Writer, old, new []byte, style string) {
 					bodyln(w, diffContextStyle.Render("  "+l))
 				}
 			case 'd': // delete
-				for _, l := range a[op.I1:op.I2] {
-					bodyln(w, red("- "+l))
-				}
+				del := a[op.I1:op.I2]
+				truncRun(w, len(del), maxRun, 1, func(i int) { bodyln(w, red("- "+del[i])) })
 			case 'i': // insert
-				for _, l := range b[op.J1:op.J2] {
-					bodyln(w, green("+ "+l))
-				}
+				ins := b[op.J1:op.J2]
+				truncRun(w, len(ins), maxRun, 1, func(i int) { bodyln(w, green("+ "+ins[i])) })
 			case 'r': // replace
-				renderReplace(w, a[op.I1:op.I2], b[op.J1:op.J2], style)
+				renderReplace(w, a[op.I1:op.I2], b[op.J1:op.J2], style, maxRun)
 			}
 		}
 		prevEnd = group[len(group)-1].I2
@@ -73,17 +98,19 @@ func renderInlineDiff(w io.Writer, old, new []byte, style string) {
 // renderReplace shows a changed region. When the same number of lines changed,
 // each old/new pair is rendered per the configured style; otherwise it's a block
 // rewrite with no 1:1 pairing, always shown as plain removed-then-added lines.
-func renderReplace(w io.Writer, oldLines, newLines []string, style string) {
+// Both shapes cap long runs at maxRun (pairs count as one entry, so a truncated
+// pair region keeps its old/new lines together).
+func renderReplace(w io.Writer, oldLines, newLines []string, style string, maxRun int) {
 	if len(oldLines) != len(newLines) {
-		for _, l := range oldLines {
-			bodyln(w, red("- "+l))
-		}
-		for _, l := range newLines {
-			bodyln(w, green("+ "+l))
-		}
+		truncRun(w, len(oldLines), maxRun, 1, func(i int) { bodyln(w, red("- "+oldLines[i])) })
+		truncRun(w, len(newLines), maxRun, 1, func(i int) { bodyln(w, green("+ "+newLines[i])) })
 		return
 	}
-	for i := range oldLines {
+	linesPer := 2 // a pair renders as two lines ("- old" / "+ new")
+	if style == diffStyleInline {
+		linesPer = 1 // the single "~" word-diff line
+	}
+	truncRun(w, len(oldLines), maxRun, linesPer, func(i int) {
 		switch style {
 		case diffStyleInline:
 			bodyln(w, inlineSingle(oldLines[i], newLines[i]))
@@ -95,7 +122,7 @@ func renderReplace(w io.Writer, oldLines, newLines []string, style string) {
 			bodyln(w, del)
 			bodyln(w, ins)
 		}
-	}
+	})
 }
 
 // diffSpans splits a changed line pair into the shared prefix, the differing

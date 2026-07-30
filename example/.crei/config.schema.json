@@ -74,6 +74,12 @@
           "off"
         ]
       }
+    },
+    "context_lines": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 10,
+      "description": "Head/tail lines kept when a diff shows a long added/removed run; the rest collapses to a count. 0 shows everything (as does --verbose per run)."
     }
   },
   "definitions": {

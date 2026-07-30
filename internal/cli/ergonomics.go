@@ -142,6 +142,12 @@ func printConfig(out io.Writer, cfg config) {
 	row("reload scope", scope, reason)
 	row("secrets field", cfg.SecretsField, cfg.secretsFieldSource)
 
+	cl := fmt.Sprintf("%d", cfg.ContextLines)
+	if cfg.ContextLines == 0 {
+		cl = "unlimited"
+	}
+	row("context lines", cl, cfg.contextLinesSource)
+
 	cfgFile, cfgSource := cfg.configFilePath, "loaded"
 	if cfgFile == "" {
 		cfgFile, cfgSource = filepath.Join(cfg.ProjectDir, ".crei", "config.toml"), "not found"
@@ -504,6 +510,11 @@ quadlet_dir = "~/.config/containers/systemd"
 #   "inline"              - single "~" line, word-diff style: removed run struck
 #                           through (remove color), added run (add color)
 # diff_style = "highlight"
+
+# Head/tail lines kept when a diff shows a long added/removed run (a big
+# asset file); the rest collapses to a count. 0 shows everything, as does
+# --verbose per run.
+# context_lines = 10
 
 # Run 'systemctl daemon-reload' after 'crei apply'. On by default (matching
 # podman quadlet install); set false to disable, or override per-run with

@@ -32,6 +32,7 @@ var (
 	flagQuadletDir string
 	flagDiffTool   string
 	flagRawErrors  bool
+	flagVerbose    bool
 )
 
 // errSilent makes Execute exit non-zero without printing an "Error:" line, for
@@ -111,6 +112,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&flagQuadletDir, "quadlet-dir", "", "target quadlet directory (overrides $QUADLET_DIR and config)")
 	pf.StringVar(&flagDiffTool, "diff-tool", "", "external diff tool to use (default: built-in unified diff)")
 	pf.BoolVar(&flagRawErrors, "raw-errors", false, "print cue's untranslated errors (bypass crei's error translation)")
+	pf.BoolVar(&flagVerbose, "verbose", false, "full output: don't truncate long diff runs (overrides context_lines)")
 	root.AddCommand(
 		newRenderCmd(),
 		newPlanCmd(),
@@ -156,6 +158,9 @@ type config struct {
 	// Lint holds the [lint] severity overrides (rule name -> error/warn/off),
 	// validated against the rule registry by newLintLevels.
 	Lint map[string]string
+	// ContextLines caps long added/removed runs in diffs: head/tail lines kept
+	// around a hidden-count marker. 0 shows everything; --verbose forces 0.
+	ContextLines int
 
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
@@ -163,6 +168,7 @@ type config struct {
 	diffStyleSource     string
 	reloadSystemdSource string
 	secretsFieldSource  string
+	contextLinesSource  string
 	configFilePath      string // config file path if present, else ""
 }
 
@@ -172,6 +178,7 @@ type fileConfig struct {
 	DiffStyle     string            `toml:"diff_style"`
 	ReloadSystemd *bool             `toml:"reload_systemd"` // pointer: distinguish unset from false
 	SecretsField  string            `toml:"secrets_field"`
+	ContextLines  *int              `toml:"context_lines"` // pointer: distinguish unset from an explicit 0 (unlimited)
 	Style         styleConfig       `toml:"style"`
 	Lint          map[string]string `toml:"lint"`
 }
@@ -397,6 +404,18 @@ func resolveConfig() (config, error) {
 		sourcedValue{fc.SecretsField, configRelPath},
 		sourcedValue{"secrets", "default"},
 	)
+	// Diff truncation: keep this many head/tail lines around long added/removed
+	// runs. 0 shows everything; --verbose forces 0 regardless of the config.
+	contextLines, contextLinesSource := 10, "default"
+	if fc.ContextLines != nil {
+		if *fc.ContextLines < 0 {
+			return config{}, fmt.Errorf("invalid context_lines %d in %s (want >= 0; 0 shows everything)", *fc.ContextLines, configRelPath)
+		}
+		contextLines, contextLinesSource = *fc.ContextLines, configRelPath
+	}
+	if flagVerbose {
+		contextLines, contextLinesSource = 0, "--verbose flag"
+	}
 	return config{
 		ProjectDir:          flagProjectDir,
 		QuadletDir:          expanded,
@@ -405,11 +424,13 @@ func resolveConfig() (config, error) {
 		ReloadSystemd:       reload,
 		SecretsField:        sf.value,
 		Lint:                fc.Lint,
+		ContextLines:        contextLines,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
 		diffStyleSource:     ds.source,
 		reloadSystemdSource: reloadSource,
 		secretsFieldSource:  sf.source,
+		contextLinesSource:  contextLinesSource,
 		configFilePath:      fcPath,
 	}, nil
 }

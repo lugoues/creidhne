@@ -546,6 +546,7 @@ Configuration is resolved as **flags > environment > `.crei/config.toml` > defau
 | Diff style | n/a | n/a | `diff_style` | `highlight` |
 | Reload systemd after apply | `--reload-systemd` | n/a | `reload_systemd` | `true` (on, like `podman quadlet install`) |
 | Secrets field | n/a | n/a | `secrets_field` | `secrets` |
+| Diff run truncation | `--verbose` (off) | n/a | `context_lines` | `10` |
 
 Run `crei config` to print the resolved values and where each came from.
 
@@ -556,6 +557,11 @@ Writing to a system path like `/etc/containers/systemd` requires elevated privil
 ### Diff output
 
 `plan`, `diff`, and `apply` render a Terraform-style inline diff of each change: a bold `# <file>` header, a `+`/`-` gutter, collapsed unchanged regions (`# (N unmodified lines hidden)`), and highlighting of what changed within a line. Pass `--no-diff` to `plan`/`apply` for just the compact `+`/`~`/`-` change list.
+
+Long added/removed runs (a new 9k-line asset file) are capped at
+`context_lines` head/tail lines (default 10) around a
+`# (N more lines; --verbose shows all)` marker; set `context_lines = 0` or pass
+`--verbose` to dump everything.
 
 How a *modified* line renders is set by `diff_style` in `.crei/config.toml`:
 

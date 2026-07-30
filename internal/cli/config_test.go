@@ -64,6 +64,45 @@ func TestResolveConfigProvenance(t *testing.T) {
 	}
 }
 
+// TestResolveConfigContextLines: defaults to 10, the config overrides (0 =
+// unlimited is legal, negative is a hard error), and --verbose forces 0 over
+// whatever the config says.
+func TestResolveConfigContextLines(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool, flagVerbose = ".", "", "", false }()
+	flagQuadletDir, flagDiffTool = "", ""
+	t.Setenv("QUADLET_DIR", "")
+	t.Setenv("DIFF_TOOL", "")
+
+	flagProjectDir = t.TempDir() // no config file
+	cfg, err := resolveConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ContextLines != 10 || cfg.contextLinesSource != "default" {
+		t.Fatalf("default: %d (%s)", cfg.ContextLines, cfg.contextLinesSource)
+	}
+
+	dir := t.TempDir()
+	writeConfig(t, dir, "context_lines = 25\n")
+	flagProjectDir = dir
+	if cfg, _ = resolveConfig(); cfg.ContextLines != 25 || cfg.contextLinesSource != configRelPath {
+		t.Fatalf("config: %d (%s)", cfg.ContextLines, cfg.contextLinesSource)
+	}
+
+	flagVerbose = true
+	if cfg, _ = resolveConfig(); cfg.ContextLines != 0 || cfg.contextLinesSource != "--verbose flag" {
+		t.Fatalf("verbose must force 0: %d (%s)", cfg.ContextLines, cfg.contextLinesSource)
+	}
+	flagVerbose = false
+
+	bad := t.TempDir()
+	writeConfig(t, bad, "context_lines = -1\n")
+	flagProjectDir = bad
+	if _, err := resolveConfig(); err == nil {
+		t.Fatal("negative context_lines must be a hard error")
+	}
+}
+
 // TestResolveConfigReloadSystemd: reload defaults on, is taken from the config
 // when set (true or false), with the source recorded.
 func TestResolveConfigReloadSystemd(t *testing.T) {
