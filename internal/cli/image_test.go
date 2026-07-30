@@ -254,11 +254,10 @@ func TestLockRoundTrip(t *testing.T) {
 	for _, e := range got {
 		byKey[e.Key] = e
 	}
-	l := byKey["traefik"].Lock
-	if l == nil {
+	switch l := byKey["traefik"].Lock; {
+	case l == nil:
 		t.Fatal("traefik lost its lock through emit -> load")
-	}
-	if l.Reason != "3.6 breaks websocket upgrades" || l.Since != "2026-07-24" {
+	case l.Reason != "3.6 breaks websocket upgrades" || l.Since != "2026-07-24":
 		t.Fatalf("lock round-tripped wrong: %+v", l)
 	}
 	if byKey["plain"].Lock != nil {
