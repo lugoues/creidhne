@@ -147,6 +147,7 @@ func printConfig(out io.Writer, cfg config) {
 		cl = "unlimited"
 	}
 	row("context lines", cl, cfg.contextLinesSource)
+	row("context threshold", fmt.Sprintf("%d", cfg.ContextThreshold), cfg.contextThresholdSrc)
 
 	cfgFile, cfgSource := cfg.configFilePath, "loaded"
 	if cfgFile == "" {
@@ -513,8 +514,12 @@ quadlet_dir = "~/.config/containers/systemd"
 
 # Head/tail lines kept when a diff shows a long added/removed run (a big
 # asset file); the rest collapses to a count. 0 shows everything, as does
-# --verbose per run.
+# --verbose per run. Applies to images/ artifacts (Containerfiles, context
+# and asset files); unit-file diffs always render whole.
 # context_lines = 10
+
+# Minimum run length before truncation engages (0 = auto: 2*context_lines+4).
+# context_threshold = 24
 
 # Run 'systemctl daemon-reload' after 'crei apply'. On by default (matching
 # podman quadlet install); set false to disable, or override per-run with

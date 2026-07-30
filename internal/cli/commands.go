@@ -134,7 +134,7 @@ func newDiffCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			if err := printDiff(out, changes, cfg.QuadletDir, cfg.DiffTool, cfg.DiffStyle, cfg.ContextLines); err != nil {
+			if err := printDiff(out, changes, cfg); err != nil {
 				return err
 			}
 			printSummary(out, reconcile.Summarize(changes), "new", "changed", "stale")
@@ -282,7 +282,7 @@ func renderPlan(w io.Writer, changes []reconcile.Change, cfg config, noDiff bool
 		printChangeList(w, changes)
 		return nil
 	}
-	return printDiff(w, changes, cfg.QuadletDir, cfg.DiffTool, cfg.DiffStyle, cfg.ContextLines)
+	return printDiff(w, changes, cfg)
 }
 
 // printChangeList prints one +/~/- line per change (the compact view).
@@ -306,7 +306,7 @@ func printChangeList(w io.Writer, changes []reconcile.Change) {
 // content as removed lines, and a changed file as a structured inline diff.
 // Unchanged files are omitted; the summary reports their count. Entries are
 // separated by one blank line.
-func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool, diffStyle string, maxRun int) error {
+func printDiff(w io.Writer, changes []reconcile.Change, cfg config) error {
 	printed := false
 	for _, c := range changes {
 		if c.Action == reconcile.ActionUnchanged {
@@ -320,13 +320,13 @@ func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool, di
 		switch c.Action {
 		case reconcile.ActionAdd:
 			add := bodyLines(c.Content)
-			truncRun(w, len(add), maxRun, 1, func(i int) { bodyln(w, green("+ "+add[i])) })
+			truncRun(w, len(add), limitsFor(c.Name, cfg), 1, func(i int) { bodyln(w, green("+ "+add[i])) })
 		case reconcile.ActionRemove:
 			// The change carries no content for removals; read what's on disk so
 			// the user sees what is about to be deleted.
-			body, _ := os.ReadFile(filepath.Join(quadletDir, filepath.FromSlash(c.Name)))
+			body, _ := os.ReadFile(filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name)))
 			rm := bodyLines(body)
-			truncRun(w, len(rm), maxRun, 1, func(i int) { bodyln(w, red("- "+rm[i])) })
+			truncRun(w, len(rm), limitsFor(c.Name, cfg), 1, func(i int) { bodyln(w, red("- "+rm[i])) })
 		case reconcile.ActionChange:
 			// A change whose only difference is crei's build-hash stamp is
 			// derived, not authored: label it instead of showing a cryptic
@@ -339,11 +339,11 @@ func printDiff(w io.Writer, changes []reconcile.Change, quadletDir, diffTool, di
 			// Built-in differ: render a structured inline diff from the in-memory
 			// old/new content. A configured external tool formats (and colors) its
 			// own output, so pass it through indented.
-			if diffTool == "" || diffTool == "diff" {
-				renderInlineDiff(w, c.Existing, c.Content, diffStyle, maxRun)
+			if cfg.DiffTool == "" || cfg.DiffTool == "diff" {
+				renderInlineDiff(w, c.Existing, c.Content, cfg.DiffStyle, limitsFor(c.Name, cfg))
 			} else {
-				live := filepath.Join(quadletDir, filepath.FromSlash(c.Name))
-				d, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, diffTool)
+				live := filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name))
+				d, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, cfg.DiffTool)
 				if err != nil {
 					return err
 				}

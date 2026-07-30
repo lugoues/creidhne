@@ -158,9 +158,13 @@ type config struct {
 	// Lint holds the [lint] severity overrides (rule name -> error/warn/off),
 	// validated against the rule registry by newLintLevels.
 	Lint map[string]string
-	// ContextLines caps long added/removed runs in diffs: head/tail lines kept
-	// around a hidden-count marker. 0 shows everything; --verbose forces 0.
+	// ContextLines caps long added/removed runs in images/ artifact diffs:
+	// head/tail lines kept around a hidden-count marker. 0 shows everything;
+	// --verbose forces 0. Unit-file diffs never truncate.
 	ContextLines int
+	// ContextThreshold is the minimum run length before truncation engages
+	// (auto when unset: 2*ContextLines+4, so at least 4 lines are hidden).
+	ContextThreshold int
 
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
@@ -169,18 +173,20 @@ type config struct {
 	reloadSystemdSource string
 	secretsFieldSource  string
 	contextLinesSource  string
+	contextThresholdSrc string
 	configFilePath      string // config file path if present, else ""
 }
 
 type fileConfig struct {
-	QuadletDir    string            `toml:"quadlet_dir"`
-	DiffTool      string            `toml:"diff_tool"`
-	DiffStyle     string            `toml:"diff_style"`
-	ReloadSystemd *bool             `toml:"reload_systemd"` // pointer: distinguish unset from false
-	SecretsField  string            `toml:"secrets_field"`
-	ContextLines  *int              `toml:"context_lines"` // pointer: distinguish unset from an explicit 0 (unlimited)
-	Style         styleConfig       `toml:"style"`
-	Lint          map[string]string `toml:"lint"`
+	QuadletDir       string            `toml:"quadlet_dir"`
+	DiffTool         string            `toml:"diff_tool"`
+	DiffStyle        string            `toml:"diff_style"`
+	ReloadSystemd    *bool             `toml:"reload_systemd"` // pointer: distinguish unset from false
+	SecretsField     string            `toml:"secrets_field"`
+	ContextLines     *int              `toml:"context_lines"`     // pointer: distinguish unset from an explicit 0 (unlimited)
+	ContextThreshold *int              `toml:"context_threshold"` // pointer: unset = auto (2*context_lines+4)
+	Style            styleConfig       `toml:"style"`
+	Lint             map[string]string `toml:"lint"`
 }
 
 // diff_style values: how a modified line renders in plan/diff/apply.
@@ -416,6 +422,17 @@ func resolveConfig() (config, error) {
 	if flagVerbose {
 		contextLines, contextLinesSource = 0, "--verbose flag"
 	}
+	// The run length at which truncation engages. Auto keeps at least 4 lines
+	// hidden, so the marker always earns its line.
+	threshold, thresholdSource := 2*contextLines+4, "auto (2*context_lines+4)"
+	if fc.ContextThreshold != nil {
+		if *fc.ContextThreshold < 0 {
+			return config{}, fmt.Errorf("invalid context_threshold %d in %s (want >= 0; 0 means auto)", *fc.ContextThreshold, configRelPath)
+		}
+		if *fc.ContextThreshold > 0 {
+			threshold, thresholdSource = *fc.ContextThreshold, configRelPath
+		}
+	}
 	return config{
 		ProjectDir:          flagProjectDir,
 		QuadletDir:          expanded,
@@ -425,12 +442,14 @@ func resolveConfig() (config, error) {
 		SecretsField:        sf.value,
 		Lint:                fc.Lint,
 		ContextLines:        contextLines,
+		ContextThreshold:    threshold,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
 		diffStyleSource:     ds.source,
 		reloadSystemdSource: reloadSource,
 		secretsFieldSource:  sf.source,
 		contextLinesSource:  contextLinesSource,
+		contextThresholdSrc: thresholdSource,
 		configFilePath:      fcPath,
 	}, nil
 }

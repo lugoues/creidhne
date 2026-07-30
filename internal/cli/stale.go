@@ -186,7 +186,8 @@ func diffStale(out io.Writer, cfg config) error {
 		case old == rec.Content:
 			fmt.Fprintln(out, dim("  no content difference recorded"))
 		default:
-			renderInlineDiff(out, []byte(old), []byte(rec.Content), cfg.DiffStyle, cfg.ContextLines)
+			// Stale diffs cover unit files only, which never truncate.
+			renderInlineDiff(out, []byte(old), []byte(rec.Content), cfg.DiffStyle, truncLimits{})
 		}
 	}
 	fmt.Fprintf(out, "\n%d stale unit(s)\n", len(stale))

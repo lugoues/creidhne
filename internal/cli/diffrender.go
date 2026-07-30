@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pmezard/go-difflib/difflib"
@@ -32,27 +33,43 @@ const diffIndent = "  "
 // bodyln writes one indented diff body line (the header is not indented).
 func bodyln(w io.Writer, s string) { fmt.Fprintln(w, diffIndent+s) }
 
-// truncRun visits a run of n same-kind diff entries, capping it at maxRun head
-// + maxRun tail (emit is called with each kept index, in order) with a
-// hidden-count marker between the halves. maxRun 0 shows everything, as does a
-// run short enough that truncating would hide fewer than a marker's worth —
-// hiding 1 line behind a 1-line marker helps nobody, so a few lines of slack
-// are required before the cap engages. linesPer converts hidden entries to
+// truncLimits is the diff-truncation policy for one file: run is the head/tail
+// lines kept (0 = never truncate), threshold the minimum run length before the
+// cap engages. Unit-file diffs get the zero value (no truncation, they are
+// hand-reviewed config); images/ artifacts get the configured limits.
+type truncLimits struct {
+	run, threshold int
+}
+
+// limitsFor scopes truncation: only images/ artifacts (Containerfiles, context
+// and asset files — where the multi-thousand-line runs live) are capped; unit
+// files always render whole.
+func limitsFor(name string, cfg config) truncLimits {
+	if strings.HasPrefix(name, "images/") {
+		return truncLimits{run: cfg.ContextLines, threshold: cfg.ContextThreshold}
+	}
+	return truncLimits{}
+}
+
+// truncRun visits a run of n same-kind diff entries, capping it at lim.run head
+// + lim.run tail (emit is called with each kept index, in order) with a
+// hidden-count marker between the halves. lim.run 0 shows everything, as does a
+// run below lim.threshold; regardless of threshold at least one entry must be
+// hidden, so head and tail never overlap. linesPer converts hidden entries to
 // displayed lines for the marker (a "pair" entry renders as 2 lines).
-func truncRun(w io.Writer, n, maxRun, linesPer int, emit func(int)) {
-	const slack = 3
-	if maxRun <= 0 || n <= 2*maxRun+slack {
+func truncRun(w io.Writer, n int, lim truncLimits, linesPer int, emit func(int)) {
+	if lim.run <= 0 || n < lim.threshold || n <= 2*lim.run {
 		for i := 0; i < n; i++ {
 			emit(i)
 		}
 		return
 	}
-	for i := 0; i < maxRun; i++ {
+	for i := 0; i < lim.run; i++ {
 		emit(i)
 	}
-	hidden := (n - 2*maxRun) * linesPer
+	hidden := (n - 2*lim.run) * linesPer
 	bodyln(w, diffHiddenStyle.Render(fmt.Sprintf("# (%d more lines; --verbose shows all)", hidden)))
-	for i := n - maxRun; i < n; i++ {
+	for i := n - lim.run; i < n; i++ {
 		emit(i)
 	}
 }
@@ -61,10 +78,9 @@ func truncRun(w io.Writer, n, maxRun, linesPer int, emit func(int)) {
 // sits in its own gutter column, changed lines are highlighted inline (the
 // differing span between the common prefix and suffix is emphasized), and runs
 // of unchanged lines outside the context window collapse to a gray
-// "# (N unmodified lines hidden)" marker. Long added/removed runs are capped at
-// maxRun head/tail lines (0 = unlimited), so a 9k-line asset doesn't flood the
-// plan.
-func renderInlineDiff(w io.Writer, old, new []byte, style string, maxRun int) {
+// "# (N unmodified lines hidden)" marker. Long added/removed runs are capped
+// per lim (see truncLimits), so a 9k-line asset doesn't flood the plan.
+func renderInlineDiff(w io.Writer, old, new []byte, style string, lim truncLimits) {
 	a, b := splitLines(string(old)), splitLines(string(new))
 	prevEnd := 0
 	emitHidden := func(n int) {
@@ -82,12 +98,12 @@ func renderInlineDiff(w io.Writer, old, new []byte, style string, maxRun int) {
 				}
 			case 'd': // delete
 				del := a[op.I1:op.I2]
-				truncRun(w, len(del), maxRun, 1, func(i int) { bodyln(w, red("- "+del[i])) })
+				truncRun(w, len(del), lim, 1, func(i int) { bodyln(w, red("- "+del[i])) })
 			case 'i': // insert
 				ins := b[op.J1:op.J2]
-				truncRun(w, len(ins), maxRun, 1, func(i int) { bodyln(w, green("+ "+ins[i])) })
+				truncRun(w, len(ins), lim, 1, func(i int) { bodyln(w, green("+ "+ins[i])) })
 			case 'r': // replace
-				renderReplace(w, a[op.I1:op.I2], b[op.J1:op.J2], style, maxRun)
+				renderReplace(w, a[op.I1:op.I2], b[op.J1:op.J2], style, lim)
 			}
 		}
 		prevEnd = group[len(group)-1].I2
@@ -98,19 +114,19 @@ func renderInlineDiff(w io.Writer, old, new []byte, style string, maxRun int) {
 // renderReplace shows a changed region. When the same number of lines changed,
 // each old/new pair is rendered per the configured style; otherwise it's a block
 // rewrite with no 1:1 pairing, always shown as plain removed-then-added lines.
-// Both shapes cap long runs at maxRun (pairs count as one entry, so a truncated
+// Both shapes cap long runs per lim (pairs count as one entry, so a truncated
 // pair region keeps its old/new lines together).
-func renderReplace(w io.Writer, oldLines, newLines []string, style string, maxRun int) {
+func renderReplace(w io.Writer, oldLines, newLines []string, style string, lim truncLimits) {
 	if len(oldLines) != len(newLines) {
-		truncRun(w, len(oldLines), maxRun, 1, func(i int) { bodyln(w, red("- "+oldLines[i])) })
-		truncRun(w, len(newLines), maxRun, 1, func(i int) { bodyln(w, green("+ "+newLines[i])) })
+		truncRun(w, len(oldLines), lim, 1, func(i int) { bodyln(w, red("- "+oldLines[i])) })
+		truncRun(w, len(newLines), lim, 1, func(i int) { bodyln(w, green("+ "+newLines[i])) })
 		return
 	}
 	linesPer := 2 // a pair renders as two lines ("- old" / "+ new")
 	if style == diffStyleInline {
 		linesPer = 1 // the single "~" word-diff line
 	}
-	truncRun(w, len(oldLines), maxRun, linesPer, func(i int) {
+	truncRun(w, len(oldLines), lim, linesPer, func(i int) {
 		switch style {
 		case diffStyleInline:
 			bodyln(w, inlineSingle(oldLines[i], newLines[i]))
