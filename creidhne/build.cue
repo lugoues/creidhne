@@ -30,7 +30,7 @@ import "list"
 		Context?: [string]: string | {
 			content: string
 			mode:    #FileMode | *"0644"
-		}
+		} | #AssetRef
 	} | {
 		Build: {
 			// Provide context (a working directory) to podman build via path, URL, or special keys.

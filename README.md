@@ -364,6 +364,29 @@ QUADLET=…` stays empty until the runtime catches up. See
 
 ### Inline Containerfile & Context
 Craei supports inlining Containerfiles and their context within a Build unit. Context files will be placed next to the Containerfile when being build so `COPY . /` is all you need to pull your context in. This is useful when you want only minor changes to the original image (such as installing packages).
+
+For files too large or numerous to inline (grafana dashboards, provisioning
+trees), declare an **asset** glob in `registries/assets.cue` and reference it
+from the context. `**` recursive globs are supported; the matched files expand
+at load time, preserving their structure under the context key, and their bytes
+feed the build content hash — so editing a dashboard flags the build *and* its
+consumers stale, same as an inline edit:
+
+```cue
+// registries/assets.cue (hand-authored; crei never rewrites it)
+assets: creidhne.#AssetRegistry & {
+    grafana_dashboards: source: "assets/grafana/dashboards/**/*.json"
+}
+
+// in the quadlet:
+#build: Context: dashboards: reg.assets.grafana_dashboards.#ref
+```
+
+Globs are project-relative (no `..`), matches are sorted for deterministic
+output, executable files keep their exec bit, and a glob matching nothing is a
+load error rather than a silently empty context. Asset refs work only in build
+contexts — a bind mount would put undeclared host state behind the handle and
+break build determinism. See [docs/design/asset-registry.md](docs/design/asset-registry.md).
 ```
 traefik: creidhne.#Quadlet & {
     name: "traefik"

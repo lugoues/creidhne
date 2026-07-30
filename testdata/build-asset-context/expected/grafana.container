@@ -1,0 +1,8 @@
+
+[Container]
+Image=grafana.build
+Annotation=creidhne.build-hash=1bf8a67ecc33
+LogDriver=journald
+LogOpt=label=QUADLET=grafana
+LogOpt=label=QUADLET_UNIT_NAME=grafana
+LogOpt=label=IMAGE=grafana.build

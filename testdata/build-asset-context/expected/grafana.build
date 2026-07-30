@@ -1,0 +1,6 @@
+
+[Build]
+ImageTag=quadlets.localhost/grafana:latest
+SetWorkingDirectory=images/grafana.context
+File=images/grafana.Containerfile
+Annotation=creidhne.build-hash=1bf8a67ecc33

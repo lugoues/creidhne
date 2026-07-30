@@ -59,6 +59,11 @@ func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, err
 	if err := checkUniqueServices(quads); err != nil {
 		return nil, err
 	}
+	// Asset refs expand into inline context entries before hashing, so the
+	// referenced file bytes are covered by the build content hash.
+	if err := expandAssetContexts(dir, quads); err != nil {
+		return nil, err
+	}
 	injectBuildHashes(quads)
 	return quads, nil
 }

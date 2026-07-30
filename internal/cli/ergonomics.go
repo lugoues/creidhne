@@ -211,6 +211,12 @@ func runInit(out io.Writer, projectDir string) error {
 	}
 	report(out, created, "registries/secrets.cue")
 
+	created, err = writeIfAbsent(filepath.Join(projectDir, "registries", "assets.cue"), sampleAssetRegistry)
+	if err != nil {
+		return err
+	}
+	report(out, created, "registries/assets.cue")
+
 	// Config and its JSON Schema live under .crei/ to keep the project root clean.
 	// The "#:schema ./config.schema.json" directive in the sample resolves within
 	// .crei/ since both files sit there together.
@@ -443,6 +449,20 @@ hello: creidhne.#Quadlet & {
 }
 `, base)
 }
+
+// sampleAssetRegistry is the starter registries/assets.cue. Unlike images and
+// secrets, this file is hand-authored: crei reads it but never rewrites it.
+const sampleAssetRegistry = `package registries
+
+import "github.com/lugoues/creidhne"
+
+// Hand-authored asset globs: files too large or numerous to inline in CUE
+// (dashboards, provisioning trees). Reference from a build's Context:
+//   Context: dashboards: reg.assets.<name>.#ref
+// crei reads this file but never rewrites it; comments here are safe.
+assets: creidhne.#AssetRegistry & {
+}
+`
 
 // sampleSecretRegistry is the starter registries/secrets.cue (crei-owned).
 const sampleSecretRegistry = `package registries
