@@ -137,7 +137,7 @@ app: creidhne.#Quadlet & {
 	if err != nil {
 		t.Fatalf("warnings only, validate must pass: %v\n%s", err, out)
 	}
-	for _, want := range []string{"app-unused.network", "attaches this network", `router "web" is defined by`} {
+	for _, want := range []string{"app-unused.network", "attaches this network", `http router "web" is defined by`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("validate output missing %q:\n%s", want, out)
 		}
@@ -166,5 +166,48 @@ other: creidhne.#Quadlet & {name: "other", units: #container: Container: Image: 
 	out, _ := runCmd(t, "--dir", proj, "lint", "other")
 	if strings.Contains(out, "app-unused.network") {
 		t.Fatalf("focus 'other' must hide app's findings:\n%s", out)
+	}
+}
+
+// TestDuplicateRouterFamilies: tcp routers are scanned too, and http/tcp are
+// separate namespaces — the same name across families is legal (traefik keeps
+// them apart); the same tcp name on two units is the duplicate.
+func TestDuplicateRouterFamilies(t *testing.T) {
+	// Same name, different families: no finding.
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: {
+		#container: Container: {Image: "docker.io/x", Label: ["traefik.http.routers.web.rule=Host(x)"]}
+		containers: side: Container: {Image: "docker.io/y", Label: ["'traefik.tcp.routers.web.rule=HostSNI(*)'"]}
+	}
+}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("cross-family same name must pass: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "duplicate") || strings.Contains(out, "is defined by") {
+		t.Fatalf("cross-family name must not be a duplicate:\n%s", out)
+	}
+
+	// Same tcp name on two units: finding, named as the tcp family.
+	proj = setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: {
+		#container: Container: {Image: "docker.io/x", Label: ["'traefik.tcp.routers.socks.rule=HostSNI(*)'"]}
+		containers: side: Container: {Image: "docker.io/y", Label: ["traefik.tcp.routers.socks.entrypoints=socks"]}
+	}
+}
+`)
+	out, err = runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("duplicate-router is warn severity, validate must pass: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, `tcp router "socks" is defined by`) {
+		t.Fatalf("tcp duplicate not reported:\n%s", out)
 	}
 }

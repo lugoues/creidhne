@@ -16,10 +16,12 @@ import (
 // the helper that placed it.
 const pairMarkerPrefix = "creidhne.pair="
 
-// routerLabelPrefix keys traefik router definitions inside container labels;
-// the same router name on two different units makes traefik merge or reject
-// their config.
-const routerLabelPrefix = "traefik.http.routers."
+// routerFamilies are the traefik label families whose router definitions the
+// duplicate-router rule scans (udp is unmodeled in the helpers). Router names
+// are namespaced per family — traefik keeps http and tcp routers separate, so
+// the same name across families is legal and only a same-family duplicate
+// merges config.
+var routerFamilies = []string{"http", "tcp"}
 
 // ruleFinding is one named-rule violation. Findings are created with Rule set
 // and Severity empty; lintLevels.apply stamps the effective severity (config
@@ -141,33 +143,40 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 	}
 
 	// Duplicate traefik router names across units: labels merge in traefik's
-	// docker provider, silently splicing two services' route config.
+	// docker provider, silently splicing two services' route config. Keyed
+	// "family/name" so http and tcp routers stay separate namespaces, as they
+	// are in traefik.
 	routers := map[string]map[string]bool{}
 	for _, u := range attachable {
 		for _, l := range topList(u.Data, "labelStrings") {
-			rest, ok := strings.CutPrefix(strings.Trim(l, "'"), routerLabelPrefix)
-			if !ok {
-				continue
+			clean := strings.Trim(l, "'")
+			for _, family := range routerFamilies {
+				rest, ok := strings.CutPrefix(clean, "traefik."+family+".routers.")
+				if !ok {
+					continue
+				}
+				name, _, ok := strings.Cut(rest, ".")
+				if !ok {
+					continue
+				}
+				key := family + "/" + name
+				if routers[key] == nil {
+					routers[key] = map[string]bool{}
+				}
+				routers[key][u.Filename] = true
 			}
-			name, _, ok := strings.Cut(rest, ".")
-			if !ok {
-				continue
-			}
-			if routers[name] == nil {
-				routers[name] = map[string]bool{}
-			}
-			routers[name][u.Filename] = true
 		}
 	}
-	for name, units := range routers {
+	for key, units := range routers {
 		if len(units) > 1 {
 			ids := make([]string, 0, len(units))
 			for id := range units {
 				ids = append(ids, id)
 			}
 			sort.Strings(ids)
+			family, name, _ := strings.Cut(key, "/")
 			out = append(out, ruleFinding{Rule: "graph/duplicate-router", Unit: ids[0],
-				Message: fmt.Sprintf("traefik router %q is defined by %s; router labels merge across containers and corrupt both routes", name, strings.Join(ids, ", "))})
+				Message: fmt.Sprintf("traefik %s router %q is defined by %s; router labels merge across containers and corrupt both routes", family, name, strings.Join(ids, ", "))})
 		}
 	}
 
