@@ -25,8 +25,35 @@ var (
 	restartPoll     = 400 * time.Millisecond
 	restartSleep    = time.Sleep
 	restartAsyncFn  = systemd.RestartAsync
+	startAsyncFn    = systemd.StartAsync
+	stopAsyncFn     = systemd.StopAsync
 	pendingJobsFn   = systemd.PendingJobs
 	restartStatusFn = systemd.Show
+)
+
+// verbSpec is one lifecycle transition (restart/start/stop): its display
+// wording, how the transaction is enqueued, and what counts as a failed unit
+// once the job queue drains.
+type verbSpec struct {
+	gerund  string // block header: "Restarting", "Starting", "Stopping"
+	prompt  string // confirm question
+	past    string // failure summary: "restart", "start", "stop"
+	enqueue func(userScope bool, units []string) error
+	failed  func(systemd.UnitStatus) bool
+}
+
+var (
+	restartSpec = verbSpec{"Restarting", "Restart?", "restart",
+		func(u bool, units []string) error { return restartAsyncFn(u, units) },
+		func(st systemd.UnitStatus) bool { return st.ActiveState == "failed" }}
+	startSpec = verbSpec{"Starting", "Start?", "start",
+		func(u bool, units []string) error { return startAsyncFn(u, units) },
+		func(st systemd.UnitStatus) bool { return st.ActiveState == "failed" }}
+	// A stop failed when the unit is still up after its job cleared; a unit
+	// left in the systemd "failed" state is down, which is what stop wanted.
+	stopSpec = verbSpec{"Stopping", "Stop?", "stop",
+		func(u bool, units []string) error { return stopAsyncFn(u, units) },
+		func(st systemd.UnitStatus) bool { return st.ActiveState == "active" || st.ActiveState == "activating" }}
 )
 
 // spinFrames is the braille cycle huh's spinner uses; reused so restart's
@@ -50,7 +77,10 @@ var restartLive = func(out io.Writer) bool {
 type restartTracker struct {
 	out       io.Writer
 	rows      []statusRow
-	units     []string
+	units     []string // every displayed unit
+	enqueue   []string // the subset actually enqueued (not pre-done)
+	verb      verbSpec
+	notes     map[string]string // service -> dim note ("already running")
 	userScope bool
 	width     int             // widest service name, for note alignment
 	done      map[string]bool // units whose job has left the queue
@@ -65,11 +95,26 @@ type restartTracker struct {
 // there is a single list. Off a terminal each unit prints once as it completes.
 // needConfirm asks before restarting; a failed unit turns the command non-zero.
 func trackedRestart(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool) error {
+	return trackedTransition(out, in, rows, userScope, needConfirm, restartSpec, nil)
+}
+
+// trackedTransition runs one lifecycle verb over rows with the live/plain
+// progress display. preDone marks units already in the target state (service ->
+// note): they render checked with the note from the outset and are not
+// enqueued, so start/stop stay idempotent.
+func trackedTransition(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool, verb verbSpec, preDone map[string]string) error {
 	units := serviceNames(rows)
 	if len(units) == 0 {
 		return nil
 	}
-	t := &restartTracker{out: out, rows: rows, units: units, userScope: userScope, done: map[string]bool{}}
+	t := &restartTracker{out: out, rows: rows, units: units, verb: verb, notes: preDone, userScope: userScope, done: map[string]bool{}}
+	for _, u := range units {
+		if _, ok := preDone[u]; ok {
+			t.done[u] = true
+		} else {
+			t.enqueue = append(t.enqueue, u)
+		}
+	}
 	t.width = maxServiceWidth(rows)
 	if restartLive(out) {
 		return t.liveFlow(in, needConfirm)
@@ -79,11 +124,11 @@ func trackedRestart(out io.Writer, in io.Reader, rows []statusRow, userScope boo
 
 // poll refreshes the done set: a unit absent from the job queue has finished.
 func (t *restartTracker) poll() error {
-	pending, err := pendingJobsFn(t.userScope, t.units)
+	pending, err := pendingJobsFn(t.userScope, t.enqueue)
 	if err != nil {
 		return err
 	}
-	for _, u := range t.units {
+	for _, u := range t.enqueue {
 		if _, still := pending[u]; !still {
 			t.done[u] = true
 		}
@@ -100,9 +145,14 @@ func (t *restartTracker) allDone() bool {
 	return true
 }
 
-// label renders a unit's line body (after the glyph).
+// label renders a unit's line body (after the glyph), appending any pre-done
+// note ("already running") dimmed.
 func (t *restartTracker) label(r statusRow) string {
-	return restartLabel(r, t.width)
+	s := restartLabel(r, t.width)
+	if n, ok := t.notes[r.Service]; ok {
+		s += "  " + dim("("+n+")")
+	}
+	return s
 }
 
 // maxServiceWidth is the widest service name, for aligning the staleness notes.
@@ -134,9 +184,9 @@ func restartLabel(r statusRow, width int) string {
 // printRestartPreview lists the units a restart will affect, so the confirm
 // prompt isn't blind. A distinct header from the live block's "Restarting …"
 // keeps it reading as plan -> confirm -> progress, not a repeated line.
-func printRestartPreview(out io.Writer, rows []statusRow) {
+func printRestartPreview(out io.Writer, rows []statusRow, verb verbSpec) {
 	width := maxServiceWidth(rows)
-	fmt.Fprintf(out, "%d unit(s) will restart:\n", len(rows))
+	fmt.Fprintf(out, "%d unit(s) will %s:\n", len(rows), verb.past)
 	for _, r := range rows {
 		fmt.Fprintf(out, "  %s\n", restartLabel(r, width))
 	}
@@ -146,9 +196,9 @@ func printRestartPreview(out io.Writer, rows []statusRow) {
 // job is not proof of success.
 func (t *restartTracker) failures() map[string]bool {
 	failed := map[string]bool{}
-	if statuses, err := restartStatusFn(t.userScope, t.units); err == nil {
-		for _, u := range t.units {
-			if st, ok := statuses[u]; ok && st.ActiveState == "failed" {
+	if statuses, err := restartStatusFn(t.userScope, t.enqueue); err == nil {
+		for _, u := range t.enqueue {
+			if st, ok := statuses[u]; ok && t.verb.failed(st) {
 				failed[u] = true
 			}
 		}
@@ -167,7 +217,7 @@ func (t *restartTracker) failedError(failed map[string]bool) error {
 	if len(names) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%d unit(s) failed to restart: %s", len(names), strings.Join(names, ", "))
+	return fmt.Errorf("%d unit(s) failed to %s: %s", len(names), t.verb.past, strings.Join(names, ", "))
 }
 
 // glyph is a unit's leading status marker: cross if failed, check if done, else
@@ -187,9 +237,13 @@ func (t *restartTracker) glyph(svc string, frame int, failed map[string]bool) st
 // when needed (erasing the prompt so the block stays the bottom-most content),
 // then enqueue and animate those same lines in place.
 func (t *restartTracker) liveFlow(in io.Reader, needConfirm bool) error {
-	fmt.Fprintf(t.out, "Restarting %d unit(s):\n", len(t.rows))
+	fmt.Fprintf(t.out, "%s %d unit(s):\n", t.verb.gerund, len(t.rows))
 	for _, r := range t.rows {
-		fmt.Fprintf(t.out, "  %s %s\n", dim("·"), t.label(r)) // pending
+		glyph := dim("·") // pending
+		if t.done[r.Service] {
+			glyph = green("✓") // pre-done, nothing to wait for
+		}
+		fmt.Fprintf(t.out, "  %s %s\n", glyph, t.label(r))
 	}
 	if needConfirm {
 		// Save the cursor (just below the block), run the huh confirm below it,
@@ -198,7 +252,7 @@ func (t *restartTracker) liveFlow(in io.Reader, needConfirm bool) error {
 		// most for animating. bubbletea uses relative moves, not \033[s, so the
 		// saved position survives it.
 		fmt.Fprint(t.out, "\033[s")
-		ok, err := confirm(in, t.out, "Restart?")
+		ok, err := confirm(in, t.out, t.verb.prompt)
 		fmt.Fprint(t.out, "\033[u\033[J")
 		if err != nil {
 			return err
@@ -208,7 +262,7 @@ func (t *restartTracker) liveFlow(in io.Reader, needConfirm bool) error {
 			return nil
 		}
 	}
-	if err := restartAsyncFn(t.userScope, t.units); err != nil {
+	if err := t.verb.enqueue(t.userScope, t.enqueue); err != nil {
 		return err
 	}
 	return t.animate()
@@ -252,8 +306,8 @@ func (t *restartTracker) animate() error {
 // then print each once as its job clears in the order they finish.
 func (t *restartTracker) plainFlow(in io.Reader, needConfirm bool) error {
 	if needConfirm {
-		printRestartPreview(t.out, t.rows)
-		ok, err := confirm(in, t.out, "Restart?")
+		printRestartPreview(t.out, t.rows, t.verb)
+		ok, err := confirm(in, t.out, t.verb.prompt)
 		if err != nil {
 			return err
 		}
@@ -262,8 +316,8 @@ func (t *restartTracker) plainFlow(in io.Reader, needConfirm bool) error {
 			return nil
 		}
 	}
-	fmt.Fprintf(t.out, "Restarting %d unit(s):\n", len(t.rows))
-	if err := restartAsyncFn(t.userScope, t.units); err != nil {
+	fmt.Fprintf(t.out, "%s %d unit(s):\n", t.verb.gerund, len(t.rows))
+	if err := t.verb.enqueue(t.userScope, t.enqueue); err != nil {
 		return err
 	}
 	printed := map[string]bool{}

@@ -82,6 +82,12 @@ harmless normalization. Punt v1: template units, drop-ins, kube, external
 
 ## Status / operations
 
+- `crei up`: the converge composite now that start/stop exist — apply,
+  start what's down, offer restart --stale for what's outdated; the
+  compose-shaped "make reality match the CUE" one-liner. start/stop are
+  the primitives; up is sugar over apply + start + restart --stale and
+  should stay that thin.
+
 - `crei status`: when a unit failed with result `dependency`, chase
   `Requires=` edges to the failed dependency and show the root cause.
 - `crei secrets rotate` (re-read sources, update changed secrets).

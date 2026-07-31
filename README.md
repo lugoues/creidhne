@@ -463,6 +463,8 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei secret add` | Register a secret in the crei-owned `registries/secrets.cue` (`--length`/`--charset` set the generate policy; `--manual` for a hand-entered one). |
 | `crei secret list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
 | `crei secret create` | Create a podman secret; a registry generate policy fills the value automatically, else you enter or generate it (`-a` walks every missing one). |
+| `crei start` | Start quadlets' runnable units (containers/pods/kubes; deps start on their own). Idempotent; requires names or `--all`. |
+| `crei stop` | Stop quadlets' runnable units (infra left alone — stopping a shared network cascades to other quadlets; confirm; `-y` skips; names or `--all`). |
 | `crei secret rotate` | Regenerate crei-owned secrets (per their generate policy) and replace them in podman. |
 | `crei secret remove` | Unregister a secret from `registries/secrets.cue` (`--delete` also removes it from podman; alias: `rm`). |
 | `crei version` | Print version info. |

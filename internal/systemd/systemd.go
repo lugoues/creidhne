@@ -51,11 +51,11 @@ var run = func(args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// RestartAsync enqueues a restart of the named units in one systemctl call and
+// enqueueJob enqueues verb over the named units in one systemctl call and
 // returns without waiting (--no-block). It is still a single transaction, so
 // systemd orders the jobs by their After=/Before= dependencies; the caller
 // tracks completion with PendingJobs. userScope selects `systemctl --user`.
-func RestartAsync(userScope bool, units []string) error {
+func enqueueJob(verb string, userScope bool, units []string) error {
 	if len(units) == 0 {
 		return nil
 	}
@@ -63,10 +63,25 @@ func RestartAsync(userScope bool, units []string) error {
 	if userScope {
 		args = append(args, "--user")
 	}
-	args = append(args, "restart", "--no-block")
+	args = append(args, verb, "--no-block")
 	args = append(args, units...)
 	_, err := run(args...)
 	return err
+}
+
+// RestartAsync enqueues a non-blocking restart of the named units.
+func RestartAsync(userScope bool, units []string) error {
+	return enqueueJob("restart", userScope, units)
+}
+
+// StartAsync enqueues a non-blocking start of the named units.
+func StartAsync(userScope bool, units []string) error {
+	return enqueueJob("start", userScope, units)
+}
+
+// StopAsync enqueues a non-blocking stop of the named units.
+func StopAsync(userScope bool, units []string) error {
+	return enqueueJob("stop", userScope, units)
 }
 
 // PendingJobs returns the still-queued jobs among units, mapping unit -> job

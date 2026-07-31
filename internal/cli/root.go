@@ -119,6 +119,8 @@ func newRootCmd() *cobra.Command {
 		newDiffCmd(),
 		newApplyCmd(),
 		newStatusCmd(),
+		newStartCmd(),
+		newStopCmd(),
 		newRestartCmd(),
 		newLogsCmd(),
 		newGraphCmd(),
