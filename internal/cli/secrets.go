@@ -83,9 +83,9 @@ func newSecretsCmd() *cobra.Command {
 		Use:   "secret",
 		Short: "Inspect and create podman secrets from the registry",
 		Long: "secret works with the #SecretRegistry declared in your CUE. crei owns\n" +
-			"registries/secrets.cue ('add' registers a secret there); the hand-\n" +
-			"authored top-level \"secrets\" field is also read. 'list' shows which\n" +
-			"registry secrets exist in podman; 'create' adds the missing ones;\n" +
+			"registries/secrets.cue: 'create' registers a secret there and makes it\n" +
+			"in podman, one step (the hand-authored top-level \"secrets\" field is\n" +
+			"also read). 'list' shows which registry secrets exist in podman;\n" +
 			"'rotate' regenerates them; 'remove' unregisters one; 'prune' deletes\n" +
 			"crei-created secrets nothing references anymore; 'adopt' labels\n" +
 			"pre-existing registry secrets as crei-managed.",
@@ -96,7 +96,7 @@ func newSecretsCmd() *cobra.Command {
 			return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
 		},
 	}
-	cmd.AddCommand(newSecretAddCmd(), newSecretsListCmd(), newSecretsCreateCmd(),
+	cmd.AddCommand(newSecretsListCmd(), newSecretCreateCmd(),
 		newSecretRotateCmd(), newSecretRemoveCmd(), newSecretsPruneCmd(), newSecretsAdoptCmd())
 	return cmd
 }
@@ -313,93 +313,6 @@ func newSecretsListCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func newSecretsCreateCmd() *cobra.Command {
-	var all, replace bool
-	cmd := &cobra.Command{
-		Use:   "create [name]",
-		Short: "Create a podman secret (interactively), entering or generating its value",
-		Long: "create makes a podman secret. Pass a name to create one, or -a to walk\n" +
-			"through every registry secret missing from podman. A secret whose\n" +
-			"crei-owned registry entry carries a generate policy (crei secret add\n" +
-			"--length ...) is generated from that policy automatically; otherwise\n" +
-			"you type a value (hidden) or generate a random one at the prompt.",
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if all == (len(args) == 1) {
-				return fmt.Errorf("specify exactly one of: a secret name, or -a/--all")
-			}
-			cfg, err := resolveConfig()
-			if err != nil {
-				return err
-			}
-			out := cmd.OutOrStdout()
-			existing, err := podmanListSecrets()
-			if err != nil {
-				return err
-			}
-			policies, err := secretPolicies(cfg)
-			if err != nil {
-				return err
-			}
-
-			var targets []string
-			if all {
-				declared, err := declaredSecretNames(cfg)
-				if err != nil {
-					return err
-				}
-				for _, n := range declared {
-					if !existing[n] {
-						targets = append(targets, n)
-					}
-				}
-				if len(targets) == 0 {
-					fmt.Fprintln(out, "All registry secrets already exist in podman.")
-					return nil
-				}
-			} else {
-				targets = []string{args[0]}
-			}
-
-			for _, name := range targets {
-				if existing[name] && !replace {
-					fmt.Fprintf(out, "%s already exists, skipping (use --replace to overwrite)\n", name)
-					continue
-				}
-				// A registry generate policy synthesizes the value with no
-				// prompt; crei owns it, so (like rotate) the value is not echoed.
-				// Only a value the user chose to generate at the prompt is shown
-				// once, so they can save it.
-				var value []byte
-				var promptGenerated bool
-				if g := policies[name]; g != nil {
-					value, err = generateFromPolicy(g)
-					if err != nil {
-						return fmt.Errorf("%s: %w", name, err)
-					}
-				} else {
-					value, promptGenerated, err = secretValuer(name)
-					if err != nil {
-						return err
-					}
-				}
-				if err := podmanCreateSecret(name, value, replace); err != nil {
-					return err
-				}
-				fmt.Fprintf(out, "%s created\n", green(name))
-				if promptGenerated {
-					fmt.Fprintln(out, dim("  save this value now; it will not be shown again:"))
-					fmt.Fprintf(out, "  %s\n", string(value))
-				}
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVarP(&all, "all", "a", false, "walk through every registry secret missing from podman")
-	cmd.Flags().BoolVar(&replace, "replace", false, "overwrite a secret that already exists")
-	return cmd
 }
 
 // promptSecretValue asks (via huh, so it needs a TTY) whether to enter a value

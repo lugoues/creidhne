@@ -302,15 +302,15 @@ app: creidhne.#Quadlet & {
 }
 ```
 
-crei can also own the registry for you. `crei secret add <name>` registers a
-secret in `registries/secrets.cue` (the crei-owned counterpart to
-`registries/images.cue`), recording how to generate its value; secret material
-never lives in CUE. Reference a crei-owned entry the same way, through the
-`registries` import:
+crei can also own the registry for you. `crei secret create <name>` registers
+the secret in `registries/secrets.cue` (the crei-owned counterpart to
+`registries/images.cue`) and creates its value in podman, one step — podman's
+own vocabulary, one verb. Secret material never lives in CUE. Reference a
+crei-owned entry the same way, through the `registries` import:
 
 ```sh
-crei secret add db_password --length 40   # register a generated secret
-crei secret add tls_cert --manual          # register a hand-entered one (no generate policy)
+crei secret create db_password --length 40  # record a generate policy + create
+crei secret create tls_cert --manual        # record a manual entry; value prompted
 ```
 
 `crei secret` reconciles the registry (the crei-owned `registries/secrets.cue`
@@ -319,7 +319,7 @@ secret store:
 
 ```sh
 crei secret list                # present/missing, crei-managed, created/updated
-crei secret create db_password  # create one, typing (hidden) or generating its value
+crei secret create db_password  # prompt (enter or generate); the choice is recorded
 crei secret create -a           # walk through every secret missing from podman
 crei secret adopt               # label pre-existing registry secrets as crei-managed
 crei secret prune               # delete crei-created secrets nothing references
@@ -460,9 +460,8 @@ Mutual exclusivity is enforced: `Image`/`Rootfs` and `ReloadCmd`/`ReloadSignal` 
 | `crei import compose [file...]` | Convert a docker-compose project into a creidhne CUE file (see below). |
 | `crei vendor [module[@ref]]` | Vendor a git-hosted CUE helper module into `cue.mod/usr` for offline use (`--check` verifies against the lock). |
 | `crei config` | Show the resolved configuration and where each value came from. |
-| `crei secret add` | Register a secret in the crei-owned `registries/secrets.cue` (`--length`/`--charset` set the generate policy; `--manual` for a hand-entered one). |
 | `crei secret list` | List the secret registry and whether each secret exists in podman (alias: `ls`). |
-| `crei secret create` | Create a podman secret; a registry generate policy fills the value automatically, else you enter or generate it (`-a` walks every missing one). |
+| `crei secret create` | Create a podman secret and register it in `registries/secrets.cue` in one step (`--length`/`--charset` record a generate policy, `--manual` a prompted one; `-a` walks every missing one). |
 | `crei start` | Start quadlets' runnable units (containers/pods/kubes; deps start on their own). Idempotent; requires names or `--all`. |
 | `crei stop` | Stop quadlets' runnable units (infra left alone — stopping a shared network cascades to other quadlets; confirm; `-y` skips; names or `--all`). |
 | `crei secret rotate` | Regenerate crei-owned secrets (per their generate policy) and replace them in podman. |

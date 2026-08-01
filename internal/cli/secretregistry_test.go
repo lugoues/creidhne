@@ -71,17 +71,32 @@ func TestEmitSecretRegistry(t *testing.T) {
 	}
 }
 
-// TestCmdSecretAdd registers a generated and a manual secret, then confirms
-// both land in the crei-owned registry and are visible to `secret list`.
-func TestCmdSecretAdd(t *testing.T) {
+// TestCmdSecretCreateRegisters: create records the entry in the crei-owned
+// registry and makes the podman secret in one step; --manual records a manual
+// entry with a prompted value.
+func TestCmdSecretCreateRegisters(t *testing.T) {
 	dir := setupProject(t, testMain) // a quadlet, no hand-authored secrets field
-	stubSecrets(t, nil, nil, nil)
+	created := map[string]string{}
+	stubSecrets(t, nil, func(name string, v []byte, _ bool) error { created[name] = string(v); return nil },
+		func(string) ([]byte, bool, error) { return []byte("typed"), false, nil })
 
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db_password", "--length", "40"); err != nil {
+	out, err := runCmd(t, "--dir", dir, "secret", "create", "db_password", "--length", "40")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "tls_cert", "--manual", "--name", "prod-tls"); err != nil {
+	if len(created["db_password"]) != 40 {
+		t.Fatalf("policy value should be 40 chars, got %d", len(created["db_password"]))
+	}
+	for _, want := range []string{"created (generated 40 chars)", "registered in registries/secrets.cue (generate 40)"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "tls_cert", "--manual", "--name", "prod-tls"); err != nil {
 		t.Fatal(err)
+	}
+	if created["prod-tls"] != "typed" {
+		t.Fatalf("manual value should come from the prompt, got %q", created["prod-tls"])
 	}
 
 	entries, err := eval.LoadSecretRegistry(dir, overlayFor(t, dir))
@@ -91,14 +106,23 @@ func TestCmdSecretAdd(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("want 2 registered secrets, got %+v", entries)
 	}
+	by := map[string]eval.SecretEntry{}
+	for _, e := range entries {
+		by[e.Key] = e
+	}
+	if g := by["db_password"].Generate; g == nil || g.Length != 40 {
+		t.Fatalf("db_password policy wrong: %+v", by["db_password"])
+	}
+	if by["tls_cert"].Name != "prod-tls" || by["tls_cert"].Generate != nil {
+		t.Fatalf("tls_cert entry wrong: %+v", by["tls_cert"])
+	}
 
-	// list reconciles the crei-owned registry against podman: prod-tls is the
-	// podman name of tls_cert, db_password its own key.
-	out, err := runCmd(t, "--dir", dir, "secret", "list")
+	// list sees both under their podman names.
+	out, err = runCmd(t, "--dir", dir, "secret", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"db_password", "prod-tls", "missing"} {
+	for _, want := range []string{"db_password", "prod-tls"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("list missing %q:\n%s", want, out)
 		}
@@ -109,12 +133,13 @@ func TestCmdSecretAdd(t *testing.T) {
 // with --delete also removes the value from podman (confirmed via -y).
 func TestCmdSecretRemove(t *testing.T) {
 	dir := setupProject(t, testMain)
-	stubSecrets(t, map[string]bool{"db_password": true}, nil, nil)
+	stubSecrets(t, map[string]bool{"db_password": true},
+		func(string, []byte, bool) error { return nil }, nil)
 
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db_password"); err != nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "db_password", "--length", "32", "--replace"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "keep_me"); err != nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "keep_me", "--length", "32"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -196,14 +221,18 @@ func TestCmdSecretRotate(t *testing.T) {
 		created[name] = value
 		replaced[name] = replace
 		return nil
-	}, nil)
+	}, func(string) ([]byte, bool, error) { return []byte("typed"), false, nil })
 
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db_password", "--length", "40"); err != nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "db_password", "--length", "40"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "tls_cert", "--manual"); err != nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "tls_cert", "--manual"); err != nil {
 		t.Fatal(err)
 	}
+
+	// The setup creates wrote both; observe only what rotate does from here.
+	clear(created)
+	clear(replaced)
 
 	// Rotate everything (-y): db_password rotates, tls_cert (manual) is skipped.
 	out, err := runCmd(t, "--dir", dir, "secret", "rotate", "-y")
@@ -248,10 +277,10 @@ func TestCmdSecretCreateUsesPolicy(t *testing.T) {
 		return []byte("typed-" + name), false, nil // the interactive valuer
 	})
 
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "gen_pw", "--length", "48", "--charset", "hex"); err != nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "gen_pw", "--length", "48", "--charset", "hex"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "manual_pw", "--manual"); err != nil {
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "manual_pw", "--manual"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,21 +304,35 @@ func TestCmdSecretCreateUsesPolicy(t *testing.T) {
 	}
 }
 
-// TestCmdSecretAddCollision: a duplicate name is refused without --force.
-func TestCmdSecretAddCollision(t *testing.T) {
+// TestCmdSecretCreateForce: policy flags on an already-registered entry need
+// --force; a bare create reuses the recorded policy without prompting.
+func TestCmdSecretCreateForce(t *testing.T) {
 	dir := setupProject(t, testMain)
-	stubSecrets(t, nil, nil, nil)
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db"); err != nil {
+	created := map[string]string{}
+	stubSecrets(t, nil, func(name string, v []byte, _ bool) error { created[name] = string(v); return nil },
+		func(name string) ([]byte, bool, error) {
+			t.Errorf("prompt must not run for %q", name)
+			return nil, false, nil
+		})
+
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "db", "--length", "20"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db"); err == nil {
-		t.Fatal("adding a duplicate should error without --force")
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "db", "--length", "50"); err == nil {
+		t.Fatal("changing the policy without --force must error")
 	}
-	if _, err := runCmd(t, "--dir", dir, "secret", "add", "db", "--force", "--length", "50"); err != nil {
-		t.Fatalf("--force should replace: %v", err)
+	// Bare re-create: recorded policy, no prompt (stub errors if prompted).
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "db", "--replace"); err != nil {
+		t.Fatal(err)
+	}
+	if len(created["db"]) != 20 {
+		t.Fatalf("recorded policy (20) should be used, got %d chars", len(created["db"]))
+	}
+	if _, err := runCmd(t, "--dir", dir, "secret", "create", "db", "--length", "50", "--force", "--replace"); err != nil {
+		t.Fatalf("--force should update the policy: %v", err)
 	}
 	entries, _ := eval.LoadSecretRegistry(dir, overlayFor(t, dir))
 	if len(entries) != 1 || entries[0].Generate == nil || entries[0].Generate.Length != 50 {
-		t.Fatalf("force-replace wrong: %+v", entries)
+		t.Fatalf("force-update wrong: %+v", entries)
 	}
 }

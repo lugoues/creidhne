@@ -46,7 +46,7 @@ func emitSecretRegistry(entries []eval.SecretEntry) ([]byte, error) {
 	w("")
 	w("import %q", eval.ModulePath)
 	w("")
-	w("// Managed by crei (crei secret add/rotate). Declares the podman secrets")
+	w("// Managed by crei (crei secret create/rotate). Declares the podman secrets")
 	w("// crei owns and how to generate them; secret values never live here.")
 	w("secrets: creidhne.#SecretRegistry & {")
 	for _, e := range sorted {
@@ -87,7 +87,7 @@ func emitSecretRegistry(entries []eval.SecretEntry) ([]byte, error) {
 }
 
 // writeSecretRegistry regenerates registries/secrets.cue from entries. It
-// creates the registries/ dir if absent so `secret add` works before an
+// creates the registries/ dir if absent so `secret create` works before an
 // explicit `crei init` scaffolds it.
 func writeSecretRegistry(projectDir string, entries []eval.SecretEntry) error {
 	content, err := emitSecretRegistry(entries)

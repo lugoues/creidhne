@@ -204,7 +204,7 @@ func runInit(out io.Writer, projectDir string) error {
 	}
 
 	// The registries package is crei-owned (managed image pins and secret
-	// metadata). Always scaffold both so 'crei image' and 'crei secret add'
+	// metadata). Always scaffold both so 'crei image' and 'crei secret create'
 	// have a home; existing entries are kept.
 	created, err = writeIfAbsent(filepath.Join(projectDir, "registries", "images.cue"), sampleRegistries)
 	if err != nil {
@@ -476,7 +476,7 @@ const sampleSecretRegistry = `package registries
 
 import "github.com/lugoues/creidhne"
 
-// crei-owned secret registry. 'crei secret add <name>' registers a secret and
+// crei-owned secret registry. 'crei secret create <name>' registers a secret and
 // how to generate it; 'crei secret create' makes the value in podman. Secret
 // material never lives here. Reference an entry from a container, adding
 // consumption details: Secret: [reg.secrets.<name> & {type: "env", target: "X"}]
