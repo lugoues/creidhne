@@ -206,7 +206,7 @@ func newImageUpdateCmd() *cobra.Command {
 			now := time.Now()
 			var items, held []updateItem
 			var warns []string
-			withSpinner(out, "Image updates: fetching versions", func() {
+			withSpinner(out, "Fetching versions", func() {
 				items, held, warns = splitCandidates(entries, only, defAge, now, res)
 			})
 			for _, w := range warns {

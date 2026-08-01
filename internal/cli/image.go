@@ -67,7 +67,11 @@ func newImageOutdatedCmd() *cobra.Command {
 				fmt.Fprintln(out, "No image registry (registries/images.cue).")
 				return nil
 			}
-			rows, available := checkOutdated(entries, defAge, time.Now(), liveResolver())
+			var rows []imageRow
+			available := 0
+			withSpinner(out, "Checking registries", func() {
+				rows, available = checkOutdated(entries, defAge, time.Now(), liveResolver())
+			})
 			printImageRows(out, rows)
 			if available > 0 {
 				return errSilent{}
