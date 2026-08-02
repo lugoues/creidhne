@@ -870,7 +870,9 @@ func mapServiceHealthcheck(m *model, u *unitDef, name string, svc types.ServiceC
 func mapServiceSecrets(m *model, p *types.Project, u *unitDef, name string, svc types.ServiceConfig) {
 	var entries []string
 	for _, s := range svc.Secrets {
-		ref := sel("secrets", m.secretKeys.key(s.Source))
+		// Registry entries are consumed via their #ref handle; the entry
+		// itself is a management record the Secret slot rejects.
+		ref := sel("secrets", m.secretKeys.key(s.Source)) + ".#ref"
 		var opts []string
 		if s.Target != "" && s.Target != s.Source && s.Target != "/run/secrets/"+s.Source {
 			opts = append(opts, "target: "+strconv.Quote(s.Target))

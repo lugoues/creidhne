@@ -51,8 +51,8 @@ forge: creidhne.#Quadlet & {
 						units.networks.default.#self,
 					]
 					Secret: [
-						secrets.db_password,
-						secrets.tls_cert & {target: "/etc/ssl/app.pem", mode: "0400"},
+						secrets.db_password.#ref,
+						secrets.tls_cert.#ref & {target: "/etc/ssl/app.pem", mode: "0400"},
 					]
 				}
 			}
@@ -63,7 +63,7 @@ forge: creidhne.#Quadlet & {
 						units.networks.default.#self,
 					]
 					Secret: [
-						secrets.db_password,
+						secrets.db_password.#ref,
 					]
 				}
 			}
