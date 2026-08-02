@@ -53,6 +53,9 @@ func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, err
 	if err != nil {
 		return nil, err
 	}
+	if err := checkUniqueQuadletNames(quads); err != nil {
+		return nil, err
+	}
 	if err := checkUniqueFilenames(quads); err != nil {
 		return nil, err
 	}
@@ -66,6 +69,22 @@ func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, err
 	}
 	injectBuildHashes(quads)
 	return quads, nil
+}
+
+// checkUniqueQuadletNames rejects two quadlets sharing a Name. Unit filenames
+// and services may not collide (a container-only and a volume-only quadlet
+// coexist file-wise), but state attribution keys on the quadlet name alone, so
+// a duplicate would silently overwrite the other's entry in crei.state and
+// corrupt status, staleness, and targeted rendering.
+func checkUniqueQuadletNames(quads []Quadlet) error {
+	seen := map[string]bool{}
+	for _, q := range quads {
+		if seen[q.Name] {
+			return fmt.Errorf("two quadlets share the name %q; quadlet names must be unique (state and targeting key on them)", q.Name)
+		}
+		seen[q.Name] = true
+	}
+	return nil
 }
 
 // checkUniqueFilenames rejects two units that write the same on-disk filename.

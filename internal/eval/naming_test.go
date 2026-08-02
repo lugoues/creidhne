@@ -285,3 +285,23 @@ func TestIncompleteUnitErrorNamesUnit(t *testing.T) {
 		t.Errorf("blank unit identifier in error: %q", err.Error())
 	}
 }
+
+// TestRejectsDuplicateQuadletNames: two quadlets sharing a Name with
+// non-colliding unit types pass the filename and service checks, but state
+// attribution is keyed by quadlet name, so later entries silently overwrite
+// earlier ones in crei.state. Must be a load error. (REVIEW-1 finding 1)
+func TestRejectsDuplicateQuadletNames(t *testing.T) {
+	err := loadSourceErr(t, `package naming
+
+import q "github.com/lugoues/creidhne@v0"
+
+a: q.#Quadlet & {name: "app", units: #container: Container: Image: "docker.io/x"}
+b: q.#Quadlet & {name: "app", units: #volume: {}}
+`)
+	if err == nil {
+		t.Fatal("duplicate quadlet names must fail to load")
+	}
+	if !strings.Contains(err.Error(), `"app"`) {
+		t.Fatalf("error should name the duplicate: %v", err)
+	}
+}

@@ -380,10 +380,13 @@ app: creidhne.#Quadlet & {
 // TestCmdGraphDuplicateFilename: two units colliding on one filename must error
 // (matching render), not silently misrender.
 func TestCmdGraphDuplicateFilename(t *testing.T) {
+	// Distinct quadlet names (same names are rejected earlier by their own
+	// check) whose stems still collide on one filename: "dup"'s plural
+	// container x and "dup-x"'s primary container both write dup-x.container.
 	dir := setupProject(t, `package config
 import "github.com/lugoues/creidhne@v0"
-a: creidhne.#Quadlet & {name: "dup", units: #container: Container: Image: "docker.io/x"}
-b: creidhne.#Quadlet & {name: "dup", units: #container: Container: Image: "docker.io/y"}
+a: creidhne.#Quadlet & {name: "dup", units: containers: x: Container: Image: "docker.io/x"}
+b: creidhne.#Quadlet & {name: "dup-x", units: #container: Container: Image: "docker.io/y"}
 `)
 	_, err := runCmd(t, "--dir", dir, "graph")
 	if err == nil || !strings.Contains(err.Error(), "duplicate output file") {
