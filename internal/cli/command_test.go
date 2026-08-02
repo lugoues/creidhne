@@ -470,3 +470,18 @@ func TestCmdApplyPermissionHint(t *testing.T) {
 		t.Errorf("permission error should hint at sudo, got: %v", err)
 	}
 }
+
+// TestCmdPlanRejectsInvalidLintConfig: plan must surface a [lint] config
+// validation error, not swallow it — a misspelled rule name would otherwise
+// silently leave the intended rule at its default severity. (REVIEW-1 finding 6)
+func TestCmdPlanRejectsInvalidLintConfig(t *testing.T) {
+	dir := setupProject(t, testMain)
+	qd := t.TempDir()
+	mustWrite(t, filepath.Join(dir, ".crei", "config.toml"),
+		"[lint]\n\"graph/pair-cardinalty\" = \"off\"\n")
+
+	_, err := runCmd(t, "--dir", dir, "--quadlet-dir", qd, "plan")
+	if err == nil || !strings.Contains(err.Error(), "unknown rule") {
+		t.Fatalf("plan must fail on the invalid [lint] config, got %v", err)
+	}
+}

@@ -90,14 +90,18 @@ func newPlanCmd() *cobra.Command {
 			}
 			// Named-rule findings, advisory here (validate enforces errors).
 			// Image rules are skipped: plan is about file changes, and the
-			// registry findings would repeat on every plan.
-			if levels, err := newLintLevels(cfg.Lint); err == nil {
-				rules := levels.apply(graphRuleFindings(quads))
-				sortFindings(rules)
-				if len(rules) > 0 {
-					fmt.Fprintln(out)
-					printRuleFindings(out, rules)
-				}
+			// registry findings would repeat on every plan. An invalid [lint]
+			// config is still a hard error: swallowing it would silently
+			// leave a misspelled rule at its default severity.
+			levels, err := newLintLevels(cfg.Lint)
+			if err != nil {
+				return err
+			}
+			rules := levels.apply(graphRuleFindings(quads))
+			sortFindings(rules)
+			if len(rules) > 0 {
+				fmt.Fprintln(out)
+				printRuleFindings(out, rules)
 			}
 			s := reconcile.Summarize(changes)
 			printSummary(out, s, "to add", "to update", "to remove")
