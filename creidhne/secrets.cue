@@ -38,11 +38,21 @@ package creidhne
 //
 // An entry may also carry a `generate` policy, which crei owns and writes into
 // registries/secrets.cue; it tells `crei secret create`/`rotate` how to make
-// the value and is ignored when the entry is consumed by a container:
+// the value:
 //   secrets: creidhne.#SecretRegistry & {
 //       db_password: generate: {length: 40}
 //   }
+//
+// Consume an entry through its #ref handle (like the image and asset
+// registries), adding the consumption fields there:
+//   Container: Secret: [secrets.db_password.#ref & {type: "env", target: "DB"}]
+//
+// #ref carries only the podman name. A metadata-free entry can still be
+// unified directly (the pre-registry pattern), but an entry with `generate`
+// set cannot: #SecretRef is closed and rejects the management field, so the
+// handle is the form that always works.
 #SecretRegistry: [Key=string]: #SecretName & {
 	name: *Key | string
 	generate?: #SecretGenerate
+	#ref:      #SecretName & {"name": name}
 }

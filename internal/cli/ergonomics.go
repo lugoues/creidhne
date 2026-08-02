@@ -479,7 +479,7 @@ import "github.com/lugoues/creidhne"
 // crei-owned secret registry. 'crei secret create <name>' registers a secret and
 // how to generate it; 'crei secret create' makes the value in podman. Secret
 // material never lives here. Reference an entry from a container, adding
-// consumption details: Secret: [reg.secrets.<name> & {type: "env", target: "X"}]
+// consumption details: Secret: [reg.secrets.<name>.#ref & {type: "env", target: "X"}]
 secrets: creidhne.#SecretRegistry & {
 }
 `

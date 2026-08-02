@@ -23,6 +23,7 @@ images: creidhne.#ImageRegistry & {
 secrets: creidhne.#SecretRegistry & {
 	db_password: _
 	tls: {name: "tls-cert"}
+	session: generate: {length: 32}
 }
 
 assets: creidhne.#AssetRegistry & {
@@ -44,8 +45,13 @@ test: testing.#Test & {
 				Image:         images.app.#ref
 				ContainerName: "app"
 				Secret: [
+					// Direct unification: the pre-registry pattern, valid for
+					// metadata-free entries.
 					secrets.db_password & {type: "env", target: "DB_PASSWORD"},
 					secrets.tls & {type: "mount", target: "/etc/ssl/cert.pem", mode: "0400"},
+					// The #ref handle: the form that also works when the entry
+					// carries management metadata (generate).
+					secrets.session.#ref & {type: "env", target: "SESSION_KEY"},
 				]
 			}
 			containers: tracker: Container: Image: images.tracker.#ref

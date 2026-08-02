@@ -306,7 +306,12 @@ crei can also own the registry for you. `crei secret create <name>` registers
 the secret in `registries/secrets.cue` (the crei-owned counterpart to
 `registries/images.cue`) and creates its value in podman, one step — podman's
 own vocabulary, one verb. Secret material never lives in CUE. Reference a
-crei-owned entry the same way, through the `registries` import:
+crei-owned entry through its `#ref` handle (like the image and asset
+registries), adding the consumption fields there:
+
+```cue
+Container: Secret: [reg.secrets.db_password.#ref & {type: "env", target: "DB_PASSWORD"}]
+```
 
 ```sh
 crei secret create db_password --length 40  # record a generate policy + create
