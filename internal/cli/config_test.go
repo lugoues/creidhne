@@ -351,3 +351,37 @@ func tomlTags(typ reflect.Type) []string {
 	}
 	return out
 }
+
+// TestConfigStatErrorNotSilent: a stat failure that is not "does not exist"
+// (here: .crei is a file, so the path errors with ENOTDIR) must be a hard
+// error, not silently treated as config-absent. (REVIEW-1 finding 2)
+func TestConfigStatErrorNotSilent(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
+	flagQuadletDir, flagDiffTool = "", ""
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".crei"), []byte("not a dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flagProjectDir = dir
+	if _, err := resolveConfig(); err == nil {
+		t.Fatal("a blocked config path must error, not silently use defaults")
+	}
+}
+
+// TestConfigUnknownKeyRejected: an unknown top-level key (quadlet_dr) must be
+// a hard error; silently ignoring it routes apply at the default directory,
+// exactly what the malformed-config guard exists to prevent. (REVIEW-1 finding 2)
+func TestConfigUnknownKeyRejected(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
+	flagQuadletDir, flagDiffTool = "", ""
+	dir := t.TempDir()
+	writeConfig(t, dir, "quadlet_dr = \"/srv/typo\"\n")
+	flagProjectDir = dir
+	_, err := resolveConfig()
+	if err == nil {
+		t.Fatal("an unknown config key must error")
+	}
+	if !strings.Contains(err.Error(), "quadlet_dr") {
+		t.Fatalf("error should name the unknown key: %v", err)
+	}
+}

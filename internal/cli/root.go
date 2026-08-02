@@ -465,10 +465,27 @@ func loadConfigFile(projectDir string) (fileConfig, string, error) {
 	var fc fileConfig
 	path := filepath.Join(projectDir, filepath.FromSlash(configRelPath))
 	if _, err := os.Stat(path); err != nil {
-		return fc, "", nil
+		// Only a genuinely absent file means "no config". Permission errors,
+		// I/O errors, or a file blocking the .crei path segment (ENOTDIR)
+		// must surface: silently falling back to defaults would route apply
+		// at the default quadlet directory.
+		if errors.Is(err, fs.ErrNotExist) {
+			return fc, "", nil
+		}
+		return fc, path, fmt.Errorf("read %s: %w", path, err)
 	}
-	if _, err := toml.DecodeFile(path, &fc); err != nil {
+	md, err := toml.DecodeFile(path, &fc)
+	if err != nil {
 		return fc, path, fmt.Errorf("parse %s: %w", path, err)
+	}
+	// Unknown keys are the typo case the malformed-config guard exists for:
+	// quadlet_dr silently ignored means apply runs at the default directory.
+	if undecoded := md.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, len(undecoded))
+		for i, k := range undecoded {
+			keys[i] = k.String()
+		}
+		return fc, path, fmt.Errorf("unknown key(s) in %s: %s", path, strings.Join(keys, ", "))
 	}
 	return fc, path, nil
 }
