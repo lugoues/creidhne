@@ -137,3 +137,51 @@ func TestVendorRefusesModuleMismatch(t *testing.T) {
 		t.Fatalf("expected module mismatch error, got: %v", err)
 	}
 }
+
+// TestVendorRejectsTraversalModule: a module argument like ../../victim,
+// paired with a repo declaring that same string, must be rejected before the
+// unconditional RemoveAll under cue.mod/usr can reach outside it and destroy
+// (then squat) an arbitrary project path. (REVIEW-1 finding 3)
+func TestVendorRejectsTraversalModule(t *testing.T) {
+	repo := gitModuleRepo(t, "../../victim", map[string]string{
+		"payload.cue": "package victim\n\nx: 1\n",
+	})
+	proj := setupProject(t, testMain)
+	sentinel := filepath.Join(proj, "victim", "keep.txt")
+	mustWrite(t, sentinel, "precious")
+
+	_, err := runCmd(t, "--dir", proj, "vendor", "../../victim", "--source", repo)
+	if err == nil {
+		t.Fatal("a traversal module path must be rejected")
+	}
+	if _, statErr := os.Stat(sentinel); statErr != nil {
+		t.Fatalf("the traversal destroyed data outside cue.mod/usr: %v", statErr)
+	}
+}
+
+// TestVendorRejectsSymlinkedDest: a symlinked component under cue.mod/usr
+// must not redirect the wholesale RemoveAll+install outside it.
+func TestVendorRejectsSymlinkedDest(t *testing.T) {
+	repo := gitModuleRepo(t, "example.com/helpers", map[string]string{
+		"payload.cue": "package helpers\n\nx: 1\n",
+	})
+	proj := setupProject(t, testMain)
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	sentinel := filepath.Join(outside, "helpers", "keep.txt")
+	mustWrite(t, sentinel, "precious")
+	usr := filepath.Join(proj, "cue.mod", "usr")
+	if err := os.MkdirAll(usr, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(usr, "example.com")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runCmd(t, "--dir", proj, "vendor", "example.com/helpers", "--source", repo)
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("want a symlink refusal, got %v", err)
+	}
+	if _, statErr := os.Stat(sentinel); statErr != nil {
+		t.Fatalf("install went through the symlink: %v", statErr)
+	}
+}

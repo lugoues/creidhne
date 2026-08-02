@@ -114,9 +114,53 @@ func splitModuleRef(arg string) (module, ref string) {
 	return arg, ""
 }
 
+// modulePathRe is the shape of a canonical CUE module path: a dotted,
+// domain-like first segment followed by plain path segments. Anything that
+// doesn't match (absolute paths, "..", empty or dot segments, backslashes)
+// is rejected before it can ever become a filesystem path.
+var modulePathRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(/[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?)*$`)
+
+// validateModulePath rejects module arguments that are not canonical
+// domain-shaped CUE module paths, so they cannot traverse outside
+// cue.mod/usr when joined into the install destination.
+func validateModulePath(module string) error {
+	if !modulePathRe.MatchString(module) {
+		return fmt.Errorf("invalid module path %q: must be a domain-shaped CUE module path like example.com/helpers", module)
+	}
+	return nil
+}
+
+// ensureUnder verifies that dest resolves beneath root and that no
+// already-existing path component between them is a symlink, so RemoveAll
+// and the install writes cannot be redirected outside root.
+func ensureUnder(root, dest string) error {
+	rel, err := filepath.Rel(root, dest)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("destination %s escapes %s", dest, root)
+	}
+	at := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		at = filepath.Join(at, part)
+		info, err := os.Lstat(at)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // nothing beyond this point exists yet
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%s is a symlink; refusing to install through it", at)
+		}
+	}
+	return nil
+}
+
 // vendorModule fetches module at ref from source (or the module's own https
 // URL), validates it, and installs it under cue.mod/usr. Returns the pin.
 func vendorModule(out io.Writer, cueMod, module, ref, source string) (*vendorPin, error) {
+	if err := validateModulePath(module); err != nil {
+		return nil, err
+	}
 	if _, err := exec.LookPath("git"); err != nil {
 		return nil, errors.New("crei vendor needs git on PATH")
 	}
@@ -163,7 +207,11 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string) (*vendorPin
 	}
 
 	// Install: replace the module's tree under cue.mod/usr wholesale.
-	dest := filepath.Join(cueMod, "usr", filepath.FromSlash(module))
+	usr := filepath.Join(cueMod, "usr")
+	dest := filepath.Join(usr, filepath.FromSlash(module))
+	if err := ensureUnder(usr, dest); err != nil {
+		return nil, err
+	}
 	if err := os.RemoveAll(dest); err != nil {
 		return nil, err
 	}
