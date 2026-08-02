@@ -88,15 +88,15 @@ traefik: creidhne.#Quadlet & {
 				ContainerName: "traefik"
 
 				Secret: [
-					secrets.porkbun_api_key & {
+					secrets.porkbun_api_key.#ref & {
 						type:   "env"
 						target: "PORKBUN_API_KEY"
 					},
-					secrets.porkbun_secret_api_key & {
+					secrets.porkbun_secret_api_key.#ref & {
 						type:   "env"
 						target: "PORKBUN_SECRET_API_KEY"
 					},
-					secrets.traefik_otel_auth & {
+					secrets.traefik_otel_auth.#ref & {
 						type:   "env"
 						target: "OTEL_AUTH"
 					},

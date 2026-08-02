@@ -45,12 +45,10 @@ test: testing.#Test & {
 				Image:         images.app.#ref
 				ContainerName: "app"
 				Secret: [
-					// Direct unification: the pre-registry pattern, valid for
-					// metadata-free entries.
-					secrets.db_password & {type: "env", target: "DB_PASSWORD"},
-					secrets.tls & {type: "mount", target: "/etc/ssl/cert.pem", mode: "0400"},
-					// The #ref handle: the form that also works when the entry
-					// carries management metadata (generate).
+					// Registry entries are consumed only via their #ref handle;
+					// the entry itself is a management record #SecretRef rejects.
+					secrets.db_password.#ref & {type: "env", target: "DB_PASSWORD"},
+					secrets.tls.#ref & {type: "mount", target: "/etc/ssl/cert.pem", mode: "0400"},
 					secrets.session.#ref & {type: "env", target: "SESSION_KEY"},
 				]
 			}

@@ -280,7 +280,7 @@ Well-known systemd targets (default, multi-user, network-online, graphical, ...)
 
 ### Secrets
 
-Declare the podman secrets your quadlets use in a `#SecretRegistry`, then reference them in a container's `Secret` field, adding the consumption details (the registry entry and the consumption fields unify into one secret reference):
+Declare the podman secrets your quadlets use in a `#SecretRegistry`, then reference each entry's `#ref` handle in a container's `Secret` field, adding the consumption details (the handle and the consumption fields unify into one secret reference; the entry itself is a management record and cannot be used directly):
 
 ```cue
 secrets: creidhne.#SecretRegistry & {
@@ -294,8 +294,8 @@ app: creidhne.#Quadlet & {
         Container: {
             Image: "docker.io/myapp:latest"
             Secret: [
-                secrets.db_password & {type: "env", target: "DB_PASSWORD"},
-                secrets.tls_cert & {type: "mount", target: "/etc/ssl/cert.pem", mode: "0400"},
+                secrets.db_password.#ref & {type: "env", target: "DB_PASSWORD"},
+                secrets.tls_cert.#ref & {type: "mount", target: "/etc/ssl/cert.pem", mode: "0400"},
             ]
         }
     }

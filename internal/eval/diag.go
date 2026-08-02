@@ -163,7 +163,10 @@ func diagnose(root cue.Value, dir string, err error) ([]finding, bool) {
 			rewrote = true
 		} else if collapsed[key] {
 			f.msg = "matches no accepted form here: " + f.msg
-			if structInRefSlot(strings.Split(key, "."), msgOf(e)) {
+			switch {
+			case secretEntryInSlot(groups, key):
+				f.msg += ` (a #SecretRegistry entry is consumed via its handle: secrets.<name>.#ref & {type: ...})`
+			case structInRefSlot(strings.Split(key, "."), msgOf(e)):
 				f.msg += ` (a struct here is built from the unit's ".#self" handle)`
 			}
 			rewrote = true
@@ -185,6 +188,26 @@ func structInRefSlot(segs []string, msg string) bool {
 		return false
 	}
 	return refSlots[segs[len(segs)-2]] && strings.Contains(msg, "conflicting values {")
+}
+
+// secretEntryInSlot recognizes a #SecretRegistry management record rejected by
+// a consumption slot: the schema stamps registryEntry on every entry precisely
+// so #SecretRef refuses it, and that marker surfacing anywhere in the failed
+// element's error groups (the rejection lands in a child group, e.g.
+// Secret.0.registryEntry, collapsed under the element) is the tell. The fix is
+// always the same — consume the entry's .#ref handle — so the hint is specific.
+func secretEntryInSlot(groups map[string][]errors.Error, anchor string) bool {
+	for key, arms := range groups {
+		if key != anchor && !strings.HasPrefix(key, anchor+".") {
+			continue
+		}
+		for _, e := range arms {
+			if strings.Contains(e.Error(), "registryEntry") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // anchorOf is the path up to and including its first list index: the

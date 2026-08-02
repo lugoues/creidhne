@@ -47,12 +47,16 @@ package creidhne
 // registries), adding the consumption fields there:
 //   Container: Secret: [secrets.db_password.#ref & {type: "env", target: "DB"}]
 //
-// #ref carries only the podman name. A metadata-free entry can still be
-// unified directly (the pre-registry pattern), but an entry with `generate`
-// set cannot: #SecretRef is closed and rejects the management field, so the
-// handle is the form that always works.
+// #ref carries only the podman name and is the ONLY consumable form: the
+// entry itself is a management record (registryEntry marks it), and #SecretRef
+// rejects it, so unifying an entry directly into a Secret list is an error,
+// uniformly, instead of working for some entry shapes and not others. Pass
+// #ref to mixin inputs typed #SecretName for the same reason.
 #SecretRegistry: [Key=string]: #SecretName & {
 	name: *Key | string
 	generate?: #SecretGenerate
-	#ref:      #SecretName & {"name": name}
+	// registryEntry marks the management record; #SecretRef rejects it, which
+	// is what forces consumption through #ref.
+	registryEntry: true
+	#ref:          #SecretName & {"name": name}
 }

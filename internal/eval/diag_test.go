@@ -240,3 +240,28 @@ func TestDiagStructDumpStaysTrimmed(t *testing.T) {
 		t.Fatalf("error should be concise, got %d bytes:\n%s", len(err.Error()), err)
 	}
 }
+
+// TestDiagSecretEntryHint: unifying a #SecretRegistry entry directly into a
+// Secret slot is rejected (the registryEntry marker), and the finding points
+// at the .#ref handle instead of the generic .#self hint.
+func TestDiagSecretEntryHint(t *testing.T) {
+	err := loadSourceErr(t, `package naming
+
+import q "github.com/lugoues/creidhne@v0"
+
+secrets: q.#SecretRegistry & {db: _}
+app: q.#Quadlet & {
+	name: "app"
+	units: #container: Container: {
+		Image:  "docker.io/x"
+		Secret: [secrets.db & {type: "env", target: "T"}]
+	}
+}
+`)
+	if err == nil {
+		t.Fatal("direct entry consumption must fail")
+	}
+	if !strings.Contains(err.Error(), ".#ref") {
+		t.Fatalf("finding should point at the .#ref handle:\n%v", err)
+	}
+}
