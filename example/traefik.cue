@@ -198,7 +198,7 @@ traefik: creidhne.#Quadlet & {
 			}
 
 			Pod: {
-				PodName: "traefik"
+				PodName: "traefik-pod"
 				UserNS:  "auto"
 				Network: [
 					units.networks.internal.#self,
