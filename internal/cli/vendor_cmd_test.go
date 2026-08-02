@@ -185,3 +185,28 @@ func TestVendorRejectsSymlinkedDest(t *testing.T) {
 		t.Fatalf("install went through the symlink: %v", statErr)
 	}
 }
+
+// TestVendorRejectsSymlinkedUsrRoot: the containment root itself
+// (cue.mod/usr) being a symlink must be rejected too — Rel-based containment
+// is lexical and passes, but RemoveAll/install would land wherever the link
+// points. (Sol re-review of finding 3)
+func TestVendorRejectsSymlinkedUsrRoot(t *testing.T) {
+	repo := gitModuleRepo(t, "example.com/helpers", map[string]string{
+		"payload.cue": "package helpers\n\nx: 1\n",
+	})
+	proj := setupProject(t, testMain)
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	sentinel := filepath.Join(outside, "example.com", "helpers", "keep.txt")
+	mustWrite(t, sentinel, "precious")
+	if err := os.Symlink(outside, filepath.Join(proj, "cue.mod", "usr")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runCmd(t, "--dir", proj, "vendor", "example.com/helpers", "--source", repo)
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("want a symlink refusal for the usr root, got %v", err)
+	}
+	if _, statErr := os.Stat(sentinel); statErr != nil {
+		t.Fatalf("install went through the symlinked usr root: %v", statErr)
+	}
+}

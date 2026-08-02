@@ -138,6 +138,11 @@ func ensureUnder(root, dest string) error {
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("destination %s escapes %s", dest, root)
 	}
+	// The containment root itself must not be a symlink either: Rel is purely
+	// lexical, so a linked root would relocate everything below it.
+	if info, err := os.Lstat(root); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s is a symlink; refusing to install through it", root)
+	}
 	at := root
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
 		at = filepath.Join(at, part)
