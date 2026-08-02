@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -154,4 +156,22 @@ func stubJobsClear(t *testing.T) {
 		return map[string]systemd.UnitStatus{}, nil
 	}
 	restartSleep = func(time.Duration) {}
+}
+
+// TestRestartPlainLeavesOnly: a plain named restart targets runnable leaves
+// like start/stop — the volume oneshot stays out of the transaction (--stale
+// keeps its own curated set, covered by TestRestartStale).
+func TestRestartPlainLeavesOnly(t *testing.T) {
+	proj, qd, recDir := staleFixture(t)
+	out, err := runCmd(t, "--dir", proj, "--quadlet-dir", qd, "restart", "app", "-y")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	args, err := os.ReadFile(filepath.Join(recDir, "restart.args"))
+	if err != nil {
+		t.Fatalf("systemctl restart never invoked: %v", err)
+	}
+	if !strings.Contains(string(args), "app.service") || strings.Contains(string(args), "volume") {
+		t.Fatalf("plain restart must target only the leaf, got %s", args)
+	}
 }

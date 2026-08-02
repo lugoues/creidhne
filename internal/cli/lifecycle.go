@@ -418,8 +418,12 @@ func newRestartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "restart [quadlet...]",
 		Short: "Restart quadlet units via systemctl (--stale: only units running outdated config)",
-		Long: "restart restarts the named quadlets' units via systemctl, in the scope\n" +
-			"the quadlet directory implies (user when under $HOME, system otherwise).\n\n" +
+		Long: "restart restarts the named quadlets' runnable units (containers, pods,\n" +
+			"kubes) via systemctl, in the scope the quadlet directory implies (user\n" +
+			"when under $HOME, system otherwise). Volume/network/build units are\n" +
+			"left alone, like start/stop: their oneshots are pulled in by the\n" +
+			"units' own dependencies, and restarting a shared network would\n" +
+			"cascade its stop to attachers in other quadlets.\n\n" +
 			"--stale restricts the set to units whose running process predates the\n" +
 			"last applied config change (what status flags as stale), making the\n" +
 			"applied changes take effect. Stale units whose change a restart cannot\n" +
@@ -441,6 +445,15 @@ func newRestartCmd() *cobra.Command {
 			rows, pending, err := lifecycleRows(out, cfg, args, staleOnly, true)
 			if err != nil {
 				return err
+			}
+			// Plain restart targets the runnable leaves, like start/stop:
+			// restarting a shared network's oneshot cascades its stop to
+			// attachers in other quadlets, and restarting a .build re-runs the
+			// build. --stale keeps its own curated set: unrestartable
+			// volumes/networks are already skipped with warnings, and a stale
+			// build in the transaction is the rebuild path.
+			if !staleOnly {
+				rows = runnableRows(rows)
 			}
 			if len(rows) == 0 {
 				fmt.Fprintln(out, "Nothing to restart.")
