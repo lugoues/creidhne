@@ -146,3 +146,30 @@ func TestAssetEditMovesBuildHash(t *testing.T) {
 		t.Fatalf("an asset edit must move the build hash: %q vs %q", h1, h2)
 	}
 }
+
+// TestAssetGlobRejectsSymlinkEscape: doublestar follows symlinks, so a
+// directory symlink inside the project must not smuggle outside files past
+// the lexical ".." check into the build context. (REVIEW-1 finding 5)
+func TestAssetGlobRejectsSymlinkEscape(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.json"), []byte(`{"leak":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := assetProject(t, map[string]string{"assets/real.json": "{}"})
+	if err := os.Symlink(outside, filepath.Join(dir, "assets", "leak")); err != nil {
+		t.Fatal(err)
+	}
+
+	u := assetBuild("x", "assets/**/*.json")
+	err := expandAssetContexts(dir, []Quadlet{{Name: "app", Units: []UnitRecord{u}}})
+	if err == nil {
+		ctx := u.Data["Context"].(map[string]any)
+		if _, leaked := ctx["x/leak/secret.json"]; leaked {
+			t.Fatal("symlink escape read a file outside the project into the context")
+		}
+		t.Fatal("want an error for a glob resolving outside the project")
+	}
+	if !strings.Contains(err.Error(), "outside the project") {
+		t.Fatalf("error %q should say the asset resolves outside the project", err)
+	}
+}

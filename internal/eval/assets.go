@@ -102,9 +102,25 @@ func resolveAssetGlob(dir, glob string) ([]assetFile, error) {
 	// root the destination paths are made relative to.
 	base, _ := doublestar.SplitPattern(glob)
 
+	// The lexical ".." check above cannot see symlinks, and both the glob and
+	// the reads below follow them. Resolve every match and require it to stay
+	// beneath the resolved project root, or a symlink inside the project would
+	// smuggle outside files into the build context.
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve project dir: %w", err)
+	}
+
 	out := make([]assetFile, 0, len(matches))
 	for _, m := range matches {
 		full := filepath.Join(dir, filepath.FromSlash(m))
+		resolved, err := filepath.EvalSymlinks(full)
+		if err != nil {
+			return nil, fmt.Errorf("asset %q: %w", m, err)
+		}
+		if rel, relErr := filepath.Rel(root, resolved); relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("asset %q resolves to %s, outside the project", m, resolved)
+		}
 		info, err := os.Stat(full)
 		if err != nil {
 			return nil, fmt.Errorf("asset %q: %w", m, err)
