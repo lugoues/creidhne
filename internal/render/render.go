@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"text/template"
 
 	"github.com/lugoues/creidhne/internal/eval"
@@ -182,6 +183,7 @@ func addBuildArtifacts(files map[string]FileContent, owners map[string]string, o
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+	ctxDir := path.Join("images", u.Stem+".context")
 	for _, p := range keys {
 		content, mode, err := contextEntry(p, ctx[p])
 		if err != nil {
@@ -191,9 +193,15 @@ func addBuildArtifacts(files map[string]FileContent, owners map[string]string, o
 		// redundant slashes (e.g. "/home/x") yields the same canonical relative
 		// path the filesystem stores it at. Without this the desired-set key
 		// ("images/<stem>.context//home/x", double slash) never matches the
-		// cleaned on-disk path, and every apply oscillates add<->remove. An
-		// escaping key (..) still fails the ensureLocal check inside add.
-		if err := add(path.Join("images", u.Stem+".context", p), FileContent{Content: []byte(content), Mode: mode}); err != nil {
+		// cleaned on-disk path, and every apply oscillates add<->remove.
+		joined := path.Join(ctxDir, p)
+		// The cleaned path must stay below the context dir: a key like
+		// "../../rogue.container" cleans to a quadlet-root path that
+		// ensureLocal alone would accept, injecting a raw managed unit file.
+		if !strings.HasPrefix(joined, ctxDir+"/") {
+			return fmt.Errorf("context entry %q escapes %s/", p, ctxDir)
+		}
+		if err := add(joined, FileContent{Content: []byte(content), Mode: mode}); err != nil {
 			return err
 		}
 	}

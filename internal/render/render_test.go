@@ -212,3 +212,28 @@ func TestBuildFileSetRejectsTraversal(t *testing.T) {
 		t.Error("BuildFileSet accepted a traversal build-context key, want error")
 	}
 }
+
+// TestBuildContextKeyMustStayInContextDir: a context key that escapes
+// images/<stem>.context/ but lands inside the quadlet root (e.g.
+// ../../rogue.container) must be rejected — it would inject a raw managed
+// unit file, bypassing the typed schema. (REVIEW-1 finding 4)
+func TestBuildContextKeyMustStayInContextDir(t *testing.T) {
+	r := newTestRenderer(t)
+	bu := eval.UnitRecord{
+		Kind: "build", Stem: "b", Filename: "b.build",
+		Data: map[string]any{
+			"ContainerFile": "FROM scratch\n",
+			"Context":       map[string]any{"../../rogue.container": "[Container]\nImage=evil\n"},
+		},
+	}
+	files, err := r.BuildFileSet([]eval.Quadlet{{Name: "b", Units: []eval.UnitRecord{bu}}})
+	if err == nil {
+		if _, ok := files["rogue.container"]; ok {
+			t.Fatal("context key escaped its context dir into a top-level rogue.container")
+		}
+		t.Fatal("expected an error for a context key escaping images/<stem>.context/")
+	}
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("error %q should mention the escaped context dir", err)
+	}
+}
