@@ -121,11 +121,13 @@ func resolveAssetGlob(dir, glob string) ([]assetFile, error) {
 		if rel, relErr := filepath.Rel(root, resolved); relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return nil, fmt.Errorf("asset %q resolves to %s, outside the project", m, resolved)
 		}
-		info, err := os.Stat(full)
+		// Stat and read the resolved path, so the bytes shipped are the bytes
+		// the containment check validated.
+		info, err := os.Stat(resolved)
 		if err != nil {
 			return nil, fmt.Errorf("asset %q: %w", m, err)
 		}
-		content, err := os.ReadFile(full)
+		content, err := os.ReadFile(resolved)
 		if err != nil {
 			return nil, fmt.Errorf("asset %q: %w", m, err)
 		}
