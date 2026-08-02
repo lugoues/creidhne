@@ -1,0 +1,11 @@
+
+[Container]
+Image=ghcr.io/acme/app:2.3.0@sha256:6339c0ffee00000000000000000000000000000000000000000000000000beef
+ContainerName=app
+LogDriver=journald
+LogOpt=label=QUADLET=app
+LogOpt=label=QUADLET_UNIT_NAME=app
+LogOpt=label=IMAGE=ghcr.io/acme/app:2.3.0
+LogOpt=label=IMAGE_DIGEST=sha256:6339c0ffee00000000000000000000000000000000000000000000000000beef
+Secret=db_password,type=env,target=DB_PASSWORD
+Secret=tls-cert,type=mount,target=/etc/ssl/cert.pem,mode=0400

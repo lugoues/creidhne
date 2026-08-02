@@ -1,0 +1,6 @@
+
+[Build]
+ImageTag=quadlets.localhost/app:latest
+SetWorkingDirectory=images/app.context
+File=images/app.Containerfile
+Annotation=creidhne.build-hash=7f4ee192a62f

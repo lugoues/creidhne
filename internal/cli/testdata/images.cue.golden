@@ -1,0 +1,21 @@
+package registries
+
+import "github.com/lugoues/creidhne"
+
+// Managed by crei (crei image pin). Each entry's image is the tracked
+// channel (edit it here); crei image pin writes the digest.
+images: creidhne.#ImageRegistry & {
+	app: {image: "ghcr.io/acme/app:2.3.0", digest: "sha256:6339c0ffee"}
+	cautious: {image: "ghcr.io/acme/slow:1.0.0", digest: "sha256:aa11", minAge: "7d"}
+	held: {
+		image:  "docker.io/library/traefik:v3.6"
+		digest: "sha256:cc33"
+		lock: {
+			reason: "3.6 breaks websocket upgrades"
+			since:  "2026-07-24"
+		}
+	}
+	ranged: {image: "docker.io/x/z:8.25.0", digest: "sha256:bb22", range: "~8.25"}
+	tracker: image:     "docker.io/library/redis:7.2"
+	"weird-key": image: "docker.io/x/w:1"
+}
