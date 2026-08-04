@@ -309,7 +309,9 @@ func checkImports(module string, files map[string][]byte, vendored map[string]ve
 	for _, rel := range sortedKeys(files) {
 		for _, imp := range cueImports(files[rel]) {
 			first, _, _ := strings.Cut(imp, "/")
-			base, _, _ := strings.Cut(imp, "@")
+			// An import is path[@version][:package]; matching is on the path.
+			pathOnly, _, _ := strings.Cut(imp, ":")
+			base, _, _ := strings.Cut(pathOnly, "@")
 			switch {
 			case !strings.Contains(first, "."): // stdlib (list, strings, encoding/json, ...)
 			case base == "github.com/lugoues/creidhne" || strings.HasPrefix(base, "github.com/lugoues/creidhne/"):

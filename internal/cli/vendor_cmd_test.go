@@ -225,6 +225,13 @@ func TestVendorAllowsVendoredDependency(t *testing.T) {
 import "example.com/base@v0"
 
 x: base.Answer
+`,
+		// The package-qualified form (path:package) must match the lock too.
+		"qualified.cue": `package stacks
+
+import b "example.com/base:base"
+
+y: b.Answer
 `})
 	proj := setupProject(t, "package quadlets\n")
 
