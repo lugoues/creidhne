@@ -128,3 +128,7 @@ harmless normalization. Punt v1: template units, drop-ins, kube, external
 - Upstream podman docs PR: `podman-network-create.1.md` documents only
   the bool form of `isolate`; `strict` (netavark >= 1.7, default in 2.0)
   is invisible outside netavark release notes.
+- Transitive vendoring: `crei vendor` now allows imports of already-vendored
+  modules but never fetches them; a future enhancement could read the fetched
+  repo's declared deps (cue.mod/module.cue) and vendor them automatically.
+  Deferred: it makes crei pick versions (mini package manager).
