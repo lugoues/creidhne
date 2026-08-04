@@ -121,8 +121,8 @@ x: else.Thing
 `})
 	proj := setupProject(t, "package quadlets\n")
 	_, err := runCmd(t, "--dir", proj, "vendor", helperModule, "--source", repo)
-	if err == nil || !strings.Contains(err.Error(), "transitive module dependencies") {
-		t.Fatalf("expected transitive-import refusal, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "vendored first") {
+		t.Fatalf("expected unvendored-import refusal, got: %v", err)
 	}
 	if _, statErr := os.Stat(filepath.Join(proj, "cue.mod", "usr", "example.com")); !os.IsNotExist(statErr) {
 		t.Fatal("nothing should have been installed on refusal")
@@ -208,5 +208,45 @@ func TestVendorRejectsSymlinkedUsrRoot(t *testing.T) {
 	}
 	if _, statErr := os.Stat(sentinel); statErr != nil {
 		t.Fatalf("install went through the symlinked usr root: %v", statErr)
+	}
+}
+
+// TestVendorAllowsVendoredDependency: a module may import another module once
+// that module is vendored in the project (present in the lock). Order is
+// explicit: the dependent is refused with a hint until its dependency is
+// vendored; crei never fetches transitively.
+func TestVendorAllowsVendoredDependency(t *testing.T) {
+	depRepo := gitModuleRepo(t, "example.com/base", map[string]string{
+		"base.cue": "package base\n\nAnswer: 42\n",
+	})
+	appRepo := gitModuleRepo(t, "example.com/stacks", map[string]string{
+		"stack.cue": `package stacks
+
+import "example.com/base@v0"
+
+x: base.Answer
+`})
+	proj := setupProject(t, "package quadlets\n")
+
+	// Dependent first: refused, naming the missing dependency.
+	_, err := runCmd(t, "--dir", proj, "vendor", "example.com/stacks", "--source", appRepo)
+	if err == nil || !strings.Contains(err.Error(), "vendored first") || !strings.Contains(err.Error(), "example.com/base") {
+		t.Fatalf("want a vendored-first refusal naming example.com/base, got: %v", err)
+	}
+
+	// Dependency, then dependent: both succeed.
+	if _, err := runCmd(t, "--dir", proj, "vendor", "example.com/base", "--source", depRepo); err != nil {
+		t.Fatalf("vendor dependency: %v", err)
+	}
+	if _, err := runCmd(t, "--dir", proj, "vendor", "example.com/stacks", "--source", appRepo); err != nil {
+		t.Fatalf("vendor dependent after its dependency: %v", err)
+	}
+	for _, p := range []string{
+		filepath.Join("usr", "example.com", "base", "base.cue"),
+		filepath.Join("usr", "example.com", "stacks", "stack.cue"),
+	} {
+		if _, err := os.Stat(filepath.Join(proj, "cue.mod", p)); err != nil {
+			t.Fatalf("expected vendored file %s: %v", p, err)
+		}
 	}
 }

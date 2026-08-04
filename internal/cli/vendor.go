@@ -45,9 +45,10 @@ func newVendorCmd() *cobra.Command {
 			"uses, recording the resolved commit and a tree hash in\n" +
 			"cue.mod/" + vendorLockName + ".\n\n" +
 			"The module path doubles as the git URL (https://<module>.git); pass\n" +
-			"--source for private remotes or local paths. A vendored module may only\n" +
-			"import the CUE standard library, itself, and the creidhne schema:\n" +
-			"transitive module dependencies are refused.\n\n" +
+			"--source for private remotes or local paths. A vendored module may\n" +
+			"import the CUE standard library, itself, the creidhne schema, and\n" +
+			"modules already vendored in this project; crei never fetches\n" +
+			"dependencies transitively, so vendor a module's dependencies first.\n\n" +
 			"With no arguments, re-fetches every module in the lock at its recorded\n" +
 			"ref. --check verifies the vendored trees against the lock offline and\n" +
 			"exits non-zero on drift.",
@@ -76,7 +77,7 @@ func newVendorCmd() *cobra.Command {
 
 			if len(args) == 1 {
 				module, ref := splitModuleRef(args[0])
-				pin, err := vendorModule(out, cueMod, module, ref, source)
+				pin, err := vendorModule(out, cueMod, module, ref, source, lock.Modules)
 				if err != nil {
 					return err
 				}
@@ -90,7 +91,7 @@ func newVendorCmd() *cobra.Command {
 			}
 			for _, module := range sortedKeys(lock.Modules) {
 				pin := lock.Modules[module]
-				updated, err := vendorModule(out, cueMod, module, pin.Ref, "")
+				updated, err := vendorModule(out, cueMod, module, pin.Ref, "", lock.Modules)
 				if err != nil {
 					return err
 				}
@@ -162,7 +163,8 @@ func ensureUnder(root, dest string) error {
 
 // vendorModule fetches module at ref from source (or the module's own https
 // URL), validates it, and installs it under cue.mod/usr. Returns the pin.
-func vendorModule(out io.Writer, cueMod, module, ref, source string) (*vendorPin, error) {
+// vendored is the lock's module set, which the fetched module may import.
+func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored map[string]vendorPin) (*vendorPin, error) {
 	if err := validateModulePath(module); err != nil {
 		return nil, err
 	}
@@ -207,7 +209,7 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string) (*vendorPin
 	if len(files) == 0 {
 		return nil, fmt.Errorf("%s contains no .cue files outside cue.mod", source)
 	}
-	if err := checkImports(module, files); err != nil {
+	if err := checkImports(module, files, vendored); err != nil {
 		return nil, err
 	}
 
@@ -289,10 +291,20 @@ func collectModuleFiles(repo string) (map[string][]byte, error) {
 
 var importLine = regexp.MustCompile(`(?m)^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?"([^"]+)"`)
 
-// checkImports enforces the no-transitive-dependencies rule: a vendored
-// module may import the CUE standard library (paths without a domain), the
-// creidhne schema, and itself.
-func checkImports(module string, files map[string][]byte) error {
+// checkImports enforces the vendored-dependencies rule: a vendored module may
+// import the CUE standard library (paths without a domain), the creidhne
+// schema, itself, and modules already vendored in this project (present in
+// the lock). crei never fetches dependencies transitively — the user vendors
+// each module explicitly, so every pin stays a deliberate, reviewable choice.
+func checkImports(module string, files map[string][]byte, vendored map[string]vendorPin) error {
+	inLock := func(base string) bool {
+		for dep := range vendored {
+			if base == dep || strings.HasPrefix(base, dep+"/") {
+				return true
+			}
+		}
+		return false
+	}
 	var offending []string
 	for _, rel := range sortedKeys(files) {
 		for _, imp := range cueImports(files[rel]) {
@@ -302,13 +314,14 @@ func checkImports(module string, files map[string][]byte) error {
 			case !strings.Contains(first, "."): // stdlib (list, strings, encoding/json, ...)
 			case base == "github.com/lugoues/creidhne" || strings.HasPrefix(base, "github.com/lugoues/creidhne/"):
 			case base == module || strings.HasPrefix(base, module+"/"):
+			case inLock(base):
 			default:
 				offending = append(offending, fmt.Sprintf("%s imports %q", rel, imp))
 			}
 		}
 	}
 	if len(offending) > 0 {
-		return fmt.Errorf("transitive module dependencies are not supported:\n  %s", strings.Join(offending, "\n  "))
+		return fmt.Errorf("module dependencies must be vendored first:\n  %s\nrun crei vendor <module> for each missing dependency, then retry", strings.Join(offending, "\n  "))
 	}
 	return nil
 }
