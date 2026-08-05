@@ -550,3 +550,43 @@ Result=
 		t.Fatalf("--problems must not include an unblocked stopped unit:\n%s", out)
 	}
 }
+
+// TestStatusBlockedCrossQuadletFiltered: `status <name>` must still see a
+// failed hard dependency living in a quadlet outside the filter — the walk
+// runs on the unfiltered manifest and the runtime batch covers it.
+func TestStatusBlockedCrossQuadletFiltered(t *testing.T) {
+	crossQuads := `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {name: "app", units: #container: {
+	Unit: Requires: ["db.service"]
+	Container: Image: "docker.io/x"
+}}
+db: creidhne.#Quadlet & {name: "db", units: #container: Container: {Image: "docker.io/pg", ContainerName: "db"}}
+`
+	proj, qd := applyProject(t, crossQuads)
+	fakeSystemctl(t, `Id=app.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+
+Id=db.service
+LoadState=loaded
+ActiveState=failed
+SubState=failed
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=exit-code
+`)
+	out, err := statusOut(t, proj, qd, "app")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "not started (blocked: db.container failed)") {
+		t.Fatalf("filtered status must still name the cross-quadlet blocker:\n%s", out)
+	}
+}

@@ -52,6 +52,11 @@ type statusInput struct {
 	Desired map[string]map[string]state.FileInput
 	// units from the eval manifest, when available.
 	DesiredUnits []eval.Quadlet
+	// AllUnits is the unfiltered manifest, set when a quadlet-name filter
+	// narrowed DesiredUnits: the blocked-dependency walk needs the whole
+	// declared graph, since the failed cause may live in a quadlet outside
+	// the filter. Nil when DesiredUnits is already the whole project.
+	AllUnits []eval.Quadlet
 	// recorded state; nil when absent.
 	Recorded *state.State
 	// disk: relative path -> content hash.
@@ -250,6 +255,7 @@ func filterStatusInput(in *statusInput, only []string) error {
 			quads = append(quads, q)
 		}
 	}
+	in.AllUnits = in.DesiredUnits
 	in.DesiredUnits = quads
 	if in.Desired != nil {
 		files := map[string]map[string]state.FileInput{}
@@ -292,7 +298,10 @@ func ownedPaths(in statusInput) map[string]bool {
 // the eval manifest first, the recorded state as fallback.
 func serviceSet(in statusInput) []string {
 	seen := map[string]bool{}
-	for _, q := range in.DesiredUnits {
+	// Include the unfiltered manifest's services (one batched systemctl call
+	// either way): under a quadlet filter the blocked-dependency walk still
+	// needs runtime state for dependencies outside the filter.
+	for _, q := range append(in.DesiredUnits, in.AllUnits...) {
 		for _, u := range q.Units {
 			if u.Service != "" {
 				seen[u.Service] = true
@@ -485,7 +494,13 @@ func annotateBlocked(rows []statusRow, in statusInput) {
 	if len(in.DesiredUnits) == 0 || in.Runtime == nil {
 		return
 	}
-	g := buildGraph(in.DesiredUnits, in.DesiredUnits)
+	// Walk the whole project's graph even under a quadlet filter: the chain
+	// out of a selected unit may pass through (or end at) another quadlet.
+	all := in.AllUnits
+	if len(all) == 0 {
+		all = in.DesiredUnits
+	}
+	g := buildGraph(all, all)
 	adj := map[string][]string{}
 	for _, e := range g.sortedEdges() { // sorted: deterministic nearest pick
 		if hardDepRels[e.Rel] {
@@ -493,7 +508,7 @@ func annotateBlocked(rows []statusRow, in statusInput) {
 		}
 	}
 	failed := map[string]bool{}
-	for _, q := range in.DesiredUnits {
+	for _, q := range all {
 		for _, u := range q.Units {
 			if u.Service == "" {
 				continue
