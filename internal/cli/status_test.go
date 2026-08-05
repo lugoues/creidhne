@@ -418,9 +418,11 @@ func TestStatusEmptyEverything(t *testing.T) {
 
 // TestStatusInactiveWords: "inactive" is refined by unit kind so oneshot
 // builds resting by design don't read like long-running services that are
-// down. A build that ran reads "done" (never ran: "unbuilt"); a container
-// that ran reads "stopped" (never ran: "never started"). Neither is a
-// problem for --problems.
+// down. A build that ran this boot reads "done"; a container that ran reads
+// "stopped", one that didn't "not started". The timestamps are boot-local,
+// so a build with no run this boot keeps plain "inactive" — claiming
+// "unbuilt" would be false after a reboot. Neither is a problem for
+// --problems.
 func TestStatusInactiveWords(t *testing.T) {
 	proj, qd := applyProject(t, buildQuad)
 	fakeSystemctl(t, `Id=hermes-build.service
@@ -454,13 +456,32 @@ Result=
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	for _, want := range []string{"done", "stopped", "never started"} {
+	for _, want := range []string{"done", "stopped", "not started"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing runtime word %q:\n%s", want, out)
 		}
 	}
 	if strings.Contains(out, "inactive") {
 		t.Fatalf("every inactive here has a refined word; raw 'inactive' should not appear:\n%s", out)
+	}
+
+	// Post-reboot: the build has no run this boot. Its image may still
+	// exist, so it reads plain "inactive", never "unbuilt".
+	fakeSystemctl(t, `Id=hermes-build.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+`)
+	out, err = statusOut(t, proj, qd, "hermes")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "inactive") || strings.Contains(out, "unbuilt") {
+		t.Fatalf("a build with no run this boot must stay plain inactive:\n%s", out)
 	}
 
 	// None of the refined words are problems: a stopped stack is often
