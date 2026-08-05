@@ -42,6 +42,7 @@ type statusRow struct {
 	Since     time.Duration
 	Stale     bool   // running, but started before this file's last content change
 	StaleNote string // what the staleness means: changed keys, recreate required
+	Blocked   string // nearest failed unit along the hard dependency chain keeping this unit down
 	artifact  bool
 }
 
@@ -76,7 +77,9 @@ func newStatusCmd() *cobra.Command {
 			"  RUNTIME  the service's ActiveState, how long it has been up, and\n" +
 			"           kind-aware inactive words: a build that ran this boot reads\n" +
 			"           done (resting is its normal state); containers/pods/kube read\n" +
-			"           stopped or not started (they are meant to be up)\n" +
+			"           stopped or not started (they are meant to be up), plus\n" +
+			"           (blocked: X failed) naming the failed hard dependency —\n" +
+			"           declared-graph only, nearest failure first\n" +
 			"           (stale: ...) when the running process predates the last apply,\n" +
 			"           annotated with the changed keys and whether a restart can even\n" +
 			"           apply them (see crei diff --stale, crei restart --stale)\n\n" +
@@ -125,7 +128,7 @@ func newStatusCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "exit non-zero unless fully synced, loaded, and healthy")
-	cmd.Flags().BoolVar(&problems, "problems", false, "show only rows needing attention (not synced, reload needed, failed, stale, activating)")
+	cmd.Flags().BoolVar(&problems, "problems", false, "show only rows needing attention (not synced, reload needed, failed, blocked by a failed dependency, stale, activating)")
 	cmd.Flags().StringVar(&format, "format", "table", "output format: table or json (json always includes artifact rows)")
 	return cmd
 }
@@ -150,7 +153,10 @@ func rowIsProblem(r statusRow) bool {
 	if r.Loaded == "reload needed" || r.Loaded == "not loaded" {
 		return true
 	}
-	return r.Runtime == "failed" || r.Runtime == "activating" || r.Stale
+	// A blocked unit is a symptom of a failed dependency: the cause is shown
+	// too, and this row is what ties them together. Plain stopped/not started
+	// without a failed dependency stays a non-problem (often intentional).
+	return r.Runtime == "failed" || r.Runtime == "activating" || r.Stale || r.Blocked != ""
 }
 
 // gatherStatus collects the four layers, degrading each independently: any
@@ -455,7 +461,78 @@ func classifyRows(in statusInput) []statusRow {
 		}
 		return rows[i].Path < rows[j].Path
 	})
+	annotateBlocked(rows, in)
 	return rows
+}
+
+// hardDepRels are the dependency relations that make systemd refuse or undo a
+// start when the target is broken: the hard [Unit] couplings plus the
+// resource edges quadlet compiles into Requires (image, pod, network,
+// volume). After/Wants are excluded — they order or nudge, but a failed
+// target does not keep the dependent down.
+var hardDepRels = map[string]bool{
+	"Requires": true, "Requisite": true, "BindsTo": true,
+	"image": true, "pod": true, "network": true, "volume": true,
+}
+
+// annotateBlocked marks each down (stopped / not started) unit with the
+// nearest failed unit along its declared hard-dependency chain — the answer
+// to "which dependency is keeping this from running". Declared-graph only
+// (same data as crei graph): out-of-project dependencies are invisible.
+// Skipped when eval failed or systemd is unavailable; a down unit with no
+// failed dependency gets no annotation (often intentionally stopped).
+func annotateBlocked(rows []statusRow, in statusInput) {
+	if len(in.DesiredUnits) == 0 || in.Runtime == nil {
+		return
+	}
+	g := buildGraph(in.DesiredUnits, in.DesiredUnits)
+	adj := map[string][]string{}
+	for _, e := range g.sortedEdges() { // sorted: deterministic nearest pick
+		if hardDepRels[e.Rel] {
+			adj[e.From] = append(adj[e.From], e.To)
+		}
+	}
+	failed := map[string]bool{}
+	for _, q := range in.DesiredUnits {
+		for _, u := range q.Units {
+			if u.Service == "" {
+				continue
+			}
+			if rt, ok := in.Runtime[u.Service]; ok && rt.ActiveState == "failed" {
+				failed[u.Filename] = true
+			}
+		}
+	}
+	if len(failed) == 0 {
+		return
+	}
+	for i, r := range rows {
+		if r.Runtime != "stopped" && r.Runtime != "not started" {
+			continue
+		}
+		rows[i].Blocked = firstFailedDep(r.Path, adj, failed)
+	}
+}
+
+// firstFailedDep walks the hard-dependency chain breadth-first and returns
+// the nearest failed unit, so an indirect cause (container -> network ->
+// failed build) still surfaces. Empty when nothing on the chain failed.
+func firstFailedDep(from string, adj map[string][]string, failed map[string]bool) string {
+	seen := map[string]bool{from: true}
+	queue := append([]string(nil), adj[from]...)
+	for len(queue) > 0 {
+		n := queue[0]
+		queue = queue[1:]
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		if failed[n] {
+			return n
+		}
+		queue = append(queue, adj[n]...)
+	}
+	return ""
 }
 
 // statusClean reports whether --check should pass: every layer readable, every
@@ -632,6 +709,9 @@ func runtimeCell(r statusRow) string {
 	if r.Since > 0 {
 		cell += " " + humanDuration(r.Since)
 	}
+	if r.Blocked != "" {
+		cell += " (blocked: " + r.Blocked + " failed)"
+	}
 	if r.Stale {
 		cell += " (stale"
 		if r.StaleNote != "" {
@@ -805,6 +885,7 @@ type statusRowJSON struct {
 	SinceSeconds int64  `json:"sinceSeconds,omitempty"`
 	Stale        bool   `json:"stale"`
 	StaleNote    string `json:"staleNote,omitempty"`
+	Blocked      string `json:"blocked,omitempty"`
 }
 
 func renderStatusJSON(out io.Writer, quadletDir string, rows []statusRow, notes []string) error {
@@ -831,6 +912,7 @@ func renderStatusJSON(out io.Writer, quadletDir string, rows []statusRow, notes 
 			SinceSeconds: int64(r.Since / time.Second),
 			Stale:        r.Stale,
 			StaleNote:    r.StaleNote,
+			Blocked:      r.Blocked,
 		})
 	}
 	enc := json.NewEncoder(out)

@@ -494,3 +494,59 @@ Result=
 		t.Fatalf("stopped/done/never started must not count as problems:\n%s", out)
 	}
 }
+
+// TestStatusBlockedAnnotation: a down leaf whose hard-dependency chain
+// contains a failed unit is annotated with the nearest failure (here the
+// container's image edge to its failed build), and that connection makes it
+// a --problems row. A down unit with a healthy chain gets neither.
+func TestStatusBlockedAnnotation(t *testing.T) {
+	proj, qd := applyProject(t, buildQuad)
+	fakeSystemctl(t, `Id=hermes-build.service
+LoadState=loaded
+ActiveState=failed
+SubState=failed
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=Fri 2026-01-01 10:00:00 UTC
+Result=exit-code
+
+Id=hermes.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+
+Id=traefik.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+`)
+	out, err := statusOut(t, proj, qd)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "not started (blocked: hermes.build failed)") {
+		t.Fatalf("missing blocked annotation:\n%s", out)
+	}
+	if strings.Contains(out, "traefik.container") && strings.Contains(out, "traefik.container"+" (blocked") {
+		t.Fatalf("traefik has no failed dependency; must not be annotated:\n%s", out)
+	}
+
+	out, err = statusOut(t, proj, qd, "--problems")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "hermes.container") || !strings.Contains(out, "hermes.build") {
+		t.Fatalf("--problems must show the failed build and the leaf it blocks:\n%s", out)
+	}
+	if strings.Contains(out, "traefik.container") {
+		t.Fatalf("--problems must not include an unblocked stopped unit:\n%s", out)
+	}
+}
