@@ -415,3 +415,61 @@ func TestStatusEmptyEverything(t *testing.T) {
 		t.Fatalf("expected the empty message:\n%s", out)
 	}
 }
+
+// TestStatusInactiveWords: "inactive" is refined by unit kind so oneshot
+// builds resting by design don't read like long-running services that are
+// down. A build that ran reads "done" (never ran: "unbuilt"); a container
+// that ran reads "stopped" (never ran: "never started"). Neither is a
+// problem for --problems.
+func TestStatusInactiveWords(t *testing.T) {
+	proj, qd := applyProject(t, buildQuad)
+	fakeSystemctl(t, `Id=hermes-build.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=Fri 2026-01-01 10:00:00 UTC
+Result=success
+
+Id=hermes.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=Fri 2026-01-01 10:00:05 UTC
+InactiveExitTimestamp=Fri 2026-01-01 10:00:05 UTC
+Result=success
+
+Id=traefik.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+`)
+	out, err := statusOut(t, proj, qd)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, want := range []string{"done", "stopped", "never started"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing runtime word %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "inactive") {
+		t.Fatalf("every inactive here has a refined word; raw 'inactive' should not appear:\n%s", out)
+	}
+
+	// None of the refined words are problems: a stopped stack is often
+	// intentional, exactly like plain inactive before.
+	out, err = statusOut(t, proj, qd, "--problems")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "No problems.") {
+		t.Fatalf("stopped/done/never started must not count as problems:\n%s", out)
+	}
+}

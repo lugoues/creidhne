@@ -13,6 +13,8 @@ ActiveState=active
 SubState=running
 NeedDaemonReload=no
 ActiveEnterTimestamp=Fri 2026-07-11 10:00:00 UTC
+InactiveExitTimestamp=Fri 2026-07-11 09:59:58 UTC
+Result=success
 
 Id=db.service
 LoadState=loaded
@@ -68,9 +70,15 @@ func TestParseShow(t *testing.T) {
 	if !app.ActiveEnter.Equal(want) {
 		t.Fatalf("app ActiveEnter = %v, want %v", app.ActiveEnter, want)
 	}
+	if app.InactiveExit.IsZero() || app.Result != "success" {
+		t.Fatalf("app InactiveExit/Result: %+v", app)
+	}
 	db := got["db.service"]
 	if db.ActiveState != "failed" || !db.NeedDaemonReload || !db.ActiveEnter.IsZero() {
 		t.Fatalf("db: %+v", db)
+	}
+	if !db.InactiveExit.IsZero() || db.Result != "" {
+		t.Fatalf("db absent InactiveExit/Result must stay zero: %+v", db)
 	}
 	if gone := got["gone.service"]; gone.LoadState != "not-found" {
 		t.Fatalf("gone: %+v", gone)

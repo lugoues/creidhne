@@ -21,6 +21,12 @@ type UnitStatus struct {
 	SubState         string // running, dead, exited, ...
 	NeedDaemonReload bool
 	ActiveEnter      time.Time // zero when the unit never entered active
+	// InactiveExit is when the unit last left inactive (i.e. last started);
+	// zero when it never ran. A oneshot without RemainAfterExit may run to
+	// completion without ever entering active, so this — not ActiveEnter —
+	// is the "has it ever run" signal.
+	InactiveExit time.Time
+	Result       string // success, exit-code, ... ; "" when never ran
 }
 
 // Running reports the common healthy case.
@@ -29,7 +35,7 @@ func (u UnitStatus) Running() bool {
 }
 
 // properties requested from systemctl show, parsed by parseShow.
-const properties = "Id,LoadState,ActiveState,SubState,NeedDaemonReload,ActiveEnterTimestamp"
+const properties = "Id,LoadState,ActiveState,SubState,NeedDaemonReload,ActiveEnterTimestamp,InactiveExitTimestamp,Result"
 
 // run executes systemctl and returns stdout; a var so tests can stub it.
 var run = func(args ...string) ([]byte, error) {
@@ -196,6 +202,8 @@ func parseShow(out []byte, requested []string) map[string]UnitStatus {
 			SubState:         block["SubState"],
 			NeedDaemonReload: block["NeedDaemonReload"] == "yes",
 			ActiveEnter:      parseTimestamp(block["ActiveEnterTimestamp"]),
+			InactiveExit:     parseTimestamp(block["InactiveExitTimestamp"]),
+			Result:           block["Result"],
 		}
 		block = map[string]string{}
 	}

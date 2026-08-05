@@ -74,6 +74,9 @@ func newStatusCmd() *cobra.Command {
 			"  LOADED   whether systemd's generator has picked the file up\n" +
 			"           (not loaded / reload needed / ok)\n" +
 			"  RUNTIME  the service's ActiveState, how long it has been up, and\n" +
+			"           kind-aware inactive words: builds read done/unbuilt (resting\n" +
+			"           is their normal state); containers/pods/kube read stopped or\n" +
+			"           never started (they are meant to be up)\n" +
 			"           (stale: ...) when the running process predates the last apply,\n" +
 			"           annotated with the changed keys and whether a restart can even\n" +
 			"           apply them (see crei diff --stale, crei restart --stale)\n\n" +
@@ -422,6 +425,9 @@ func classifyRows(in statusInput) []statusRow {
 					if rt.Running() {
 						row.Runtime = "running"
 					}
+					if rt.ActiveState == "inactive" {
+						row.Runtime = inactiveWord(p, rt)
+					}
 					if !rt.ActiveEnter.IsZero() && rt.ActiveState == "active" {
 						row.Since = in.Now.Sub(rt.ActiveEnter)
 						if inState && rec.AppliedAt.After(rt.ActiveEnter) {
@@ -584,6 +590,31 @@ func renderStatus(out io.Writer, quadletDir string, rows []statusRow, notes []st
 	}
 }
 
+// inactiveWord refines "inactive" by unit kind, so units that rest at
+// inactive by design don't blend into units that should be up. A build is a
+// oneshot: after a successful run "done" is its normal state, and before any
+// run it is "unbuilt". A container/pod/kube is long-running: inactive means
+// "stopped" (ran before) or "never started" — the gray worth a second look.
+// Networks, volumes, and images keep the raw word (they rest at
+// "active (exited)", so inactive is already unusual there).
+func inactiveWord(path string, rt systemd.UnitStatus) string {
+	switch strings.TrimPrefix(filepath.Ext(path), ".") {
+	case "build":
+		if rt.InactiveExit.IsZero() {
+			return "unbuilt"
+		}
+		if rt.Result == "success" || rt.Result == "" {
+			return "done"
+		}
+	case "container", "pod", "kube":
+		if rt.InactiveExit.IsZero() {
+			return "never started"
+		}
+		return "stopped"
+	}
+	return "inactive"
+}
+
 func dash(s string) string {
 	if s == "" {
 		return "-"
@@ -623,7 +654,9 @@ func glyphFor(r statusRow) string {
 		return yellow("●")
 	case r.Runtime == "running" || r.Runtime == "active":
 		return green("●")
-	case r.Runtime == "inactive":
+	case r.Runtime == "stopped" || r.Runtime == "never started":
+		return yellow("○")
+	case r.Runtime == "inactive" || r.Runtime == "done" || r.Runtime == "unbuilt":
 		return dim("○")
 	default: // activating, deactivating, reloading, ...
 		return "◌"
@@ -660,6 +693,8 @@ func styleCell(col int, row []string, c string) string {
 		// at the sixth character.
 		case strings.HasPrefix(c, "running"), strings.HasPrefix(c, "active"):
 			return green(c)
+		case strings.HasPrefix(c, "stopped"), strings.HasPrefix(c, "never started"):
+			return yellow(c)
 		case c == "-":
 			return c
 		default:
@@ -701,7 +736,7 @@ func runtimeSummary(rows []statusRow) string {
 		return ""
 	}
 	var parts []string
-	for _, k := range []string{"running", "running stale", "active", "active stale", "failed", "inactive", "activating"} {
+	for _, k := range []string{"running", "running stale", "active", "active stale", "failed", "stopped", "never started", "inactive", "done", "unbuilt", "activating"} {
 		n := run[k]
 		delete(run, k)
 		if n == 0 {
@@ -711,7 +746,7 @@ func runtimeSummary(rows []statusRow) string {
 		switch k {
 		case "failed":
 			p = red(p)
-		case "running stale", "active stale":
+		case "running stale", "active stale", "stopped", "never started":
 			p = yellow(p)
 		}
 		parts = append(parts, p)
