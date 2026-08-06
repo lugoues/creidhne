@@ -119,6 +119,12 @@ _#renderLabel: {
 // A managed unit's #service and an external native unit's #ref are #ServiceNames.
 #ServiceName: string & =~"\\.(service|socket|target|timer|path|mount|automount|device|swap|slice|scope)$"
 
+// #UnitNameBase is a systemd unit basename, what quadlet's ServiceName=
+// accepts: the generated unit becomes <base>.service. Restricted to the
+// systemd unit-name charset, and a unit-type suffix is rejected (quadlet
+// appends .service itself, so "foo.service" would yield foo.service.service).
+#UnitNameBase: string & =~"^[A-Za-z0-9:_.\\\\-]+$" & !~"\\.(service|socket|target|timer|path|mount|automount|device|swap|slice|scope)$"
+
 // #RefSelf is the base handle for kinds referenced by a bare ref (network, pod,
 // image, build, container, ...). It flattens to the plain #ref.
 #RefSelf: {
@@ -249,6 +255,10 @@ _#pct: =~"^[0-9]+%$"
 // Units: us, ms, s, min, h, d, w.  See systemd.time(7).
 _#systemdDuration: =~"^[0-9]+(us|ms|s|min|h|d|w)( [0-9]+(us|ms|s|min|h|d|w))*$"
 
+// Like _#systemdDuration, plus the ns unit that only systemd's nanosecond
+// parser (config_parse_nsec, e.g. TimerSlackNSec=) accepts.
+_#systemdNsecDuration: =~"^[0-9]+(ns|us|ms|s|min|h|d|w)( [0-9]+(ns|us|ms|s|min|h|d|w))*$"
+
 // Go duration format, including fractional and compound spans (e.g. "30s",
 // "1h30m", "500ms", "0.5s"). Units: ns, us, ms, s, m, h.  See Go
 // time.ParseDuration. A leading sign is intentionally not allowed: a negative
@@ -264,6 +274,11 @@ _#goDuration: =~"^([0-9]*\\.?[0-9]+(ns|us|ms|s|m|h))+$"
 // Systemd time span: bare integer (seconds), suffixed/compound duration, or "infinity".
 // See systemd.time(7).
 #TimeSpan: "infinity" | _#bareInt | _#systemdDuration
+
+// Time span for systemd's nanosecond-granularity parser (config_parse_nsec,
+// e.g. TimerSlackNSec=): #TimeSpan plus the ns unit, bare integers meaning
+// nanoseconds rather than seconds.
+#TimeSpanNSec: "infinity" | _#bareInt | _#systemdNsecDuration
 
 // CPU time quota: percentage with "%" suffix (>100% allowed for multi-CPU).
 // See systemd.resource-control(5).

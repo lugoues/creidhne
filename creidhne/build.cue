@@ -6,8 +6,11 @@ import "list"
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
-	#ref:     "\(_stem).build"
-	#service: "\(_stem)-build.service"
+	#ref: "\(_stem).build"
+	// Build is populated by the embedded forms below; this declaration only
+	// makes the identifier lexically resolvable for #service.
+	Build:    _
+	#service: "\(*Build.ServiceName | "\(_stem)-build").service"
 
 	// #self: reference handle (e.g. Image= built by this .build).
 	#self: #RefSelf & {_kind: "build", source: #ref}
@@ -21,10 +24,11 @@ import "list"
 		// Inline Containerfile content. The Containerfile is emitted to
 		// images/{stem}.Containerfile. File and SetWorkingDirectory are
 		// injected by the renderer.
-		ContainerFile: string
+		ContainerFile: string & !=""
 		// Optional build context directory. Entries are emitted under
-		// images/{stem}.context/ as relative paths. When set,
-		// SetWorkingDirectory points to the context directory.
+		// images/{stem}.context/ as relative paths. When non-empty,
+		// SetWorkingDirectory points to the context directory (an empty map
+		// is treated as absent — the renderer creates no directory for it).
 		// Values can be plain strings (default mode "0644") or
 		// structured with explicit mode (e.g. "0755" for scripts).
 		Context?: [string]: string | {
@@ -34,16 +38,19 @@ import "list"
 	} | {
 		Build: {
 			// Provide context (a working directory) to podman build via path, URL, or special keys.
-			SetWorkingDirectory?: string
+			SetWorkingDirectory?: string & !=""
 			// Specifies a Containerfile which contains instructions for building the image.
-			File?: string
+			File?: string & !=""
 		}
+		// podman build needs a context directory unless File is given, so at
+		// least one of the two must be present in this (non-inline) form.
+		Build: {SetWorkingDirectory: string} | {File: string}
 	}) & {
 		Build: {
 			// Specifies the name(s) assigned to the resulting image if the build completes successfully. (optional: default "quadlets.localhost/\(_stem):latest")
 			ImageTag: *["quadlets.localhost/\(_stem):latest"] | [...(string | [...string])]
 			// Override the default systemd service unit name.
-			ServiceName?: string
+			ServiceName?: #UnitNameBase
 			// Path to an alternate .containerignore file to use when building the image.
 			IgnoreFile?: string
 			// Set the target build stage to build. Commands after the target stage are skipped.

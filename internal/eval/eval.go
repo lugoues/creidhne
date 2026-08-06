@@ -423,7 +423,9 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 		// Validate concreteness first: MarshalJSON on an incomplete unit emits a
 		// multi-KB dump of the whole resolved struct; report a concise hint
 		// instead and point at `crei validate` for the full diagnostic.
-		if err := dataV.Validate(cue.Concrete(true)); err != nil {
+		// Final() matters too: validators that wait for a finalized value
+		// (e.g. struct.MinFields on a build Context) stay silent without it.
+		if err := dataV.Validate(cue.Concrete(true), cue.Final()); err != nil {
 			// The filename is derived from name, so when name itself is the unset
 			// field the filename is empty too; fall back to the stem, then the
 			// kind, so the message never reads "unit  is incomplete".

@@ -128,7 +128,10 @@ func (r *Renderer) renderUnit(u eval.UnitRecord) ([]byte, error) {
 	if u.Kind == "build" {
 		if _, ok := u.Data["ContainerFile"]; ok {
 			root["containerfilePath"] = "images/" + u.Stem + ".Containerfile"
-			if _, ok := u.Data["Context"]; ok {
+			// An empty Context map is treated as absent: no entries means no
+			// context directory is ever written, so pointing
+			// SetWorkingDirectory at it would name a nonexistent directory.
+			if ctx, ok := u.Data["Context"].(map[string]any); ok && len(ctx) > 0 {
 				root["contextPath"] = "images/" + u.Stem + ".context"
 			}
 		}

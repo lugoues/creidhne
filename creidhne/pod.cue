@@ -7,7 +7,7 @@ import "list"
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).pod"
-	#service: "\(_stem)-pod.service"
+	#service: "\(*Pod.ServiceName | "\(_stem)-pod").service"
 
 	// #self: reference handle for a Pod= field.
 	#self: #RefSelf & {_kind: "pod", source: #ref}
@@ -24,7 +24,7 @@ import "list"
 		// Override the default pod name. Defaults to systemd-%N.
 		PodName?: string
 		// Override the default systemd service unit name.
-		ServiceName?: string
+		ServiceName?: #UnitNameBase
 
 		// Specify a custom network for the pod. Accepts a raw mode (#NetworkMode)
 		// or a network/container #self handle. (Strict: named refs go through #self.)

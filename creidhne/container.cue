@@ -13,8 +13,10 @@ import (
 	// QUADLET telemetry log label (the stem alone can't recover it for the
 	// plural "<quadlet>-<name>" form).
 	_quadlet: string
-	#ref:     "\(_stem).container"
-	#service: "\(_stem).service"
+	#ref: "\(_stem).container"
+	// ServiceName= overrides the generated unit's basename, so everything that
+	// targets the unit (cross-refs, start/stop/status) must follow it.
+	#service: "\(*Container.ServiceName | _stem).service"
 
 	// #self: reference handle (e.g. for Network=container:... reuse via .container).
 	#self: #RefSelf & {_kind: "container", source: #ref}
@@ -29,14 +31,14 @@ import (
 	Install?: #InstallSection
 	Quadlet?: #QuadletSection
 
-	Container: {Image: (#ImageName | #ImageSelf | #BuildSelf)} | {Rootfs: string}
+	Container: {Image: (#ImageName | #ImageSelf | #BuildSelf)} | {Rootfs: string & !=""}
 	Container: {ReloadCmd: string} | {ReloadSignal: #Signal} | *{}
 	Container: {
 
 		// The (optional) name of the Podman container. If not specified, the default value is systemd-%N.
 		ContainerName?: string
 		// Override the default systemd service unit name.
-		ServiceName?: string
+		ServiceName?: #UnitNameBase
 
 		// Override the default ENTRYPOINT from the image.
 		Entrypoint?: string

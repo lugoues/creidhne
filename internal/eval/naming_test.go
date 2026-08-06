@@ -73,6 +73,71 @@ svc: q.#Quadlet & {
 	}
 }
 
+// TestServiceNameOverride locks #service to quadlet's ServiceName= semantics:
+// when set, the generated unit is <ServiceName>.service regardless of kind, and
+// everything reading the manifest (cross-refs, lifecycle) must follow it.
+func TestServiceNameOverride(t *testing.T) {
+	cases := map[string]struct {
+		unit string
+		want string
+	}{
+		"container": {`#container: Container: {Image: "img", ServiceName: "custom"}`, "custom.service"},
+		"pod":       {`#pod: Pod: ServiceName: "custom"`, "custom.service"},
+		"volume":    {`#volume: Volume: ServiceName: "custom"`, "custom.service"},
+		"network":   {`#network: Network: ServiceName: "custom"`, "custom.service"},
+		"kube":      {`#kube: Kube: {Yaml: ["app.yaml"], ServiceName: "custom"}`, "custom.service"},
+		"build":     {`#build: {ContainerFile: "FROM scratch\n", Build: ServiceName: "custom"}`, "custom.service"},
+		"image":     {`#image: Image: {Image: "img", ServiceName: "custom"}`, "custom.service"},
+		"artifact":  {`#artifact: Artifact: {Artifact: "example.com/a:v1", ServiceName: "custom"}`, "custom.service"},
+	}
+	for kind, c := range cases {
+		t.Run(kind, func(t *testing.T) {
+			quads := loadSource(t, `package naming
+import q "github.com/lugoues/creidhne@v0"
+svc: q.#Quadlet & {
+	name: "svc"
+	units: {`+c.unit+`}
+}
+`)
+			if got := quads[0].Units[0].Service; got != c.want {
+				t.Errorf("%s: service = %q, want %q", kind, got, c.want)
+			}
+		})
+	}
+}
+
+// TestServiceNameOverrideResolvesCrossRefs proves a dependent unit's After=
+// written via #service follows the ServiceName override at eval time.
+func TestServiceNameOverrideResolvesCrossRefs(t *testing.T) {
+	quads := loadSource(t, `package naming
+import q "github.com/lugoues/creidhne@v0"
+db: q.#Quadlet & {
+	name:  "db"
+	units: #container: Container: {Image: "img", ServiceName: "database"}
+}
+app: q.#Quadlet & {
+	name: "app"
+	units: #container: {
+		Unit: After: [db.units.#container.#service]
+		Container: Image: "img"
+	}
+}
+`)
+	for _, q := range quads {
+		if q.Name != "app" {
+			continue
+		}
+		data := q.Units[0].Data
+		unit, _ := data["Unit"].(map[string]any)
+		after, _ := unit["After"].([]any)
+		if len(after) != 1 || after[0] != "database.service" {
+			t.Errorf("After = %v, want [database.service]", after)
+		}
+		return
+	}
+	t.Fatal("quadlet app not found")
+}
+
 // TestStemPlural covers the plural stem ("<quadlet>-<name>", name defaulting to
 // the key). Here key "gw_tmp" is the CUE-side handle and name "gw-tmp" sets the
 // hyphenated stem, producing app-gw-tmp.volume.

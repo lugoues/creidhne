@@ -5,7 +5,7 @@ package creidhne
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).kube"
-	#service: "\(_stem).service"
+	#service: "\(*Kube.ServiceName | _stem).service"
 
 	// #self: reference handle.
 	#self: #RefSelf & {_kind: "kube", source: #ref}
@@ -16,10 +16,13 @@ package creidhne
 	Quadlet?: #QuadletSection
 
 	Kube: {
-		// The path (absolute or relative to the unit file) to the Kubernetes YAML file.
-		Yaml: [...(string | [...string])] & [_, ...]
+		// The path (absolute or relative to the unit file) to the Kubernetes YAML
+		// file. Nonempty, and nested lists must be nonempty too — the values are
+		// flattened, so [[]] would otherwise pass the outer check yet render no
+		// Yaml= line at all.
+		Yaml: [...((string & !="") | ([...(string & !="")] & [_, ...]))] & [_, ...]
 		// Override the default systemd service unit name.
-		ServiceName?: string
+		ServiceName?: #UnitNameBase
 		// Pass Kubernetes ConfigMap YAML paths to podman kube play via --configmap.
 		ConfigMap?: [...(string | [...string])]
 		// Indicates whether containers will be auto-updated (registry or local).

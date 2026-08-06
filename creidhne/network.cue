@@ -7,7 +7,7 @@ import "list"
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).network"
-	#service: "\(_stem)-network.service"
+	#service: "\(*Network.ServiceName | "\(_stem)-network").service"
 
 	// #self: reference handle for a Network= field, optionally decorated with
 	// connection options: units.networks.X.#self & {ip: "10.0.0.5", alias: ["web"]}.
@@ -25,7 +25,7 @@ import "list"
 		// Override the default network name. Defaults to systemd-%N.
 		NetworkName?: string
 		// Override the default systemd service unit name.
-		ServiceName?: string
+		ServiceName?: #UnitNameBase
 		// Driver to manage the network. Currently bridge, macvlan and ipvlan are supported.
 		Driver?: #NetworkDriver
 		// Set the IPAM driver (IP Address Management Driver) for the network.

@@ -5,7 +5,7 @@ package creidhne
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).image"
-	#service: "\(_stem)-image.service"
+	#service: "\(*Image.ServiceName | "\(_stem)-image").service"
 
 	// #self: reference handle (e.g. Image= pulled by this .image).
 	#self: #RefSelf & {_kind: "image", source: #ref}
@@ -19,7 +19,7 @@ package creidhne
 		// The image to pull. It is recommended to use a fully qualified image name.
 		Image: #ImageRef
 		// Override the default systemd service unit name.
-		ServiceName?: string
+		ServiceName?: #UnitNameBase
 		// All tagged images in the repository are pulled.
 		AllTags?: bool
 		// The pull policy to use when pulling the image.

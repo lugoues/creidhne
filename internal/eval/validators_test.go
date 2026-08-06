@@ -50,3 +50,31 @@ func TestValidatorsStillRejectInvalid(t *testing.T) {
 		})
 	}
 }
+
+// TestSchemaRejectsVacuousUnits locks out shapes that validate but render a
+// unit podman cannot run (or that silently defeat a required field): an empty
+// Rootfs, a Build with neither context nor Containerfile, a Yaml list whose
+// nesting hides emptiness, and ServiceName values quadlet would mangle.
+// (An empty build Context is handled by the renderer instead — see
+// render.TestEmptyContextTreatedAsAbsent — because an incomplete-class
+// validator like struct.MinFields would make the manifest comprehension's
+// `if u != _|_` guard silently drop the unit rather than fail.)
+func TestSchemaRejectsVacuousUnits(t *testing.T) {
+	reject := map[string]string{
+		"empty rootfs":              `#container: Container: {Rootfs: ""}`,
+		"build with nothing":        `#build: Build: {}`,
+		"kube nested empty yaml":    `#kube: Kube: Yaml: [[]]`,
+		"kube empty yaml path":      `#kube: Kube: Yaml: [""]`,
+		"empty service name":        `#container: Container: {Image: "img", ServiceName: ""}`,
+		"service-suffixed override": `#container: Container: {Image: "img", ServiceName: "web.service"}`,
+	}
+	for desc, cu := range reject {
+		t.Run(desc, func(t *testing.T) {
+			src := "package naming\nimport q \"github.com/lugoues/creidhne@v0\"\n" +
+				"app: q.#Quadlet & {name: \"app\", units: " + cu + "}\n"
+			if err := loadSourceErr(t, src); err == nil {
+				t.Errorf("want rejected, got accepted")
+			}
+		})
+	}
+}

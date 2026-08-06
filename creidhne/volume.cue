@@ -7,7 +7,7 @@ import "list"
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
 	#ref:     "\(_stem).volume"
-	#service: "\(_stem)-volume.service"
+	#service: "\(*Volume.ServiceName | "\(_stem)-volume").service"
 
 	// #self: reference handle for a Volume= field, e.g.
 	//   Volume: [units.volumes.data.#self & {target: "/data", options: "U"}]
@@ -25,7 +25,7 @@ import "list"
 		// Override the default volume name. Defaults to systemd-%N.
 		VolumeName?: string
 		// Override the default systemd service unit name.
-		ServiceName?: string
+		ServiceName?: #UnitNameBase
 		// Specify the volume driver name. When set to "image", the Image key must also be set.
 		Driver?: string
 		// The mount options to use for a filesystem, per mount(8) -o option.

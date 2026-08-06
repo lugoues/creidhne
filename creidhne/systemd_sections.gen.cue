@@ -1484,7 +1484,7 @@ package creidhne
 	// Sets the timer slack in nanoseconds for the executed processes. The timer slack controls the accuracy of wake-ups triggered by timers. See prctl(2) for more information. Note that in contrast to most other time span definitions this parameter takes an integer value in nano-seconds if no unit is specified. The usual time units are understood too.
 	//
 	// https://www.freedesktop.org/software/systemd/man/257/systemd.exec.html#TimerSlackNSec=
-	TimerSlackNSec?: #TimeSpan
+	TimerSlackNSec?: #TimeSpanNSec
 
 	// Takes a boolean argument. If true, ensures that the service process and all its children can never gain new privileges through execve() (e.g. via setuid or setgid bits, or filesystem capabilities). This is the simplest and most effective way to ensure that a process and its children can never elevate privileges again. Defaults to false. In case the service will be run in a new mount namespace anyway and SELinux is disabled, all file systems are mounted with MS_NOSUID flag. Also see No New Privileges Flag.
 	//

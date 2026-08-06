@@ -140,7 +140,7 @@ var cueType = map[string]string{
 	"config_parse_pass_environ":                "[...string]",
 	"config_parse_restrict_namespaces":         "[...string]",
 	"config_parse_service_sockets":             "[...string]",
-	"config_parse_nsec":                        "#TimeSpan",
+	"config_parse_nsec":                        "#TimeSpanNSec",
 	// plain strings
 	"config_parse_exec_output":        "string", // Standard{Output,Error}: journal|file:PATH|fd:NAME|...
 	"config_parse_working_directory":  "string",

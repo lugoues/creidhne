@@ -122,6 +122,38 @@ func TestBuildContextModes(t *testing.T) {
 	}
 }
 
+// TestEmptyContextTreatedAsAbsent: a present-but-empty Context map must render
+// exactly like no Context at all. It writes no context files, so emitting
+// SetWorkingDirectory=images/<stem>.context would point the build at a
+// directory that never gets created.
+func TestEmptyContextTreatedAsAbsent(t *testing.T) {
+	r := newTestRenderer(t)
+	bu := eval.UnitRecord{
+		Kind: "build", Stem: "x", Filename: "x.build",
+		Data: map[string]any{
+			"ContainerFile": "FROM scratch\n",
+			"Context":       map[string]any{},
+			"Build":         map[string]any{"ImageTag": []any{"localhost/x:latest"}},
+		},
+	}
+	files, err := r.BuildFileSet([]eval.Quadlet{{Name: "x", Units: []eval.UnitRecord{bu}}})
+	if err != nil {
+		t.Fatalf("BuildFileSet: %v", err)
+	}
+	unit := string(files["x.build"].Content)
+	if strings.Contains(unit, "SetWorkingDirectory=images/x.context") {
+		t.Errorf("empty Context must not point SetWorkingDirectory at a context dir that is never written, got:\n%s", unit)
+	}
+	if !strings.Contains(unit, "SetWorkingDirectory=unit") {
+		t.Errorf("empty Context should fall back to the no-context form (SetWorkingDirectory=unit), got:\n%s", unit)
+	}
+	for name := range files {
+		if strings.HasPrefix(name, "images/x.context/") {
+			t.Errorf("empty Context must emit no context files, got %s", name)
+		}
+	}
+}
+
 // TestBuildContextRejectsBadTypes ensures render fails loud on malformed build
 // data instead of silently producing an empty file or a default (wrong) mode.
 // render validates its inputs rather than trusting the schema to have done so.
