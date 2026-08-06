@@ -3,7 +3,7 @@
 Image={{ .Image.Image }}
 {{ if .Image.ServiceName -}}ServiceName={{ .Image.ServiceName }}
 {{ end -}}
-{{ if .Image.AllTags -}}AllTags=true
+{{ if isset .Image "AllTags" -}}AllTags={{ .Image.AllTags }}
 {{ end -}}
 {{ if .Image.Policy -}}Policy={{ .Image.Policy }}
 {{ end -}}
@@ -21,7 +21,7 @@ Image={{ .Image.Image }}
 {{ end -}}
 {{ if .Image.DecryptionKey -}}DecryptionKey={{ .Image.DecryptionKey }}
 {{ end -}}
-{{ if .Image.TLSVerify -}}TLSVerify=true
+{{ if isset .Image "TLSVerify" -}}TLSVerify={{ .Image.TLSVerify }}
 {{ end -}}
 {{ if .Image.ImageTag -}}ImageTag={{ .Image.ImageTag }}
 {{ end -}}

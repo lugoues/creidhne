@@ -18,15 +18,15 @@
 {{ end -}}
 {{ if .Container.Group -}}Group={{ .Container.Group }}
 {{ end -}}
-{{ if .Container.RunInit -}}RunInit=true
+{{ if isset .Container "RunInit" -}}RunInit={{ .Container.RunInit }}
 {{ end -}}
 {{ range .Container.Environment -}}Environment={{ . }}
 {{ end -}}
 {{ range .Container.EnvironmentFile -}}EnvironmentFile={{ . }}
 {{ end -}}
-{{ if .Container.EnvironmentHost -}}EnvironmentHost=true
+{{ if isset .Container "EnvironmentHost" -}}EnvironmentHost={{ .Container.EnvironmentHost }}
 {{ end -}}
-{{ if .Container.HttpProxy -}}HttpProxy=true
+{{ if isset .Container "HttpProxy" -}}HttpProxy={{ .Container.HttpProxy }}
 {{ end -}}
 {{ range .networkStrings -}}Network={{ . }}
 {{ end -}}
@@ -60,13 +60,13 @@
 {{ end -}}
 {{ range .Container.DropCapability -}}DropCapability={{ . }}
 {{ end -}}
-{{ if .Container.NoNewPrivileges -}}NoNewPrivileges=true
+{{ if isset .Container "NoNewPrivileges" -}}NoNewPrivileges={{ .Container.NoNewPrivileges }}
 {{ end -}}
 {{ if .Container.SeccompProfile -}}SeccompProfile={{ .Container.SeccompProfile }}
 {{ end -}}
 {{ if .Container.AppArmor -}}AppArmor={{ .Container.AppArmor }}
 {{ end -}}
-{{ if .Container.SecurityLabelDisable -}}SecurityLabelDisable=true
+{{ if isset .Container "SecurityLabelDisable" -}}SecurityLabelDisable={{ .Container.SecurityLabelDisable }}
 {{ end -}}
 {{ if .Container.SecurityLabelFileType -}}SecurityLabelFileType={{ .Container.SecurityLabelFileType }}
 {{ end -}}
@@ -74,11 +74,11 @@
 {{ end -}}
 {{ if .Container.SecurityLabelLevel -}}SecurityLabelLevel={{ .Container.SecurityLabelLevel }}
 {{ end -}}
-{{ if .Container.SecurityLabelNested -}}SecurityLabelNested=true
+{{ if isset .Container "SecurityLabelNested" -}}SecurityLabelNested={{ .Container.SecurityLabelNested }}
 {{ end -}}
-{{ if .Container.ReadOnly -}}ReadOnly=true
+{{ if isset .Container "ReadOnly" -}}ReadOnly={{ .Container.ReadOnly }}
 {{ end -}}
-{{ if .Container.ReadOnlyTmpfs -}}ReadOnlyTmpfs=true
+{{ if isset .Container "ReadOnlyTmpfs" -}}ReadOnlyTmpfs={{ .Container.ReadOnlyTmpfs }}
 {{ end -}}
 {{ if .Container.Mask -}}Mask={{ .Container.Mask }}
 {{ end -}}
@@ -156,7 +156,7 @@
 {{ end -}}
 {{ if .podString -}}Pod={{ .podString }}
 {{ end -}}
-{{ if .Container.StartWithPod -}}StartWithPod=true
+{{ if isset .Container "StartWithPod" -}}StartWithPod={{ .Container.StartWithPod }}
 {{ end -}}
 {{ if .Container.AutoUpdate -}}AutoUpdate={{ .Container.AutoUpdate }}
 {{ end -}}

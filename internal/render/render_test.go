@@ -71,24 +71,57 @@ func TestRenderZeroAndFalseValues(t *testing.T) {
 			"StopTimeout":       int64(0),
 			"HealthMaxLogCount": int64(0),
 			"Notify":            false,
+			// Explicit false must render: these quadlet options default to
+			// true (or true-when-ReadOnly), so dropping the line re-enables
+			// exactly what the user turned off.
+			"HttpProxy":     false,
+			"ReadOnlyTmpfs": false,
+			"StartWithPod":  false,
+			"RunInit":       false,
 		}},
 	}
 	vu := eval.UnitRecord{
 		Kind: "volume", Stem: "v", Filename: "v.volume",
 		Data: map[string]any{"Volume": map[string]any{"UID": int64(0), "GID": int64(0)}},
 	}
-	files, err := r.BuildFileSet([]eval.Quadlet{{Name: "z", Units: []eval.UnitRecord{cu, vu}}})
+	bu := eval.UnitRecord{
+		Kind: "build", Stem: "b", Filename: "b.build",
+		Data: map[string]any{
+			"ContainerFile": "FROM scratch\n",
+			"Build": map[string]any{
+				"ImageTag":  []any{"localhost/b:latest"},
+				"ForceRM":   false,
+				"TLSVerify": false,
+			},
+		},
+	}
+	iu := eval.UnitRecord{
+		Kind: "image", Stem: "i", Filename: "i.image",
+		Data: map[string]any{"Image": map[string]any{
+			"Image": "img", "AllTags": false, "TLSVerify": false,
+		}},
+	}
+	nu := eval.UnitRecord{
+		Kind: "network", Stem: "n", Filename: "n.network",
+		Data: map[string]any{"Network": map[string]any{"Internal": false, "IPv6": false}},
+	}
+	files, err := r.BuildFileSet([]eval.Quadlet{{Name: "z", Units: []eval.UnitRecord{cu, vu, bu, iu, nu}}})
 	if err != nil {
 		t.Fatalf("BuildFileSet: %v", err)
 	}
-	for _, want := range []string{"StopTimeout=0", "HealthMaxLogCount=0", "Notify=false"} {
-		if !strings.Contains(string(files["z.container"].Content), want) {
-			t.Errorf("z.container missing %q:\n%s", want, files["z.container"].Content)
-		}
+	expect := map[string][]string{
+		"z.container": {"StopTimeout=0", "HealthMaxLogCount=0", "Notify=false",
+			"HttpProxy=false", "ReadOnlyTmpfs=false", "StartWithPod=false", "RunInit=false"},
+		"v.volume":  {"UID=0", "GID=0"},
+		"b.build":   {"ForceRM=false", "TLSVerify=false"},
+		"i.image":   {"AllTags=false", "TLSVerify=false"},
+		"n.network": {"Internal=false", "IPv6=false"},
 	}
-	for _, want := range []string{"UID=0", "GID=0"} {
-		if !strings.Contains(string(files["v.volume"].Content), want) {
-			t.Errorf("v.volume missing %q:\n%s", want, files["v.volume"].Content)
+	for file, wants := range expect {
+		for _, want := range wants {
+			if !strings.Contains(string(files[file].Content), want) {
+				t.Errorf("%s missing %q:\n%s", file, want, files[file].Content)
+			}
 		}
 	}
 }

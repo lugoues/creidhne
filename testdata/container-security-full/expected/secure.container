@@ -5,6 +5,7 @@ HttpProxy=true
 NoNewPrivileges=true
 SeccompProfile=/etc/seccomp.json
 AppArmor=container-default
+SecurityLabelDisable=false
 SecurityLabelFileType=container_file_t
 SecurityLabelType=container_t
 SecurityLabelLevel=s0:c100,c200

@@ -11,9 +11,9 @@ Artifact={{ .Artifact.Artifact }}
 {{ end -}}
 {{ if .Artifact.DecryptionKey -}}DecryptionKey={{ .Artifact.DecryptionKey }}
 {{ end -}}
-{{ if .Artifact.TLSVerify -}}TLSVerify=true
+{{ if isset .Artifact "TLSVerify" -}}TLSVerify={{ .Artifact.TLSVerify }}
 {{ end -}}
-{{ if .Artifact.Quiet -}}Quiet=true
+{{ if isset .Artifact "Quiet" -}}Quiet={{ .Artifact.Quiet }}
 {{ end -}}
 {{ if isset .Artifact "Retry" -}}Retry={{ printf "%d" .Artifact.Retry }}
 {{ end -}}

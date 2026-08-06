@@ -19,13 +19,13 @@
 {{ end -}}
 {{ range .Network.IPRange -}}IPRange={{ . }}
 {{ end -}}
-{{ if .Network.IPv6 -}}IPv6=true
+{{ if isset .Network "IPv6" -}}IPv6={{ .Network.IPv6 }}
 {{ end -}}
-{{ if .Network.Internal -}}Internal=true
+{{ if isset .Network "Internal" -}}Internal={{ .Network.Internal }}
 {{ end -}}
-{{ if .Network.DisableDNS -}}DisableDNS=true
+{{ if isset .Network "DisableDNS" -}}DisableDNS={{ .Network.DisableDNS }}
 {{ end -}}
-{{ if .Network.NetworkDeleteOnStop -}}NetworkDeleteOnStop=true
+{{ if isset .Network "NetworkDeleteOnStop" -}}NetworkDeleteOnStop={{ .Network.NetworkDeleteOnStop }}
 {{ end -}}
 {{ range .Network.DNS -}}DNS={{ . }}
 {{ end -}}

@@ -403,8 +403,16 @@ func RunDiff(livePath string, newContent []byte, liveLabel, newLabel, tool strin
 			}
 			return "", fmt.Errorf("diff tool %q: %w", tool, err)
 		}
-		// A non-zero exit is conventional for diff tools when files differ; the
-		// diff itself is on stdout, so fall through and return it.
+		// Exit status 1 is the diff convention for "files differ"; the diff
+		// itself is on stdout, so fall through and return it. Anything higher
+		// is an operational failure (GNU diff documents 2 as "trouble", e.g. an
+		// unreadable file), which must not pass as a quiet or partial diff.
+		if code := exitErr.ExitCode(); code != 1 {
+			if msg := bytes.TrimSpace(stderr.Bytes()); len(msg) > 0 {
+				return "", fmt.Errorf("diff tool %q exited %d: %s", tool, code, msg)
+			}
+			return "", fmt.Errorf("diff tool %q exited %d", tool, code)
+		}
 	}
 	return stdout.String(), nil
 }

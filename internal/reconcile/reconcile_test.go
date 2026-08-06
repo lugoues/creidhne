@@ -349,6 +349,27 @@ func TestRunDiffExternalToolNonZeroExit(t *testing.T) {
 	}
 }
 
+// TestRunDiffExternalToolTroubleExit: exit status 1 means "files differ", but
+// anything higher is an operational failure (GNU diff's "trouble", status 2)
+// and must surface as an error instead of a quiet or partial diff.
+func TestRunDiffExternalToolTroubleExit(t *testing.T) {
+	dir := t.TempDir()
+	live := filepath.Join(dir, "f")
+	write(t, live, "a\n")
+	tool := filepath.Join(dir, "faildiff")
+	script := "#!/bin/sh\necho 'read error' >&2\nexit 2\n"
+	if err := os.WriteFile(tool, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := RunDiff(live, []byte("b\n"), "live", "new", tool)
+	if err == nil {
+		t.Fatal("expected an error for exit status 2")
+	}
+	if !strings.Contains(err.Error(), "read error") {
+		t.Fatalf("error should carry the tool's stderr, got: %v", err)
+	}
+}
+
 // TestWriteFileAtomicLeavesNoTemp: the atomic write renames its temp into place,
 // leaving only the target file (no .crei-*.tmp residue).
 func TestWriteFileAtomicLeavesNoTemp(t *testing.T) {

@@ -41,11 +41,11 @@ File={{ .containerfilePath }}
 {{ end -}}
 {{ range .Build.Annotation -}}Annotation={{ . }}
 {{ end -}}
-{{ if .Build.ForceRM -}}ForceRM=true
+{{ if isset .Build "ForceRM" -}}ForceRM={{ .Build.ForceRM }}
 {{ end -}}
 {{ if .Build.Pull -}}Pull={{ .Build.Pull }}
 {{ end -}}
-{{ if .Build.TLSVerify -}}TLSVerify=true
+{{ if isset .Build "TLSVerify" -}}TLSVerify={{ .Build.TLSVerify }}
 {{ end -}}
 {{ range .Build.Secret -}}Secret={{ . }}
 {{ end -}}

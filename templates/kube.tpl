@@ -10,7 +10,7 @@
 {{ end -}}
 {{ if .Kube.ExitCodePropagation -}}ExitCodePropagation={{ .Kube.ExitCodePropagation }}
 {{ end -}}
-{{ if .Kube.KubeDownForce -}}KubeDownForce=true
+{{ if isset .Kube "KubeDownForce" -}}KubeDownForce={{ .Kube.KubeDownForce }}
 {{ end -}}
 {{ if .Kube.LogDriver -}}LogDriver={{ .Kube.LogDriver }}
 {{ end -}}
