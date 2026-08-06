@@ -90,7 +90,9 @@ func newLintCmd() *cobra.Command {
 				return err
 			}
 			findings = append(findings, rules...)
-			findings = append(findings, imageRuleFindings(all, entries)...)
+			// Container coverage respects the quadlet filter (focus); the
+			// registry-entry checks inside are registry-wide by design.
+			findings = append(findings, imageRuleFindings(focus, all, entries)...)
 			findings = levels.apply(findings)
 			sortFindings(findings)
 			out := cmd.OutOrStdout()

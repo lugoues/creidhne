@@ -150,7 +150,10 @@ func newStopCmd() *cobra.Command {
 			}
 			preDone := map[string]string{}
 			for _, r := range rows {
-				if !isUp(r.Runtime) && r.Runtime != "activating" {
+				// An empty runtime means systemd could not be queried, not
+				// "down": those units still get a stop attempt (idempotent)
+				// rather than a green check based on nothing.
+				if r.Runtime != "" && !isUp(r.Runtime) && r.Runtime != "activating" {
 					preDone[r.Service] = "not running"
 				}
 			}

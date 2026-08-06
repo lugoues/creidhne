@@ -205,6 +205,10 @@ func gatherStatus(cfg config, only []string) (statusInput, []string, error) {
 			}
 			raw, err := os.ReadFile(filepath.Join(cfg.QuadletDir, filepath.FromSlash(rel)))
 			if err != nil {
+				// The file exists (ListExisting saw it) but can't be read:
+				// leaving it out of the disk layer would misreport it as
+				// "missing"; say what actually happened instead.
+				notes = append(notes, rel+" unreadable: "+firstLine(err.Error()))
 				continue
 			}
 			in.Disk[rel] = state.HashBytes(raw)
@@ -398,6 +402,14 @@ func classifyRows(in statusInput) []statusRow {
 		switch {
 		case inDesired && onDisk && dHash == diskHash:
 			disk = diskSynced
+			// Even a file matching desired counts as tampered when it differs
+			// from the record: it was changed outside crei (to what a pending
+			// apply would write), and the stale-history layers (diff --stale,
+			// restart --stale) keep reading the outdated record until an apply
+			// refreshes it.
+			if inState && rec.SHA256 != diskHash {
+				disk = diskTampered
+			}
 		case inDesired && onDisk:
 			disk = diskPending
 			if inState && rec.SHA256 != diskHash {
@@ -448,6 +460,15 @@ func classifyRows(in statusInput) []statusRow {
 						if inState && rec.AppliedAt.After(rt.ActiveEnter) {
 							row.Stale = true
 							row.StaleNote = staleNote(p, rec, rt.ActiveEnter)
+						}
+					} else if row.Runtime == "done" && !rt.InactiveExit.IsZero() {
+						// A build that ran to completion rests inactive (no
+						// ActiveEnter to compare), so judge staleness by its
+						// last start; otherwise an applied context change
+						// after the run would never mark the build stale.
+						if inState && rec.AppliedAt.After(rt.InactiveExit) {
+							row.Stale = true
+							row.StaleNote = staleNote(p, rec, rt.InactiveExit)
 						}
 					}
 				}

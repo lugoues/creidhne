@@ -71,7 +71,7 @@ func newValidateCmd() *cobra.Command {
 			}
 			rules := lintQuadlets(quads, quads)
 			rules = append(rules, graphRuleFindings(quads)...)
-			rules = append(rules, imageRuleFindings(quads, images)...)
+			rules = append(rules, imageRuleFindings(quads, quads, images)...)
 			rules = levels.apply(rules)
 			sortFindings(rules)
 			if len(rules) > 0 {

@@ -193,17 +193,30 @@ func printRestartPreview(out io.Writer, rows []statusRow, verb verbSpec) {
 }
 
 // failures returns the units that cleared the queue but ended failed; a cleared
-// job is not proof of success.
-func (t *restartTracker) failures() map[string]bool {
+// job is not proof of success. A failed status query, or a unit systemd
+// returned nothing for, is indeterminate — reported as an error rather than
+// silently passing as success (green checks with no verification behind them).
+func (t *restartTracker) failures() (map[string]bool, error) {
 	failed := map[string]bool{}
-	if statuses, err := restartStatusFn(t.userScope, t.enqueue); err == nil {
-		for _, u := range t.enqueue {
-			if st, ok := statuses[u]; ok && t.verb.failed(st) {
-				failed[u] = true
-			}
+	statuses, err := restartStatusFn(t.userScope, t.enqueue)
+	if err != nil {
+		return nil, fmt.Errorf("jobs finished, but verifying unit states failed: %w", err)
+	}
+	var missing []string
+	for _, u := range t.enqueue {
+		st, ok := statuses[u]
+		if !ok {
+			missing = append(missing, u)
+			continue
+		}
+		if t.verb.failed(st) {
+			failed[u] = true
 		}
 	}
-	return failed
+	if len(missing) > 0 {
+		return failed, fmt.Errorf("jobs finished, but systemd returned no state for %s; verify with crei status", strings.Join(missing, ", "))
+	}
+	return failed, nil
 }
 
 // failedError names the failed units for a non-zero exit, or nil if none.
@@ -292,12 +305,15 @@ func (t *restartTracker) animate() error {
 		restartSleep(spinInterval)
 	}
 	// Final pass: overlay failures onto the settled block.
-	failed := t.failures()
+	failed, verr := t.failures()
 	if len(failed) > 0 {
 		fmt.Fprintf(t.out, "\033[%dA", len(t.rows))
 		for _, r := range t.rows {
 			fmt.Fprintf(t.out, "\r\033[K  %s %s\n", t.glyph(r.Service, 0, failed), t.label(r))
 		}
+	}
+	if verr != nil {
+		return verr
 	}
 	return t.failedError(failed)
 }
@@ -339,11 +355,14 @@ func (t *restartTracker) plainFlow(in io.Reader, needConfirm bool) error {
 		}
 		restartSleep(restartPoll)
 	}
-	failed := t.failures()
+	failed, verr := t.failures()
 	for _, r := range t.rows {
 		if failed[r.Service] {
 			fmt.Fprintf(t.out, "  %s %s\n", red("✗"), r.Service)
 		}
+	}
+	if verr != nil {
+		return verr
 	}
 	return t.failedError(failed)
 }

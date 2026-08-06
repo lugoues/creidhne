@@ -11,10 +11,14 @@ import (
 )
 
 // unitDirectives are the [Unit] dependency directives whose values name other
-// systemd units; each becomes a labeled edge in the graph.
+// systemd units; each becomes a labeled edge in the graph. Keep in sync with
+// #UnitDeps in creidhne/unit_deps.cue — a directive the schema accepts but
+// this list omits silently vanishes from the graph.
 var unitDirectives = []string{
 	"After", "Before", "Requires", "Requisite", "Wants",
 	"BindsTo", "PartOf", "Upholds", "Conflicts", "OnFailure", "OnSuccess",
+	"PropagatesReloadTo", "ReloadPropagatedFrom",
+	"PropagatesStopTo", "StopPropagatedFrom", "JoinsNamespaceOf",
 }
 
 // graphNode is a unit (or an external systemd unit referenced by one).
@@ -180,6 +184,11 @@ func (g *depGraph) addResourceEdges(u eval.UnitRecord, catalog map[string]graphN
 	}
 	for _, v := range resourceStrings(u.Data, "volumeStrings") {
 		link(firstField(v), "volume")
+	}
+	// Kube units reference networks through raw [Kube] Network= strings (no
+	// computed networkStrings), so resolve those against the catalog too.
+	for _, n := range nestedList(u.Data, "Kube", "Network") {
+		link(firstField(n), "network")
 	}
 }
 

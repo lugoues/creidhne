@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/registry"
@@ -16,7 +15,7 @@ import (
 //   - image/unmanaged: a container whose Image= is a raw registry ref rather
 //     than a registry entry's #ref (or a managed .build) receives no update
 //     management. Off by default; enable to be nudged to full coverage.
-func imageRuleFindings(all []eval.Quadlet, entries []eval.ImageEntry) []ruleFinding {
+func imageRuleFindings(focus, all []eval.Quadlet, entries []eval.ImageEntry) []ruleFinding {
 	var out []ruleFinding
 
 	// refs a container renders when it consumes a registry entry.
@@ -26,6 +25,18 @@ func imageRuleFindings(all []eval.Quadlet, entries []eval.ImageEntry) []ruleFind
 			managed[e.Image+"@"+e.Digest] = true
 		}
 		managed[e.Image] = true // unpinned entries render the bare image
+	}
+
+	// Actual sibling-unit filenames, resolved against the whole project. A
+	// suffix test alone would also exempt a genuine OCI repository that merely
+	// ends in ".build"/".image" (e.g. registry.example/app.image:v1).
+	siblingUnits := map[string]bool{}
+	for _, q := range all {
+		for _, u := range q.Units {
+			if u.Kind == "build" || u.Kind == "image" {
+				siblingUnits[u.Filename] = true
+			}
+		}
 	}
 
 	for _, e := range entries {
@@ -41,7 +52,7 @@ func imageRuleFindings(all []eval.Quadlet, entries []eval.ImageEntry) []ruleFind
 		}
 	}
 
-	for _, q := range all {
+	for _, q := range focus {
 		for _, u := range q.Units {
 			if u.Kind != "container" {
 				continue
@@ -50,7 +61,7 @@ func imageRuleFindings(all []eval.Quadlet, entries []eval.ImageEntry) []ruleFind
 			switch {
 			case img == "":
 				continue
-			case strings.HasSuffix(img, ".build") || strings.HasSuffix(img, ".image"):
+			case siblingUnits[img]:
 				continue // built/managed by a sibling unit
 			case managed[img]:
 				continue

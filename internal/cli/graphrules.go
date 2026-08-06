@@ -46,7 +46,15 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 	var networks []eval.UnitRecord
 	var attachable []eval.UnitRecord   // containers and pods
 	attachers := map[string][]string{} // network filename -> attaching unit filenames
+	attached := map[string]bool{}      // "network|unit" — dedupe: one unit is one attacher
 	owner := map[string]string{}       // unit filename -> owning quadlet
+	attach := func(ref, unit string) {
+		if !strings.HasSuffix(ref, ".network") || attached[ref+"|"+unit] {
+			return
+		}
+		attached[ref+"|"+unit] = true
+		attachers[ref] = append(attachers[ref], unit)
+	}
 	for _, q := range all {
 		for _, u := range q.Units {
 			owner[u.Filename] = q.Name
@@ -56,10 +64,14 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 			case "container", "pod":
 				attachable = append(attachable, u)
 				for _, n := range resourceStrings(u.Data, "networkStrings") {
-					ref := firstField(n)
-					if strings.HasSuffix(ref, ".network") {
-						attachers[ref] = append(attachers[ref], u.Filename)
-					}
+					attach(firstField(n), u.Filename)
+				}
+			case "kube":
+				// Kube units attach networks through raw [Kube] Network=
+				// strings; without them a network used only by a kube would
+				// misreport as orphaned (or as missing its pair attacher).
+				for _, n := range nestedList(u.Data, "Kube", "Network") {
+					attach(firstField(n), u.Filename)
 				}
 			}
 		}

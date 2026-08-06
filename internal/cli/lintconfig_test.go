@@ -62,13 +62,17 @@ func TestImageRuleFindings(t *testing.T) {
 		{Key: "loose", Image: "docker.io/a/y:v1"},
 	}
 	quads := []eval.Quadlet{{Name: "app", Units: []eval.UnitRecord{
+		{Kind: "build", Filename: "app.build", Data: map[string]any{}},
 		{Kind: "container", Filename: "managed.container", Data: map[string]any{"imageString": "docker.io/a/x:v1@sha256:abc"}},
 		{Kind: "container", Filename: "loose.container", Data: map[string]any{"imageString": "docker.io/a/y:v1"}},
 		{Kind: "container", Filename: "inline.container", Data: map[string]any{"imageString": "docker.io/raw/thing:latest"}},
 		{Kind: "container", Filename: "built.container", Data: map[string]any{"imageString": "app.build"}},
+		// Suffix alone must not exempt: this is a real OCI repo that merely
+		// ends in ".image", with no sibling unit of that name.
+		{Kind: "container", Filename: "sneaky.container", Data: map[string]any{"imageString": "registry.example/app.image"}},
 	}}}
 
-	fs := imageRuleFindings(quads, entries)
+	fs := imageRuleFindings(quads, quads, entries)
 	byRule := map[string][]string{}
 	for _, f := range fs {
 		byRule[f.Rule] = append(byRule[f.Rule], f.Unit+": "+f.Message)
@@ -76,9 +80,13 @@ func TestImageRuleFindings(t *testing.T) {
 	if n := len(byRule["image/unpinned"]); n != 1 || !strings.Contains(byRule["image/unpinned"][0], "loose") {
 		t.Fatalf("unpinned findings wrong: %v", byRule["image/unpinned"])
 	}
-	// Only the raw inline image is unmanaged: the managed ref, the unpinned
-	// entry's bare ref, and the .build self-ref are all covered.
-	if n := len(byRule["image/unmanaged"]); n != 1 || !strings.Contains(byRule["image/unmanaged"][0], "inline.container") {
+	// The raw inline image and the .image-suffixed real repo are unmanaged:
+	// the managed ref, the unpinned entry's bare ref, and the ref matching an
+	// actual sibling .build unit are all covered.
+	unmanaged := strings.Join(byRule["image/unmanaged"], "\n")
+	if n := len(byRule["image/unmanaged"]); n != 2 ||
+		!strings.Contains(unmanaged, "inline.container") ||
+		!strings.Contains(unmanaged, "sneaky.container") {
 		t.Fatalf("unmanaged findings wrong: %v", byRule["image/unmanaged"])
 	}
 }

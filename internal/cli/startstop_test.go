@@ -152,8 +152,15 @@ func stubJobsClear(t *testing.T) {
 	op, os2, osl := pendingJobsFn, restartStatusFn, restartSleep
 	t.Cleanup(func() { pendingJobsFn, restartStatusFn, restartSleep = op, os2, osl })
 	pendingJobsFn = func(bool, []string) (map[string]string, error) { return map[string]string{}, nil }
-	restartStatusFn = func(bool, []string) (map[string]systemd.UnitStatus, error) {
-		return map[string]systemd.UnitStatus{}, nil
+	restartStatusFn = func(_ bool, units []string) (map[string]systemd.UnitStatus, error) {
+		// Like the real systemctl show: one block per requested unit. A unit
+		// missing from the map is treated as unverified (an error), so the
+		// stub must answer for everything asked.
+		m := map[string]systemd.UnitStatus{}
+		for _, u := range units {
+			m[u] = systemd.UnitStatus{LoadState: "loaded", ActiveState: "inactive"}
+		}
+		return m, nil
 	}
 	restartSleep = func(time.Duration) {}
 }
