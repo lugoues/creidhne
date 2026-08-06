@@ -82,6 +82,12 @@ func nextPin(e eval.ImageEntry, r registry.Ref, minAge time.Duration, now time.T
 		c.Age = now.Sub(created)
 		c.HasAge = true
 		c.Young = minAge > 0 && c.Age < minAge
+	} else if minAge > 0 {
+		// Age unknown (config-fetch or auth failure): with a min-age gate in
+		// effect the candidate cannot be proven aged, so it keeps the young
+		// marker — otherwise a transient lookup failure would waltz an
+		// unvetted image straight through `update -y`.
+		c.Young = true
 	}
 	return c, nil
 }
@@ -99,7 +105,11 @@ type updateItem struct {
 func (it updateItem) label() string {
 	name := bold(it.e.Key)
 	if it.c.Young {
-		name += "  ! younger than min-age"
+		if it.c.HasAge {
+			name += "  ! younger than min-age"
+		} else {
+			name += "  ! age unknown (min-age in effect)"
+		}
 	}
 	age := "age unknown"
 	if it.c.HasAge {
@@ -212,14 +222,26 @@ func newImageUpdateCmd() *cobra.Command {
 			for _, w := range warns {
 				fmt.Fprintln(out, yellow("! "+w))
 			}
+			// A lookup failure means those entries' registry state is unknown:
+			// the command still processes what it could resolve, but must not
+			// exit 0 claiming everything is current (CI would read an outage
+			// as "up to date").
+			lookupErr := func() error {
+				if len(warns) > 0 {
+					return fmt.Errorf("%d entry lookup(s) failed; their update state is unknown", len(warns))
+				}
+				return nil
+			}
 			printHeld(out, held, now)
 			if len(items) == 0 {
 				if len(held) > 0 {
 					fmt.Fprintln(out, "Nothing to update (every candidate is locked).")
-					return nil
+					return lookupErr()
 				}
-				fmt.Fprintln(out, "Everything up to date.")
-				return nil
+				if len(warns) == 0 {
+					fmt.Fprintln(out, "Everything up to date.")
+				}
+				return lookupErr()
 			}
 
 			var chosen []int
@@ -256,7 +278,7 @@ func newImageUpdateCmd() *cobra.Command {
 			}
 			if len(chosen) == 0 {
 				fmt.Fprintln(out, "Nothing selected.")
-				return nil
+				return lookupErr()
 			}
 
 			for _, k := range chosen {
@@ -278,7 +300,7 @@ func newImageUpdateCmd() *cobra.Command {
 				return fmt.Errorf("write %s: %w", path, err)
 			}
 			fmt.Fprintf(out, "\nWrote %d update(s). Run 'crei plan' to see the change.\n", len(chosen))
-			return nil
+			return lookupErr()
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the picker; apply all aged candidates")

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -241,29 +243,94 @@ func TestCmdSecretsPruneNothing(t *testing.T) {
 	}
 }
 
+// TestCmdSecretCreateResolvesHandAuthoredKey: `create app_db` against the
+// hand-authored `app_db: {name: "app-db"}` must create the declared podman
+// name "app-db" — not a stray "app_db" secret plus a duplicate crei-registry
+// entry.
+func TestCmdSecretCreateResolvesHandAuthoredKey(t *testing.T) {
+	dir := setupProject(t, secretsRegistryMain)
+	created := map[string]string{}
+	stubSecrets(t, map[string]bool{},
+		func(name string, v []byte, replace bool) error {
+			created[name] = string(v)
+			return nil
+		},
+		func(string) ([]byte, bool, error) { return []byte("hunter2"), false, nil })
+
+	out, err := runCmd(t, "--dir", dir, "secret", "create", "app_db")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if _, ok := created["app-db"]; !ok || len(created) != 1 {
+		t.Fatalf("want podman secret app-db (the declared name), got %v", created)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "registries", "secrets.cue")); err == nil {
+		t.Fatalf("hand-authored declaration must not be re-registered in registries/secrets.cue")
+	}
+}
+
+// TestCmdSecretCreateRegistersExistingUnflagged: creating an undeclared secret
+// that already exists in podman still registers it (that is how adoption into
+// the registry starts), flags or not.
+func TestCmdSecretCreateRegistersExistingUnflagged(t *testing.T) {
+	dir := setupProject(t, secretsRegistryMain)
+	stubSecrets(t, map[string]bool{"legacy": true},
+		func(name string, v []byte, replace bool) error {
+			t.Errorf("existing secret without --replace must not be re-created (got create %q)", name)
+			return nil
+		}, nil)
+
+	out, err := runCmd(t, "--dir", dir, "secret", "create", "legacy")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "registries", "secrets.cue"))
+	if err != nil {
+		t.Fatalf("an unflagged create of an existing secret must still register it: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(body), "legacy") {
+		t.Fatalf("registry missing the entry:\n%s", body)
+	}
+}
+
 // TestCmdSecretsAdopt: existing unlabeled registry secrets are re-created
 // with their value byte-exact; managed and missing ones are left alone.
 func TestCmdSecretsAdopt(t *testing.T) {
 	dir := setupProject(t, secretsRegistryMain)
 	created := map[string]string{}
-	replaced := map[string]bool{}
 	stubSecrets(t, map[string]bool{"app-db": true, "api_key": true},
 		func(name string, v []byte, replace bool) error {
-			created[name] = string(v)
-			replaced[name] = replace
+			t.Errorf("adopt must go through AdoptSecret (metadata-preserving), not CreateSecret")
 			return nil
 		}, nil)
+	appDBInfo := podman.SecretInfo{
+		Labels: map[string]string{"other.tool": "yes"},
+		Driver: "pass", DriverOpts: map[string]string{"prefix": "svc"},
+	}
 	podmanSecretInfos = func() (map[string]podman.SecretInfo, error) {
-		return map[string]podman.SecretInfo{"app-db": {}, "api_key": {Managed: true}}, nil
+		return map[string]podman.SecretInfo{"app-db": appDBInfo, "api_key": {Managed: true}}, nil
 	}
 	podmanReadSecret = func(name string) ([]byte, error) { return []byte("value-of-" + name + "\n"), nil }
+	adoptedInfo := map[string]podman.SecretInfo{}
+	oldAdopt := podmanAdoptSecret
+	t.Cleanup(func() { podmanAdoptSecret = oldAdopt })
+	podmanAdoptSecret = func(name string, v []byte, info podman.SecretInfo) error {
+		created[name] = string(v)
+		adoptedInfo[name] = info
+		return nil
+	}
 
 	out, err := runCmd(t, "--dir", dir, "secret", "adopt")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if len(created) != 1 || created["app-db"] != "value-of-app-db\n" || !replaced["app-db"] {
-		t.Fatalf("expected app-db re-created byte-exact with replace, got %v (replace=%v)", created, replaced)
+	if len(created) != 1 || created["app-db"] != "value-of-app-db\n" {
+		t.Fatalf("expected app-db re-created byte-exact, got %v", created)
+	}
+	// The existing labels and driver ride along so adoption changes only
+	// ownership metadata.
+	if got := adoptedInfo["app-db"]; got.Labels["other.tool"] != "yes" || got.Driver != "pass" || got.DriverOpts["prefix"] != "svc" {
+		t.Fatalf("adopt must preserve labels and driver, got %+v", got)
 	}
 	if !strings.Contains(out, "app-db adopted") {
 		t.Errorf("want adoption notice:\n%s", out)

@@ -82,6 +82,19 @@ func Parse(ref string) (Ref, error) {
 	if _, err := name.NewRepository(repo, name.WeakValidation); err != nil {
 		return Ref{}, fmt.Errorf("invalid image repository %q: %w", repo, err)
 	}
+	// Validate the tag and digest portions too: an invalid one written back to
+	// registries/images.cue would fail schema validation on every later load,
+	// wedging the registry until hand-edited.
+	if r.Tag != "" {
+		if _, err := name.NewTag(repo+":"+r.Tag, name.WeakValidation); err != nil {
+			return Ref{}, fmt.Errorf("invalid image tag %q: %w", r.Tag, err)
+		}
+	}
+	if r.Digest != "" {
+		if _, err := name.NewDigest(repo+"@"+r.Digest, name.WeakValidation); err != nil {
+			return Ref{}, fmt.Errorf("invalid image digest %q: %w", r.Digest, err)
+		}
+	}
 	r.Repo = repo
 	return r, nil
 }

@@ -24,6 +24,7 @@ var (
 	podmanListSecrets  = podman.ListSecrets
 	podmanSecretInfos  = podman.SecretInfos
 	podmanCreateSecret = podman.CreateSecret
+	podmanAdoptSecret  = podman.AdoptSecret
 	podmanRemoveSecret = podman.RemoveSecret
 	podmanReadSecret   = podman.ReadSecret
 	secretValuer       = promptSecretValue
@@ -253,7 +254,9 @@ func newSecretsAdoptCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := podmanCreateSecret(name, value, true); err != nil {
+				// Preserve the secret's other labels and its driver: adopt
+				// changes ownership metadata, nothing else.
+				if err := podmanAdoptSecret(name, value, info); err != nil {
 					return err
 				}
 				adopted++

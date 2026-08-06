@@ -16,7 +16,8 @@ func TestParse(t *testing.T) {
 		{"docker.io/ttlequals0/minuspod", "docker.io/ttlequals0/minuspod", "", ""},
 		{"registry:5000/team/app:1.2", "registry:5000/team/app", "1.2", ""},
 		// combined form still splits (Parse is form-agnostic)
-		{"docker.io/x/y:v3@sha256:abc", "docker.io/x/y", "v3", "sha256:abc"},
+		{"docker.io/x/y:v3@sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+			"docker.io/x/y", "v3", "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"},
 	}
 	for _, c := range cases {
 		r, err := Parse(c.in)
@@ -25,6 +26,18 @@ func TestParse(t *testing.T) {
 		}
 		if r.Repo != c.repo || r.Tag != c.tag || r.Digest != c.digest {
 			t.Fatalf("Parse(%q) = %+v, want repo=%q tag=%q digest=%q", c.in, r, c.repo, c.tag, c.digest)
+		}
+	}
+	// A malformed tag or digest must fail up front: written back to
+	// registries/images.cue it would wedge every later load on schema
+	// validation.
+	for _, bad := range []string{
+		"docker.io/x/y:v1@sha256:nothex",
+		"docker.io/x/y:v1@sha256:abc",
+		"docker.io/x/y:not a tag",
+	} {
+		if _, err := Parse(bad); err == nil {
+			t.Fatalf("Parse(%q) must error", bad)
 		}
 	}
 	if got := (Ref{Repo: "docker.io/x/y", Tag: "v3"}).TaggedRef(); got != "docker.io/x/y:v3" {

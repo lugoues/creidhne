@@ -54,7 +54,7 @@ func newImagePinCmd() *cobra.Command {
 				only[a] = true
 			}
 
-			changed := 0
+			changed, failed := 0, 0
 			for i := range entries {
 				if len(only) > 0 && !only[entries[i].Key] {
 					continue
@@ -69,6 +69,7 @@ func newImagePinCmd() *cobra.Command {
 				r, err := registry.Parse(entries[i].Image)
 				if err != nil {
 					fmt.Fprintln(out, yellow("! "+entries[i].Key+": "+err.Error()))
+					failed++
 					continue
 				}
 				if r.Tag == "" { // unmanaged: no channel to resolve
@@ -84,6 +85,7 @@ func newImagePinCmd() *cobra.Command {
 				digest, err := registry.Digest(r.TaggedRef())
 				if err != nil {
 					fmt.Fprintln(out, yellow("! "+entries[i].Key+": "+firstLine(err.Error())))
+					failed++
 					continue
 				}
 
@@ -91,9 +93,20 @@ func newImagePinCmd() *cobra.Command {
 				entries[i].Digest = digest // pin writes only the digest field
 				changed++
 			}
-			if changed == 0 {
-				fmt.Fprintln(out, "Nothing to pin.")
+			// A resolution failure must fail the command (after writing any
+			// successful pins below): a partially-failed `pin -y` exiting 0
+			// would let automation proceed with entries still unpinned.
+			pinErr := func() error {
+				if failed > 0 {
+					return fmt.Errorf("%d entr(y/ies) failed to resolve and remain unpinned", failed)
+				}
 				return nil
+			}
+			if changed == 0 {
+				if failed == 0 {
+					fmt.Fprintln(out, "Nothing to pin.")
+				}
+				return pinErr()
 			}
 
 			path := filepath.Join(projectDir, "registries", "images.cue")
@@ -115,7 +128,7 @@ func newImagePinCmd() *cobra.Command {
 				return fmt.Errorf("write %s: %w", path, err)
 			}
 			fmt.Fprintf(out, "\nWrote %d pin(s). Run 'crei plan' to see the change.\n", changed)
-			return nil
+			return pinErr()
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt")

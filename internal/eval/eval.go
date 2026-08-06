@@ -340,6 +340,36 @@ func SecretRegistry(dir string, overlay map[string]load.Source, field string) ([
 	return names, nil
 }
 
+// SecretRegistryPairs returns the hand-authored registry's entries as
+// (key, podman name) pairs, sorted by key. SecretRegistry's name list is
+// enough for reconciling against podman, but commands addressing a secret by
+// its CUE key (e.g. `crei secret create tls_cert` for `tls_cert: {name:
+// "tls-cert"}`) need the pair to resolve the declared podman name.
+func SecretRegistryPairs(dir string, overlay map[string]load.Source, field string) ([]SecretEntry, error) {
+	v, err := buildInstance(dir, overlay)
+	if err != nil {
+		return nil, err
+	}
+	reg := v.LookupPath(cue.ParsePath(field))
+	if !reg.Exists() {
+		return nil, nil
+	}
+	iter, err := reg.Fields()
+	if err != nil {
+		return nil, fmt.Errorf("%q is not a secret registry (want a struct of {name: string} entries): %w", field, err)
+	}
+	var out []SecretEntry
+	for iter.Next() {
+		name, err := iter.Value().LookupPath(cue.ParsePath("name")).String()
+		if err != nil {
+			return nil, fmt.Errorf("%s.%s has no concrete string \"name\"; is %q your #SecretRegistry?", field, iter.Selector(), field)
+		}
+		out = append(out, SecretEntry{Key: iter.Selector().Unquoted(), Name: name})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
+}
+
 // extractQuadlets finds every #Quadlet value (one carrying a manifest list)
 // reachable from v, descending through plain struct fields so quadlets nested
 // under a grouping struct (e.g. `stacks: web: #Quadlet`) or wrapped by the test

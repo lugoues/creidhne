@@ -60,9 +60,12 @@ func ListSecrets() (map[string]bool, error) {
 
 // SecretInfo is what crei knows about one existing podman secret.
 type SecretInfo struct {
-	Managed   bool // carries the crei ownership label
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Managed    bool // carries the crei ownership label
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Labels     map[string]string // all labels, including foreign ones
+	Driver     string            // storage driver name ("file" is podman's default)
+	DriverOpts map[string]string
 }
 
 // SecretInfos returns every existing secret with its label state and
@@ -94,6 +97,10 @@ func SecretInfos() (map[string]SecretInfo, error) {
 		Spec      struct {
 			Name   string            `json:"Name"`
 			Labels map[string]string `json:"Labels"`
+			Driver struct {
+				Name    string            `json:"Name"`
+				Options map[string]string `json:"Options"`
+			} `json:"Driver"`
 		} `json:"Spec"`
 	}
 	if err := json.Unmarshal(out, &rows); err != nil {
@@ -105,9 +112,12 @@ func SecretInfos() (map[string]SecretInfo, error) {
 			continue
 		}
 		infos[r.Spec.Name] = SecretInfo{
-			Managed:   r.Spec.Labels[managedLabelKey] == managedLabelValue,
-			CreatedAt: r.CreatedAt,
-			UpdatedAt: r.UpdatedAt,
+			Managed:    r.Spec.Labels[managedLabelKey] == managedLabelValue,
+			CreatedAt:  r.CreatedAt,
+			UpdatedAt:  r.UpdatedAt,
+			Labels:     r.Spec.Labels,
+			Driver:     r.Spec.Driver.Name,
+			DriverOpts: r.Spec.Driver.Options,
 		}
 	}
 	return infos, nil
@@ -178,4 +188,26 @@ var runIn = func(stdin []byte, args ...string) error {
 // existing secret of the same name is overwritten.
 func CreateSecret(name string, value []byte, replace bool) error {
 	return runIn(value, createSecretArgs(name, replace)...)
+}
+
+// AdoptSecret re-creates an existing secret with the crei ownership label
+// while preserving everything else about it: its other labels and its storage
+// driver (name and options). A plain CreateSecret would silently reset a
+// pass/shell-driver secret to the default file driver and drop another
+// tool's labels — changing far more than ownership metadata.
+func AdoptSecret(name string, value []byte, info SecretInfo) error {
+	args := []string{"secret", "create", "--replace", "--label", ManagedLabel}
+	for k, v := range info.Labels {
+		if k == managedLabelKey {
+			continue
+		}
+		args = append(args, "--label", k+"="+v)
+	}
+	if info.Driver != "" && info.Driver != "file" {
+		args = append(args, "--driver", info.Driver)
+	}
+	for k, v := range info.DriverOpts {
+		args = append(args, "--driver-opts", k+"="+v)
+	}
+	return runIn(value, append(args, "--", name, "-")...)
 }

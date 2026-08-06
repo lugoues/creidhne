@@ -74,7 +74,7 @@ func TestCheckOutdated(t *testing.T) {
 		{Key: "unpinned", Image: "docker.io/a/x:v1"},
 		{Key: "unmanaged", Image: "docker.io/a/y", Digest: "sha256:z"},
 	}
-	rows, available := checkOutdated(entries, 0, now, res)
+	rows, available, _ := checkOutdated(entries, 0, now, res)
 	if available != 2 {
 		t.Fatalf("available = %d, want 2 (behind + young; young is offered, just marked)", available)
 	}
@@ -281,7 +281,7 @@ func TestUpdateSkipsLocked(t *testing.T) {
 
 	// checkOutdated: locked is reported, with what it holds back, and does not
 	// count as an available update (so outdated stays exit-zero).
-	rows, available := checkOutdated([]eval.ImageEntry{locked}, 0, now, res)
+	rows, available, _ := checkOutdated([]eval.ImageEntry{locked}, 0, now, res)
 	if available != 0 {
 		t.Fatalf("a locked entry must not count as available, got %d", available)
 	}

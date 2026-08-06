@@ -72,6 +72,10 @@ package creidhne
 	// source fields.
 	#ref: [if _digest != "" {"\(image)@\(_digest)"}, image][0]
 
-	// Open for policy fields added in later phases (semver range, ...).
-	...
+	// Closed: crei owns registries/images.cue and regenerates it canonically
+	// on every pin/update/add/lock, emitting only the fields it decodes. A
+	// field the schema admitted but crei didn't know would be silently
+	// deleted by that rewrite — rejecting it up front is the honest contract.
+	// (The vendored schema is synced from the binary, so schema and decoder
+	// cannot drift apart.)
 }

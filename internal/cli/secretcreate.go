@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -42,6 +44,13 @@ func newSecretCreateCmd() *cobra.Command {
 			case "", "alphanumeric", "hex", "base64":
 			default:
 				return fmt.Errorf("invalid --charset %q (want alphanumeric, hex, or base64)", charset)
+			}
+			// The schema's floor is 8; podman refuses secrets over 512KB, and a
+			// multi-KB generated password is a typo, not a policy. Validating
+			// here keeps an invalid length out of both podman and the registry
+			// (a recorded length below 8 would fail every later project load).
+			if length != 0 && (length < 8 || length > 4096) {
+				return fmt.Errorf("--length %d is out of range (8..4096, the schema minimum is 8)", length)
 			}
 			if manual && (length != 0 || charset != "") {
 				return fmt.Errorf("--manual takes no --length/--charset (a manual secret has no generate policy)")
@@ -93,14 +102,20 @@ func createOne(out io.Writer, cfg config, o createOpts) error {
 	if err != nil {
 		return err
 	}
-	handNames, err := eval.SecretRegistry(cfg.ProjectDir, overlay, cfg.SecretsField)
+	handPairs, err := eval.SecretRegistryPairs(cfg.ProjectDir, overlay, cfg.SecretsField)
 	if err != nil {
 		return err
 	}
+	// A hand-authored declaration matches by CUE key or by podman name, and
+	// matching by key resolves the declared podman name: `create tls_cert`
+	// against `tls_cert: {name: "tls-cert"}` must create "tls-cert", not a
+	// stray "tls_cert" plus a duplicate registry entry.
 	handAuthored := false
-	for _, n := range handNames {
-		if n == o.key {
+	handName := ""
+	for _, p := range handPairs {
+		if p.Key == o.key || p.Name == o.key {
 			handAuthored = true
+			handName = p.Name
 		}
 	}
 
@@ -143,14 +158,18 @@ func createOne(out io.Writer, cfg config, o createOpts) error {
 	if entry != nil && (!flagged || !o.force) {
 		eff = *entry
 	}
+	if handAuthored && o.podmanName == "" {
+		eff.Name = handName
+	}
 
 	// Value first, so an aborted prompt registers nothing.
 	name := eff.Name
 	if o.existing[name] && !o.replace {
 		fmt.Fprintf(out, "%s already exists in podman, skipping (use --replace to overwrite)\n", name)
 		// Still record the registration when it is new: declaring an existing
-		// secret is how adoption into the registry starts.
-		if entry == nil && !handAuthored && (flagged || eff.Generate != nil) {
+		// secret is how adoption into the registry starts — with or without
+		// policy flags (an unflagged create records a manual entry).
+		if entry == nil && !handAuthored {
 			if err := registerSecret(out, projectDir, entries, entryIdx, eff); err != nil {
 				return err
 			}
@@ -186,12 +205,25 @@ func createOne(out io.Writer, cfg config, o createOpts) error {
 		}
 	}
 
+	// Stage the registry update before touching podman: creating (and above
+	// all --replace-ing) the secret value is the irreversible half, so an
+	// unwritable registries/secrets.cue must abort while podman is unchanged.
+	var staged string
+	if !handAuthored {
+		staged, err = stageSecretRegistration(projectDir, entries, entryIdx, eff)
+		if err != nil {
+			return err
+		}
+	}
 	if err := podmanCreateSecret(name, value, o.replace); err != nil {
+		if staged != "" {
+			_ = os.Remove(staged)
+		}
 		return err
 	}
 	fmt.Fprintf(out, "%s created (%s)\n", green(name), how)
-	if !handAuthored {
-		if err := registerSecret(out, projectDir, entries, entryIdx, eff); err != nil {
+	if staged != "" {
+		if err := commitSecretRegistration(out, projectDir, staged, eff); err != nil {
 			return err
 		}
 	}
@@ -208,6 +240,18 @@ func createOne(out io.Writer, cfg config, o createOpts) error {
 // registerSecret upserts the entry into registries/secrets.cue and reports it.
 // A no-op when the entry is already recorded identically.
 func registerSecret(out io.Writer, projectDir string, entries []eval.SecretEntry, idx int, e eval.SecretEntry) error {
+	staged, err := stageSecretRegistration(projectDir, entries, idx, e)
+	if err != nil || staged == "" {
+		return err
+	}
+	return commitSecretRegistration(out, projectDir, staged, e)
+}
+
+// stageSecretRegistration writes the would-be registries/secrets.cue to a
+// staging file in the same directory and returns its path ("" when the entry
+// is already recorded identically). Staging up front proves the registry is
+// writable before any podman mutation; committing is then a rename.
+func stageSecretRegistration(projectDir string, entries []eval.SecretEntry, idx int, e eval.SecretEntry) (string, error) {
 	if idx >= 0 {
 		prev := entries[idx]
 		samePolicy := (prev.Generate == nil) == (e.Generate == nil)
@@ -215,14 +259,35 @@ func registerSecret(out io.Writer, projectDir string, entries []eval.SecretEntry
 			samePolicy = *prev.Generate == *e.Generate
 		}
 		if prev.Name == e.Name && samePolicy {
-			return nil
+			return "", nil
 		}
-		entries[idx] = e
+		updated := make([]eval.SecretEntry, len(entries))
+		copy(updated, entries)
+		updated[idx] = e
+		entries = updated
 	} else {
-		entries = append(entries, e)
+		entries = append(entries[:len(entries):len(entries)], e)
 	}
-	if err := writeSecretRegistry(projectDir, entries); err != nil {
-		return err
+	content, err := emitSecretRegistry(entries)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(projectDir, "registries")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create %s: %w", dir, err)
+	}
+	staged := filepath.Join(dir, ".secrets.cue.staged")
+	if err := os.WriteFile(staged, content, 0o644); err != nil {
+		return "", fmt.Errorf("stage %s: %w", staged, err)
+	}
+	return staged, nil
+}
+
+// commitSecretRegistration renames the staged file into place and reports it.
+func commitSecretRegistration(out io.Writer, projectDir string, staged string, e eval.SecretEntry) error {
+	path := filepath.Join(projectDir, "registries", "secrets.cue")
+	if err := os.Rename(staged, path); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
 	how := "manual"
 	if g := e.Generate; g != nil {

@@ -68,11 +68,16 @@ func newImageOutdatedCmd() *cobra.Command {
 				return nil
 			}
 			var rows []imageRow
-			available := 0
+			available, failures := 0, 0
 			withSpinner(out, "Checking registries", func() {
-				rows, available = checkOutdated(entries, defAge, time.Now(), liveResolver())
+				rows, available, failures = checkOutdated(entries, defAge, time.Now(), liveResolver())
 			})
 			printImageRows(out, rows)
+			// Failed lookups exit non-zero on their own: an outage or auth
+			// failure must be distinguishable from "everything current" in CI.
+			if failures > 0 {
+				return fmt.Errorf("%d lookup failure(s); those entries' update state is unknown", failures)
+			}
 			if available > 0 {
 				return errSilent{}
 			}
@@ -104,10 +109,12 @@ func liveResolver() resolver {
 }
 
 // checkOutdated resolves each managed entry and classifies it. Returns the
-// rows and how many have an available (non-held) update.
-func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Time, res resolver) ([]imageRow, int) {
+// rows, how many have an available (non-held) update, and how many lookups
+// failed (their update state is unknown, which callers must not report as
+// "everything current").
+func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Time, res resolver) ([]imageRow, int, int) {
 	var rows []imageRow
-	available := 0
+	available, failures := 0, 0
 	for _, e := range entries {
 		r, err := registry.Parse(e.Image)
 		if err != nil {
@@ -145,6 +152,7 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 			c, err := nextPin(e, r, defAge, now, res)
 			if err != nil {
 				row.note = "lookup failed: " + firstLine(err.Error())
+				failures++
 				break
 			}
 			if c.Reason == "" {
@@ -163,7 +171,7 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 		}
 		rows = append(rows, row)
 	}
-	return rows, available
+	return rows, available, failures
 }
 
 func short(digest string) string {
