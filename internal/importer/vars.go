@@ -3,7 +3,6 @@ package importer
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -33,9 +32,54 @@ func newEnvSet(warnf func(string, ...any)) *envSet {
 	return &envSet{vars: map[string]*envVar{}, warnf: warnf}
 }
 
-// varToken matches compose interpolation tokens: $$, ${VAR}, ${VAR<op><arg>},
-// and bare $VAR.
-var varToken = regexp.MustCompile(`\$(?:\$|\{[^}]+\}|[a-zA-Z_][a-zA-Z0-9_]*)`)
+// varTokenSpans scans s for compose interpolation tokens — $$, $VAR, and
+// ${...} — and returns their [start, end) spans. A scanner rather than a
+// regexp because compose supports nested interpolation (${A:-${B:-x}}), and a
+// pattern stopping at the first '}' would truncate the token and leave a
+// stray '}' in the rewritten output. An unterminated ${ is left as literal
+// text.
+func varTokenSpans(s string) [][2]int {
+	var spans [][2]int
+	for i := 0; i < len(s); {
+		if s[i] != '$' || i+1 >= len(s) {
+			i++
+			continue
+		}
+		switch c := s[i+1]; {
+		case c == '$':
+			spans = append(spans, [2]int{i, i + 2})
+			i += 2
+		case c == '{':
+			depth, j := 0, i+1
+			for ; j < len(s); j++ {
+				if s[j] == '{' {
+					depth++
+				} else if s[j] == '}' {
+					if depth--; depth == 0 {
+						j++
+						break
+					}
+				}
+			}
+			if depth != 0 {
+				i += 2 // unterminated: literal
+				continue
+			}
+			spans = append(spans, [2]int{i, j})
+			i = j
+		case c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'):
+			j := i + 1
+			for j < len(s) && (s[j] == '_' || (s[j] >= 'a' && s[j] <= 'z') || (s[j] >= 'A' && s[j] <= 'Z') || (s[j] >= '0' && s[j] <= '9')) {
+				j++
+			}
+			spans = append(spans, [2]int{i, j})
+			i = j
+		default:
+			i++
+		}
+	}
+	return spans
+}
 
 // record registers a variable occurrence and returns the env-field reference.
 func (e *envSet) record(name, def string, hasDefault bool) string {
@@ -64,7 +108,7 @@ func (e *envSet) rewrite(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
 	last := 0
-	for _, loc := range varToken.FindAllStringIndex(s, -1) {
+	for _, loc := range varTokenSpans(s) {
 		b.WriteString(quoteInner(s[last:loc[0]]))
 		tok := s[loc[0]:loc[1]]
 		last = loc[1]
@@ -72,9 +116,13 @@ func (e *envSet) rewrite(s string) string {
 			b.WriteString("$")
 			continue
 		}
-		name, def, hasDefault, alt := parseVarToken(tok)
+		name, def, hasDefault, alt, nested := parseVarToken(tok)
 		if alt {
 			e.warnf("variable ${%s} uses :+ (alternate value) which has no CUE equivalent; treating as a required variable", name)
+		}
+		if nested {
+			e.warnf("variable ${%s} has a nested default (%s) that cannot be preserved symbolically; treating as a required variable — use --resolve to bake values instead", name, tok)
+			hasDefault, def = false, ""
 		}
 		b.WriteString(`\(` + e.record(name, def, hasDefault) + `)`)
 	}
@@ -84,10 +132,12 @@ func (e *envSet) rewrite(s string) string {
 }
 
 // parseVarToken decodes an interpolation token (${NAME}, ${NAME:-def},
-// ${NAME-def}, ${NAME:?err}, ${NAME:+alt}, $NAME). alt reports the :+ form.
-func parseVarToken(tok string) (name, def string, hasDefault, alt bool) {
+// ${NAME-def}, ${NAME:?err}, ${NAME:+alt}, $NAME). alt reports the :+ form;
+// nested reports a default that itself contains an interpolation
+// (${A:-${B:-x}}), which callers cannot carry as a literal.
+func parseVarToken(tok string) (name, def string, hasDefault, alt, nested bool) {
 	if !strings.HasPrefix(tok, "${") {
-		return tok[1:], "", false, false
+		return tok[1:], "", false, false, false
 	}
 	body := tok[2 : len(tok)-1]
 	for i := 0; i < len(body); i++ {
@@ -96,24 +146,26 @@ func parseVarToken(tok string) (name, def string, hasDefault, alt bool) {
 			name = body[:i]
 			rest := strings.TrimPrefix(body[i:], ":")
 			if rest == "" {
-				return name, "", false, false
+				return name, "", false, false, false
 			}
 			op, arg := rest[0], rest[1:]
 			switch op {
 			case '-':
-				return name, arg, true, false
+				return name, arg, true, false, strings.Contains(arg, "${")
 			case '+':
-				return name, "", false, true
+				return name, "", false, true, false
 			}
-			return name, "", false, false
+			return name, "", false, false, false
 		}
 	}
-	return body, "", false, false
+	return body, "", false, false, false
 }
 
 // scanRawVariables collects every interpolation variable in the given files,
-// reporting whether each has a default anywhere. Used in resolve mode to warn
-// about variables that fall back to empty.
+// reporting whether every occurrence carries a default. One defaulted
+// occurrence must not vouch for a bare one elsewhere: with ${TAG:-latest} in
+// one place and ${TAG} in another, the latter still resolves to empty when
+// TAG is unset. Used in resolve mode to warn about that fallback.
 func scanRawVariables(paths []string) map[string]bool {
 	found := map[string]bool{}
 	for _, p := range paths {
@@ -121,15 +173,21 @@ func scanRawVariables(paths []string) map[string]bool {
 		if err != nil {
 			continue
 		}
-		for _, tok := range varToken.FindAllString(string(raw), -1) {
+		s := string(raw)
+		for _, loc := range varTokenSpans(s) {
+			tok := s[loc[0]:loc[1]]
 			if tok == "$$" {
 				continue
 			}
-			name, _, hasDefault, _ := parseVarToken(tok)
+			name, _, hasDefault, _, _ := parseVarToken(tok)
 			if name == "" {
 				continue
 			}
-			found[name] = found[name] || hasDefault
+			if prev, ok := found[name]; ok {
+				found[name] = prev && hasDefault
+			} else {
+				found[name] = hasDefault
+			}
 		}
 	}
 	return found

@@ -123,8 +123,9 @@ func rawFilesUseVariables(paths []string) bool {
 		if err != nil {
 			continue
 		}
-		for _, tok := range varToken.FindAllString(string(raw), -1) {
-			if tok != "$$" {
+		s := string(raw)
+		for _, loc := range varTokenSpans(s) {
+			if s[loc[0]:loc[1]] != "$$" {
 				return true
 			}
 		}

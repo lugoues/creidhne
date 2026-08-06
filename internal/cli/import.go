@@ -56,7 +56,14 @@ func newImportComposeCmd() *cobra.Command {
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()
-			wd, err := os.Getwd()
+			// Respect the persistent -C/--dir project directory (and its
+			// config validation): discovery and the default output land in
+			// the project, not wherever the process happens to run.
+			cfg, err := resolveConfig()
+			if err != nil {
+				return err
+			}
+			wd, err := filepath.Abs(cfg.ProjectDir)
 			if err != nil {
 				return err
 			}
@@ -80,8 +87,14 @@ func newImportComposeCmd() *cobra.Command {
 				dest = res.QuadletName + ".cue"
 			}
 			if dest == "-" {
+				// The document alone goes to stdout; the conversion report
+				// moves to stderr below, so `-o - > app.cue` stays valid CUE.
 				fmt.Fprint(out, string(res.CUE))
+				out = cmd.ErrOrStderr()
 			} else {
+				if !filepath.IsAbs(dest) {
+					dest = filepath.Join(cfg.ProjectDir, dest)
+				}
 				if _, err := os.Stat(dest); err == nil && !force {
 					return fmt.Errorf("%s already exists (use --force to overwrite)", dest)
 				} else if err != nil && !errors.Is(err, fs.ErrNotExist) {

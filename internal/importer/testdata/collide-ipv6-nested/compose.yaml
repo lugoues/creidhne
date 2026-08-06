@@ -1,0 +1,12 @@
+name: collide
+services:
+  foo-bar:
+    image: docker.io/library/alpine:latest
+  foo_bar:
+    image: docker.io/library/alpine:latest
+  web:
+    image: docker.io/library/nginx:${TAG:-${FALLBACK:-latest}}
+    ports:
+      - target: 80
+        published: "8080"
+        host_ip: "::1"

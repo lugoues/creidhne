@@ -1,0 +1,1 @@
+! variable ${TAG} has a nested default (${TAG:-${FALLBACK:-latest}}) that cannot be preserved symbolically; treating as a required variable — use --resolve to bake values instead

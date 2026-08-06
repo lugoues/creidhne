@@ -539,7 +539,14 @@ func mapServicePorts(m *model, u *unitDef, name string, svc types.ServiceConfig)
 		}
 		var b strings.Builder
 		if pc.HostIP != "" {
-			b.WriteString(pc.HostIP + ":")
+			hostIP := pc.HostIP
+			// An IPv6 host address must be bracketed ("[::1]:8080:80"):
+			// bare, its colons are ambiguous with the mapping separators
+			// and the emitted value fails #PortMapping.
+			if strings.Contains(hostIP, ":") && !strings.HasPrefix(hostIP, "[") {
+				hostIP = "[" + hostIP + "]"
+			}
+			b.WriteString(hostIP + ":")
 		}
 		if pc.Published != "" {
 			b.WriteString(pc.Published + ":")

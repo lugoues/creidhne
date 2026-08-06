@@ -200,6 +200,19 @@ func (k *keymap) key(name string) string {
 			key = cand
 		}
 	}
+	// A key can collide across *different* source names in either direction:
+	// sanitized-then-original ("foo-bar" claims foo_bar, then "foo_bar"
+	// arrives) as well as the reverse. Without uniquifying, both resources
+	// unify under one CUE field and silently merge (or conflict).
+	if k.used[key] {
+		base := key
+		for i := 2; ; i++ {
+			key = fmt.Sprintf("%s_%d", base, i)
+			if !k.used[key] {
+				break
+			}
+		}
+	}
 	k.byName[name] = key
 	k.used[key] = true
 	return key

@@ -138,7 +138,9 @@ func TestAssetEditMovesBuildHash(t *testing.T) {
 		if err := expandAssetContexts(dir, quads); err != nil {
 			t.Fatal(err)
 		}
-		injectBuildHashes(quads)
+		if err := injectBuildHashes(quads); err != nil {
+			t.Fatal(err)
+		}
 		return annotationOf(u, "Build")
 	}
 	h1, h2 := hashFor(`{"v":1}`), hashFor(`{"v":2}`)

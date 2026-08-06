@@ -58,7 +58,9 @@ func TestInjectBuildHashesReferenceForms(t *testing.T) {
 	byTag := containerUnit("by-tag", "localhost/app:latest")
 	unrelated := containerUnit("other", "docker.io/nginx:latest")
 
-	injectBuildHashes([]Quadlet{{Name: "app", Units: []UnitRecord{build, byUnit, byTag, unrelated}}})
+	if err := injectBuildHashes([]Quadlet{{Name: "app", Units: []UnitRecord{build, byUnit, byTag, unrelated}}}); err != nil {
+		t.Fatal(err)
+	}
 
 	want := annotationOf(build, "Build")
 	if want == "" {
@@ -81,7 +83,9 @@ func TestInjectBuildHashesContextMoves(t *testing.T) {
 	hashFor := func(containerfile string) (buildH, consumerH string) {
 		build := buildUnit("app-img", containerfile, "localhost/app:latest")
 		consumer := containerUnit("app", "localhost/app:latest")
-		injectBuildHashes([]Quadlet{{Name: "app", Units: []UnitRecord{build, consumer}}})
+		if err := injectBuildHashes([]Quadlet{{Name: "app", Units: []UnitRecord{build, consumer}}}); err != nil {
+			t.Fatal(err)
+		}
 		return annotationOf(build, "Build"), annotationOf(consumer, "Container")
 	}
 
@@ -104,10 +108,12 @@ func TestInjectBuildHashesCrossQuadlet(t *testing.T) {
 	build := buildUnit("img", "FROM alpine\n", "localhost/shared:latest")
 	consumer := containerUnit("app", "localhost/shared:latest")
 
-	injectBuildHashes([]Quadlet{
+	if err := injectBuildHashes([]Quadlet{
 		{Name: "images", Units: []UnitRecord{build}},
 		{Name: "app", Units: []UnitRecord{consumer}},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	if got, want := annotationOf(consumer, "Container"), annotationOf(build, "Build"); got == "" || got != want {
 		t.Fatalf("cross-quadlet tag consumer not stamped: got %q, want %q", got, want)
