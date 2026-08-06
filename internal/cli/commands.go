@@ -97,7 +97,7 @@ func newPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rules := levels.apply(graphRuleFindings(quads))
+			rules := levels.apply(append(lintQuadlets(quads, quads), graphRuleFindings(quads)...))
 			sortFindings(rules)
 			if len(rules) > 0 {
 				fmt.Fprintln(out)
@@ -327,8 +327,14 @@ func printDiff(w io.Writer, changes []reconcile.Change, cfg config) error {
 			truncRun(w, len(add), limitsFor(c.Name, cfg), 1, func(i int) { bodyln(w, green("+ "+add[i])) })
 		case reconcile.ActionRemove:
 			// The change carries no content for removals; read what's on disk so
-			// the user sees what is about to be deleted.
-			body, _ := os.ReadFile(filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name)))
+			// the user sees what is about to be deleted. A read failure (e.g. an
+			// unreadable mode-000 stale file) must not pass as an empty body —
+			// the user would confirm a deletion without seeing its contents.
+			body, err := os.ReadFile(filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name)))
+			if err != nil && !os.IsNotExist(err) {
+				bodyln(w, dim("  (cannot show contents: "+err.Error()+")"))
+				continue
+			}
 			rm := bodyLines(body)
 			truncRun(w, len(rm), limitsFor(c.Name, cfg), 1, func(i int) { bodyln(w, red("- "+rm[i])) })
 		case reconcile.ActionChange:

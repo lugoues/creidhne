@@ -44,6 +44,44 @@ app: creidhne.#Quadlet & {
 	}
 }
 
+// validate and plan run the deps/* rules too (CLAUDE.md: "lint reports them
+// all, and validate/plan also run them"): a redundant network-online dep at
+// its default warn severity must show up in both, and fail validate when
+// raised to error.
+func TestValidateAndPlanRunDepsRules(t *testing.T) {
+	src := `package config
+import "github.com/lugoues/creidhne@v0"
+app: creidhne.#Quadlet & {
+	name: "app"
+	units: #container: {Container: {Image: "docker.io/app"}, Unit: After: ["network-online.target"]}
+}
+`
+	dir := setupProject(t, src)
+	out, err := runCmd(t, "--dir", dir, "validate")
+	if err != nil {
+		t.Fatalf("warn-level finding must not fail validate, got %v:\n%s", err, out)
+	}
+	if !strings.Contains(out, "deps/redundant-network-online") {
+		t.Fatalf("validate should report the deps finding:\n%s", out)
+	}
+
+	qdir := t.TempDir()
+	out, err = runCmd(t, "--dir", dir, "--quadlet-dir", qdir, "plan")
+	if err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "deps/redundant-network-online") {
+		t.Fatalf("plan should report the deps finding:\n%s", out)
+	}
+
+	dir = setupProject(t, src)
+	writeConfig(t, dir, "[lint]\n\"deps/redundant-network-online\" = \"error\"\n")
+	out, err = runCmd(t, "--dir", dir, "validate")
+	if err == nil {
+		t.Fatalf("error-level deps finding must fail validate:\n%s", out)
+	}
+}
+
 // A legitimate cross-container dependency (not a resource, not network-online)
 // must not be flagged.
 func TestCmdLintClean(t *testing.T) {
