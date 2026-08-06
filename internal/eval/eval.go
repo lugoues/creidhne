@@ -67,7 +67,9 @@ func LoadAndValidate(dir string, overlay map[string]load.Source) ([]Quadlet, err
 	if err := expandAssetContexts(dir, quads); err != nil {
 		return nil, err
 	}
-	injectBuildHashes(quads)
+	if err := injectBuildHashes(quads); err != nil {
+		return nil, err
+	}
 	return quads, nil
 }
 
@@ -351,7 +353,10 @@ func extractQuadlets(v cue.Value) ([]Quadlet, error) {
 	var visit func(cue.Value, int) error
 	visit = func(val cue.Value, depth int) error {
 		if depth > 100 {
-			return nil // guard against pathological nesting
+			// Failing loud matters here: a #Quadlet skipped by a silent depth
+			// cutoff would look removed to reconcile, which would then delete
+			// its previously applied files.
+			return fmt.Errorf("quadlet discovery gave up at %s: value nesting exceeds 100 levels", val.Path())
 		}
 		if q, ok, err := tryQuadlet(val); err != nil {
 			return err

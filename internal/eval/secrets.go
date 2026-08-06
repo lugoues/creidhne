@@ -63,20 +63,36 @@ func LoadSecretRegistry(dir string, overlay map[string]load.Source) ([]SecretEnt
 		key := it.Selector().Unquoted()
 		e := SecretEntry{Key: key, Name: key}
 		val := it.Value()
+		// Decode errors are fatal, not defaultable: a generation policy that
+		// silently decoded to zero would make `secret rotate` fall back to the
+		// default 32-character value instead of honoring the declared policy.
 		if f := val.LookupPath(cue.ParsePath("name")); f.Exists() {
-			if s, err := f.String(); err == nil && s != "" {
+			s, err := f.String()
+			if err != nil {
+				return nil, fmt.Errorf("secrets registry entry %q: field name is not a concrete string: %w", key, err)
+			}
+			if s != "" {
 				e.Name = s
 			}
 		}
 		if g := val.LookupPath(cue.ParsePath("generate")); g.Exists() {
 			gen := &SecretGenerate{}
 			if l := g.LookupPath(cue.ParsePath("length")); l.Exists() {
-				if n, err := l.Int64(); err == nil {
-					gen.Length = int(n)
+				n, err := l.Int64()
+				if err != nil {
+					return nil, fmt.Errorf("secrets registry entry %q: generate.length is not a concrete integer: %w", key, err)
 				}
+				if n < 1 || n > 1<<20 {
+					return nil, fmt.Errorf("secrets registry entry %q: generate.length %d is out of range (1..%d)", key, n, 1<<20)
+				}
+				gen.Length = int(n)
 			}
 			if c := g.LookupPath(cue.ParsePath("charset")); c.Exists() {
-				gen.Charset, _ = c.String()
+				s, err := c.String()
+				if err != nil {
+					return nil, fmt.Errorf("secrets registry entry %q: generate.charset is not a concrete string: %w", key, err)
+				}
+				gen.Charset = s
 			}
 			e.Generate = gen
 		}

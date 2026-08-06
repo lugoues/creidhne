@@ -1,3 +1,5 @@
+[Unit]
+After=myapp-main-build.service
 
 [Container]
 Image=localhost/myapp:latest

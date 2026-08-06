@@ -113,3 +113,71 @@ func TestInjectBuildHashesCrossQuadlet(t *testing.T) {
 		t.Fatalf("cross-quadlet tag consumer not stamped: got %q, want %q", got, want)
 	}
 }
+
+// TestInjectBuildHashesDuplicateTag: two builds publishing the same ImageTag is
+// a hard error — consumers reference the tag alone, so hash and ordering would
+// follow whichever build a map iteration happened to visit last.
+func TestInjectBuildHashesDuplicateTag(t *testing.T) {
+	b1 := buildUnit("one", "FROM alpine\n", "localhost/dup:latest")
+	b2 := buildUnit("two", "FROM busybox\n", "localhost/dup:latest")
+	err := injectBuildHashes([]Quadlet{{Name: "app", Units: []UnitRecord{b1, b2}}})
+	if err == nil {
+		t.Fatal("want an error for a tag produced by two builds")
+	}
+	for _, name := range []string{"one.build", "two.build", "localhost/dup:latest"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("error should name %q, got: %v", name, err)
+		}
+	}
+}
+
+// TestInjectBuildHashesTagConsumerOrdering: a tag-matched consumer gains
+// After=<build service>. Quadlet wires ordering for Image=<stem>.build refs
+// itself but knows nothing about raw tags, so without this a restart --stale
+// can restart the container against the old image mid-rebuild.
+func TestInjectBuildHashesTagConsumerOrdering(t *testing.T) {
+	build := buildUnit("img", "FROM alpine\n", "localhost/app:latest")
+	build.Service = "img-build.service"
+	consumer := containerUnit("app", "localhost/app:latest")
+	consumer.Service = "app.service"
+	pre := containerUnit("pre", "localhost/app:latest")
+	pre.Service = "pre.service"
+	pre.Data["Unit"] = map[string]any{"After": []any{"img-build.service"}}
+	byUnit := containerUnit("by-unit", "img.build")
+	byUnit.Service = "by-unit.service"
+
+	if err := injectBuildHashes([]Quadlet{{Name: "app", Units: []UnitRecord{build, consumer, pre, byUnit}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	after := func(u UnitRecord) []any {
+		unit, _ := u.Data["Unit"].(map[string]any)
+		list, _ := unit["After"].([]any)
+		return list
+	}
+	if got := after(consumer); len(got) != 1 || got[0] != "img-build.service" {
+		t.Errorf("tag consumer After = %v, want [img-build.service]", got)
+	}
+	if got := after(pre); len(got) != 1 {
+		t.Errorf("already-declared After must not be duplicated, got %v", got)
+	}
+	if got := after(byUnit); len(got) != 0 {
+		t.Errorf("Image=<stem>.build consumer is ordered by quadlet itself; After = %v, want none", got)
+	}
+}
+
+// TestHashDataBinaryContent: two context payloads that differ only in invalid
+// UTF-8 bytes must hash differently. encoding/json replaces invalid bytes with
+// U+FFFD, which would otherwise make the encodings — and the hashes — collide.
+func TestHashDataBinaryContent(t *testing.T) {
+	payload := func(b byte) map[string]any {
+		return map[string]any{"Context": map[string]any{"blob": string([]byte{0xde, b})}}
+	}
+	if hashData(payload(0xff)) == hashData(payload(0xfe)) {
+		t.Fatal("binary contents differing in invalid UTF-8 bytes must not collide")
+	}
+	text := map[string]any{"Context": map[string]any{"f": "hello"}}
+	if hashData(text) != hashData(map[string]any{"Context": map[string]any{"f": "hello"}}) {
+		t.Fatal("hashing must stay deterministic for text data")
+	}
+}

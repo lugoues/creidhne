@@ -65,25 +65,49 @@ func LoadImageRegistry(dir string, overlay map[string]load.Source) ([]ImageEntry
 	for it.Next() {
 		e := ImageEntry{Key: it.Selector().Unquoted()}
 		v := it.Value()
+		// Decode errors are fatal, not skippable: image commands write this
+		// registry back through emitImageRegistry, so a field that silently
+		// decoded to "" (e.g. an unresolved constraint) would be dropped from
+		// the rewritten file instead of rejected.
+		str := func(field string, f cue.Value) (string, error) {
+			s, err := f.String()
+			if err != nil {
+				return "", fmt.Errorf("images registry entry %q: field %s is not a concrete string: %w", e.Key, field, err)
+			}
+			return s, nil
+		}
+		var err error
 		if f := v.LookupPath(cue.ParsePath("image")); f.Exists() {
-			e.Image, _ = f.String()
+			if e.Image, err = str("image", f); err != nil {
+				return nil, err
+			}
 		}
 		if f := v.LookupPath(cue.ParsePath("digest")); f.Exists() {
-			e.Digest, _ = f.String()
+			if e.Digest, err = str("digest", f); err != nil {
+				return nil, err
+			}
 		}
 		if f := v.LookupPath(cue.ParsePath("minAge")); f.Exists() {
-			e.MinAge, _ = f.String()
+			if e.MinAge, err = str("minAge", f); err != nil {
+				return nil, err
+			}
 		}
 		if f := v.LookupPath(cue.ParsePath("range")); f.Exists() {
-			e.Range, _ = f.String()
+			if e.Range, err = str("range", f); err != nil {
+				return nil, err
+			}
 		}
 		if f := v.LookupPath(cue.ParsePath("lock")); f.Exists() {
 			l := &ImageLock{}
 			if r := f.LookupPath(cue.ParsePath("reason")); r.Exists() {
-				l.Reason, _ = r.String()
+				if l.Reason, err = str("lock.reason", r); err != nil {
+					return nil, err
+				}
 			}
 			if s := f.LookupPath(cue.ParsePath("since")); s.Exists() {
-				l.Since, _ = s.String()
+				if l.Since, err = str("lock.since", s); err != nil {
+					return nil, err
+				}
 			}
 			e.Lock = l
 		}
