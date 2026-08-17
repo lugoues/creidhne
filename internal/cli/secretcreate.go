@@ -232,7 +232,14 @@ func createOne(out io.Writer, cfg config, o createOpts) error {
 	}
 	if err := podmanCreateSecret(name, value, o.replace); err != nil {
 		if !handAuthored {
-			return fmt.Errorf("%w\n  the entry stays registered in registries/secrets.cue; re-run 'crei secret create %s' (or -a) to create the value", err, o.key)
+			// With --replace the old secret still exists, so a plain re-run
+			// (and -a) would just skip it: only the same --replace finishes
+			// the job.
+			retry := fmt.Sprintf("re-run 'crei secret create %s' (or -a) to create the value", o.key)
+			if o.replace {
+				retry = fmt.Sprintf("re-run 'crei secret create %s --replace' to finish the replacement", o.key)
+			}
+			return fmt.Errorf("%w\n  the entry stays registered in registries/secrets.cue; %s", err, retry)
 		}
 		return err
 	}
@@ -319,6 +326,9 @@ func stageSecretRegistration(projectDir string, entries []eval.SecretEntry, idx 
 func commitSecretRegistration(out io.Writer, projectDir string, staged string, e eval.SecretEntry) error {
 	path := filepath.Join(projectDir, "registries", "secrets.cue")
 	if err := os.Rename(staged, path); err != nil {
+		// Clean up the uniquely-named staging file so failed attempts don't
+		// accumulate *.staged litter next to the registry.
+		_ = os.Remove(staged)
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	how := "manual"

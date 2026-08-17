@@ -95,7 +95,7 @@ paperless: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/multi-stack/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: paperless
 // services:
 //   web:

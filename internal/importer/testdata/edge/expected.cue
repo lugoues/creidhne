@@ -86,7 +86,7 @@ edge: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/edge/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: edge
 // services:
 //   app:

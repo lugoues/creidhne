@@ -28,8 +28,10 @@ func TestGolden(t *testing.T) {
 		}
 		t.Run(c.Name(), func(t *testing.T) {
 			dir := filepath.Join("testdata", c.Name())
+			// Paths are anchored to WorkingDir (the -C project dir), so they
+			// are passed relative to it — the same contract the CLI now has.
 			opts := Options{
-				Paths:      []string{filepath.Join(dir, "compose.yaml")},
+				Paths:      []string{"compose.yaml"},
 				WorkingDir: dir,
 			}
 			// A "resolve" marker runs the case in bake mode (variables in

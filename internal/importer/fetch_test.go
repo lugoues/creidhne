@@ -296,3 +296,50 @@ func TestEmbedSource(t *testing.T) {
 		t.Fatalf("OmitSource must drop the embed:\n%s", res.CUE)
 	}
 }
+
+// TestFetchErrorsOmitCredentials: a token-only username survives Go's own
+// password redaction inside url.Error, so fetch errors must scrub it — from
+// the wrapped message and the nested error alike.
+func TestFetchErrorsOmitCredentials(t *testing.T) {
+	for _, u := range []string{
+		"https://SECRETTOKEN@127.0.0.1:1/stack/compose.yaml",
+		// user:password — Go masks the password (user:***@) so exact-string
+		// replacement of the original URL would miss it.
+		"https://SECRETTOKEN:hunter2@127.0.0.1:1/stack/compose.yaml",
+		// Schemes are case-insensitive; the scrub must not be case-blind.
+		"HTTPS://SECRETTOKEN@127.0.0.1:1/stack/compose.yaml",
+	} {
+		if !isRemote(u) {
+			t.Fatalf("isRemote(%q) = false; a credentialed URL mistaken for a filename leaks through file errors", u)
+		}
+		err := fetchTo(filepath.Join(t.TempDir(), "compose.yaml"), u)
+		if err == nil {
+			t.Fatal("expected the fetch to fail (nothing listens on port 1)")
+		}
+		if strings.Contains(err.Error(), "SECRETTOKEN") {
+			t.Fatalf("fetch error leaks the credential: %v", err)
+		}
+	}
+
+	// A failure after a redirect carries the redirect target, not the
+	// requested URL; its credentials must be scrubbed too.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://SECRETTOKEN@127.0.0.1:1/next/compose.yaml", http.StatusFound)
+	}))
+	defer srv.Close()
+	if err := fetchTo(filepath.Join(t.TempDir(), "compose.yaml"), srv.URL+"/compose.yaml"); err == nil {
+		t.Fatal("expected the redirected fetch to fail")
+	} else if strings.Contains(err.Error(), "SECRETTOKEN") {
+		t.Fatalf("redirected fetch error leaks the credential: %v", err)
+	}
+
+	// The project-name error path prints the URL too.
+	_, _, cleanup, err := resolveRemotePaths(Options{Paths: []string{"https://SECRETTOKEN@example.com/x"}}, func(string, ...any) {})
+	defer cleanup()
+	if err == nil {
+		t.Fatal("expected a cannot-derive-name error")
+	}
+	if strings.Contains(err.Error(), "SECRETTOKEN") {
+		t.Fatalf("project-name error leaks the credential: %v", err)
+	}
+}

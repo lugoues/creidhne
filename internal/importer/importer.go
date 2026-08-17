@@ -341,6 +341,15 @@ func collectSources(project *types.Project, opts Options, labels map[string]stri
 // Paths may be http(s) URLs (e.g. a GitHub file link): they are fetched to a
 // temp dir first, with browser blob URLs rewritten to their raw form.
 func Convert(opts Options) (*Result, error) {
+	// Anchor relative local paths to WorkingDir up front: compose-go resolves
+	// them through filepath.Abs (the process directory), so without this,
+	// `crei -C /project import compose compose.yaml` would read a same-named
+	// file from wherever the process happens to run.
+	origPaths := opts.Paths
+	if opts.WorkingDir != "" {
+		opts.Paths = anchorPaths(opts.WorkingDir, opts.Paths)
+		opts.EnvFiles = anchorPaths(opts.WorkingDir, opts.EnvFiles)
+	}
 	var preWarnings []string
 	opts, sourceLabels, cleanup, err := resolveRemotePaths(opts, func(f string, a ...any) {
 		preWarnings = append(preWarnings, fmt.Sprintf(f, a...))
@@ -350,11 +359,15 @@ func Convert(opts Options) (*Result, error) {
 	}
 	defer cleanup()
 	// compose-go absolutizes config paths; label sources by the user's own
-	// spelling so the embed header is stable and readable.
-	for _, p := range opts.Paths {
+	// (pre-anchoring) spelling so the embed header is stable and readable.
+	for i, p := range opts.Paths {
 		if abs, err := filepath.Abs(p); err == nil {
 			if _, exists := sourceLabels[abs]; !exists {
-				sourceLabels[abs] = p
+				label := p
+				if i < len(origPaths) {
+					label = origPaths[i]
+				}
+				sourceLabels[abs] = label
 			}
 		}
 	}

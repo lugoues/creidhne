@@ -38,7 +38,7 @@ envy: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/env-vars/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: envy
 // services:
 //   app:

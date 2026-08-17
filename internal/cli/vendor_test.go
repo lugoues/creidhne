@@ -99,3 +99,30 @@ func TestVendorSyncRemovesStaleExtraFile(t *testing.T) {
 		t.Fatal("after sync the vendored copy should match the embedded schema")
 	}
 }
+
+// TestNormalizeVendorSource: credentials never reach the recorded source —
+// including userinfo git accepts but net/url rejects — and local paths become
+// absolute so a restore doesn't depend on the caller's working directory.
+func TestNormalizeVendorSource(t *testing.T) {
+	cases := map[string]struct{ clone, record string }{
+		"https://token@example.com/mod.git":        {"https://token@example.com/mod.git", "https://example.com/mod.git"},
+		"https://user:p%|[ss@example.com/mod.git":  {"https://user:p%|[ss@example.com/mod.git", "https://example.com/mod.git"},
+		"https://example.com/mod.git":              {"https://example.com/mod.git", "https://example.com/mod.git"},
+		"git@example.com:org/mod.git":              {"git@example.com:org/mod.git", "git@example.com:org/mod.git"},
+		"ssh://git@example.com/org/mod.git":        {"ssh://git@example.com/org/mod.git", "ssh://git@example.com/org/mod.git"},
+	}
+	for in, want := range cases {
+		clone, record, _ := normalizeVendorSource(in)
+		if clone != want.clone || record != want.record {
+			t.Errorf("normalizeVendorSource(%q) = (%q, %q), want (%q, %q)", in, clone, record, want.clone, want.record)
+		}
+	}
+
+	// A local path that exists resolves to absolute for both clone and lock.
+	dir := t.TempDir()
+	t.Chdir(filepath.Dir(dir))
+	clone, record, _ := normalizeVendorSource(filepath.Base(dir))
+	if clone != dir || record != dir {
+		t.Errorf("local source: got (%q, %q), want both %q", clone, record, dir)
+	}
+}

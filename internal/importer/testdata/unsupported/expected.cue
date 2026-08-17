@@ -53,7 +53,7 @@ swarmy: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/unsupported/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: swarmy
 // services:
 //   app:

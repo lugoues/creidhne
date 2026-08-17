@@ -53,7 +53,7 @@ netty: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/external-ipam/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: netty
 // services:
 //   app:

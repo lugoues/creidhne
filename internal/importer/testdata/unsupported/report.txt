@@ -1,5 +1,6 @@
 ! configs.app_config: compose configs have no quadlet equivalent; mount the file explicitly or convert it to a secret
 ! service app: cgroup_parent (systemd owns the cgroup) not supported; dropped
+! service app: depends_on db restart=true (restart the dependent when the dependency is updated) has no quadlet equivalent; dropped
 ! service app: deploy.endpoint_mode is swarm-only; dropped
 ! service app: deploy.labels is swarm-only; dropped
 ! service app: deploy.mode is swarm-only; dropped

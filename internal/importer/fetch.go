@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,9 +20,12 @@ const maxRemoteSize = 10 << 20
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
-// isRemote reports whether a path argument is an http(s) URL.
+// isRemote reports whether a path argument is an http(s) URL. Schemes are
+// case-insensitive; treating HTTPS:// as a local filename would (among other
+// things) leak a credentialed URL verbatim through file-not-found errors.
 func isRemote(p string) bool {
-	return strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://")
+	lower := strings.ToLower(p)
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
 // resolveRemotePaths downloads any URL arguments (compose files and env
@@ -50,7 +54,7 @@ func resolveRemotePaths(opts Options, warnf func(string, ...any)) (Options, map[
 			dirName = deriveProjectName(firstRemote(opts.Paths))
 			if dirName == "" {
 				cleanup()
-				return opts, labels, func() {}, fmt.Errorf("cannot derive a project name from %s; pass --name", firstRemote(opts.Paths))
+				return opts, labels, func() {}, fmt.Errorf("cannot derive a project name from %s; pass --name", stripUserinfo(firstRemote(opts.Paths)))
 			}
 		}
 		dir := filepath.Join(root, dirName)
@@ -106,7 +110,7 @@ func fetchAll(in []string, dir, fallbackPattern string, anchorLocal bool, labels
 		if err := fetchTo(local, p); err != nil {
 			return nil, err
 		}
-		labels[local] = p
+		labels[local] = stripUserinfo(p)
 		out[i] = local
 	}
 	return out, nil
@@ -221,14 +225,25 @@ func normalizeProjectName(s string) string {
 // fetchTo downloads a (rewritten) URL to a local file.
 func fetchTo(local, raw string) error {
 	target := rewriteRawURL(raw)
+	// Errors are user-visible (terminal, logs): never echo credentials a
+	// URL's authority may carry. Nested errors need scrubbing too —
+	// url.Error embeds the request URL, and Go redacts only passwords, so a
+	// token-only username (https://TOKEN@host/...) would survive intact.
+	// The scrub is textual over every http(s) authority in the message, so
+	// it also catches forms exact replacement would miss: Go's own masked
+	// user:***@ spelling, and different URLs after a redirect.
+	raw = stripUserinfo(raw)
+	scrub := func(err error) error {
+		return errors.New(scrubURLUserinfo(err.Error()))
+	}
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
-		return fmt.Errorf("fetch %s: %w", raw, err)
+		return fmt.Errorf("fetch %s: %w", raw, scrub(err))
 	}
 	req.Header.Set("User-Agent", "crei-import-compose")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("fetch %s: %w", raw, err)
+		return fmt.Errorf("fetch %s: %w", raw, scrub(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
@@ -236,7 +251,7 @@ func fetchTo(local, raw string) error {
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRemoteSize+1))
 	if err != nil {
-		return fmt.Errorf("fetch %s: %w", raw, err)
+		return fmt.Errorf("fetch %s: %w", raw, scrub(err))
 	}
 	if len(body) > maxRemoteSize {
 		return fmt.Errorf("fetch %s: response exceeds %d bytes; not a compose file", raw, maxRemoteSize)
@@ -245,6 +260,56 @@ func fetchTo(local, raw string) error {
 		return fmt.Errorf("fetch %s: got an HTML page, not YAML; use the raw file URL", raw)
 	}
 	return os.WriteFile(local, body, 0o644)
+}
+
+// urlUserinfoRe matches the userinfo of any http(s) URL embedded in free
+// text: everything between the scheme and the last @ before the first path
+// separator, quote, or whitespace.
+var urlUserinfoRe = regexp.MustCompile(`(?i)(https?://)[^/\s"']*@`)
+
+// scrubURLUserinfo removes the userinfo from every http(s) authority found
+// in s. Used on error text, where the URL may appear in spellings exact
+// replacement cannot anticipate (Go's masked user:***@ form, redirect
+// targets).
+func scrubURLUserinfo(s string) string {
+	return urlUserinfoRe.ReplaceAllString(s, "$1")
+}
+
+// stripUserinfo removes credentials from an http(s) URL's authority for
+// anything user-visible or persisted (source labels, embedded comments,
+// errors); fetching still uses the original. Plain string surgery rather
+// than url.Parse: a parse failure must never leave a token in place.
+func stripUserinfo(raw string) string {
+	lower := strings.ToLower(raw)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		return raw
+	}
+	scheme, rest, _ := strings.Cut(raw, "://")
+	authority, path, hasPath := strings.Cut(rest, "/")
+	i := strings.LastIndex(authority, "@")
+	if i < 0 {
+		return raw
+	}
+	out := scheme + "://" + authority[i+1:]
+	if hasPath {
+		out += "/" + path
+	}
+	return out
+}
+
+// anchorPaths resolves relative local paths against wd (remote URLs and
+// absolute paths pass through), so a -C project dir wins over the process
+// working directory that compose-go's own filepath.Abs would use.
+func anchorPaths(wd string, in []string) []string {
+	out := make([]string, len(in))
+	for i, p := range in {
+		if isRemote(p) || filepath.IsAbs(p) {
+			out[i] = p
+			continue
+		}
+		out[i] = filepath.Join(wd, p)
+	}
+	return out
 }
 
 // looksLikeHTML catches forge web pages served where YAML was expected.

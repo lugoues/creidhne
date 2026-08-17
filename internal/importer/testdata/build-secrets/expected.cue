@@ -71,7 +71,7 @@ forge: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/build-secrets/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: forge
 // services:
 //   app:

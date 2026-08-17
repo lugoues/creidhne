@@ -36,7 +36,7 @@ web: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/single-basic/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: web
 // services:
 //   nginx:

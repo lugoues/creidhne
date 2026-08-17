@@ -79,7 +79,7 @@ crawler: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/resolve-structured/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: crawler
 // x-common: &common-env
 //   LOGGING_LEVEL: ${LOGGING_LEVEL:-info}

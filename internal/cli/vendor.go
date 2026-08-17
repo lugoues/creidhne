@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +17,9 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue/ast"
+	"cuelang.org/go/cue/literal"
 	"cuelang.org/go/cue/parser"
+	"cuelang.org/go/cue/token"
 	"github.com/spf13/cobra"
 )
 
@@ -204,7 +205,12 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 	}
 	cloneArgs = append(cloneArgs, source, tmp)
 	if msg, err := runGit("", cloneArgs...); err != nil {
-		return nil, fmt.Errorf("clone %s: %v\n%s", source, err, msg)
+		// Never echo a credentialed source: use the sanitized form, and
+		// scrub every http(s) authority in git's own output (it prints the
+		// URL in most clone errors, sometimes in respelled forms an exact
+		// replacement would miss).
+		msg = gitURLUserinfoRe.ReplaceAllString(msg, "$1")
+		return nil, fmt.Errorf("clone %s: %v\n%s", recordSource, err, msg)
 	}
 	commit, err := runGit(tmp, "rev-parse", "HEAD")
 	if err != nil {
@@ -218,14 +224,14 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 		return nil, err
 	}
 	if declared != module {
-		return nil, fmt.Errorf("%s declares module %q, not %q", source, declared, module)
+		return nil, fmt.Errorf("%s declares module %q, not %q", recordSource, declared, module)
 	}
 	files, err := collectModuleFiles(tmp)
 	if err != nil {
 		return nil, err
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("%s contains no .cue files outside cue.mod", source)
+		return nil, fmt.Errorf("%s contains no .cue files outside cue.mod", recordSource)
 	}
 	if err := checkImports(module, files, vendored); err != nil {
 		return nil, err
@@ -262,6 +268,11 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 	return pin, nil
 }
 
+// gitURLUserinfoRe matches the userinfo of any http(s) URL embedded in text
+// (everything between the scheme and the last @ before a path separator,
+// quote, or whitespace), for scrubbing credentials out of git output.
+var gitURLUserinfoRe = regexp.MustCompile(`(?i)(https?://)[^/\s"']*@`)
+
 // normalizeVendorSource prepares a --source for cloning and for the lock.
 // A local path becomes absolute for both (a relative path recorded in the
 // lock would resolve against whatever directory a later restore happens to
@@ -270,10 +281,18 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 // committed file, and a token pasted into --source must never land there.
 func normalizeVendorSource(source string) (cloneSource, recordSource, note string) {
 	cloneSource, recordSource = source, source
-	if u, err := url.Parse(source); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
-		if u.User != nil {
-			u.User = nil
-			recordSource = u.String()
+	// Plain string surgery on the authority, not url.Parse: git accepts
+	// userinfo characters (%, [, |, ...) that net/url rejects, and a parse
+	// failure must not become a credential written to the lock.
+	lower := strings.ToLower(source)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		scheme, rest, _ := strings.Cut(source, "://")
+		authority, path, hasPath := strings.Cut(rest, "/")
+		if i := strings.LastIndex(authority, "@"); i >= 0 {
+			recordSource = scheme + "://" + authority[i+1:]
+			if hasPath {
+				recordSource += "/" + path
+			}
 			note = "credentials in --source are used for this fetch but not recorded in cue.mod/" + vendorLockName + "; configure a git credential helper (or SSH) for restores"
 		}
 		return cloneSource, recordSource, note
@@ -295,15 +314,35 @@ func moduleDeclaration(repo string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("not a CUE module (no cue.mod/module.cue): %w", err)
 	}
-	m := regexp.MustCompile(`module:\s*"([^"]+)"`).FindSubmatch(raw)
-	if m == nil {
-		return "", errors.New("cue.mod/module.cue has no module declaration")
+	// Parsed, not regexed: a comment or string containing `module: "..."`
+	// must not satisfy (or spoof) the module-identity check.
+	f, err := parser.ParseFile("cue.mod/module.cue", raw)
+	if err != nil {
+		return "", fmt.Errorf("parse cue.mod/module.cue: %w", err)
 	}
-	declared := string(m[1])
-	if i := strings.LastIndex(declared, "@"); i > 0 {
-		declared = declared[:i]
+	for _, decl := range f.Decls {
+		field, ok := decl.(*ast.Field)
+		if !ok {
+			continue
+		}
+		name, _, err := ast.LabelName(field.Label)
+		if err != nil || name != "module" {
+			continue
+		}
+		lit, ok := field.Value.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return "", errors.New("cue.mod/module.cue: module is not a string literal")
+		}
+		declared, err := literal.Unquote(lit.Value)
+		if err != nil {
+			return "", fmt.Errorf("cue.mod/module.cue: module value: %w", err)
+		}
+		if i := strings.LastIndex(declared, "@"); i > 0 {
+			declared = declared[:i]
+		}
+		return declared, nil
 	}
-	return declared, nil
+	return "", errors.New("cue.mod/module.cue has no module declaration")
 }
 
 // collectModuleFiles gathers the module's .cue files (relative slash paths),

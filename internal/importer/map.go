@@ -306,11 +306,19 @@ func mapService(m *model, p *types.Project, r refs, name string, svc types.Servi
 	if svc.ContainerName != "" {
 		u.add("Container", "ContainerName", m.env.rewrite(svc.ContainerName))
 	}
-	if len(svc.Entrypoint) > 0 {
+	// nil and explicitly-empty differ in compose: entrypoint: [] / command: []
+	// suppress the image's ENTRYPOINT/CMD, which quadlet cannot express.
+	switch {
+	case len(svc.Entrypoint) > 0:
 		u.add("Container", "Entrypoint", m.env.rewrite(jsonArray(svc.Entrypoint)))
+	case svc.Entrypoint != nil:
+		m.warnf("service %s: entrypoint: [] (clear the image ENTRYPOINT) has no quadlet equivalent; dropped — the image default applies", name)
 	}
-	if len(svc.Command) > 0 {
+	switch {
+	case len(svc.Command) > 0:
 		u.add("Container", "Exec", m.env.rewrite(shellJoin(svc.Command)))
+	case svc.Command != nil:
+		m.warnf("service %s: command: [] (clear the image CMD) has no quadlet equivalent; dropped — the image default applies", name)
 	}
 	if svc.WorkingDir != "" {
 		u.add("Container", "WorkingDir", m.env.rewrite(svc.WorkingDir))
@@ -435,6 +443,9 @@ func mapBuild(m *model, p *types.Project, r refs, name string, svc types.Service
 		u.add("Build", "Pull", `"always"`)
 	}
 	u.addList("Build", "Label", labelList(m, b.Labels)...)
+	// Every populated-but-unmapped option is reported: a build that silently
+	// loses privileged:, platforms:, or shm_size: can fail (or behave
+	// differently) at build time with no hint why.
 	for _, skipped := range []struct {
 		set  bool
 		what string
@@ -443,7 +454,17 @@ func mapBuild(m *model, p *types.Project, r refs, name string, svc types.Service
 		{len(b.CacheTo) > 0, "cache_to"},
 		{len(b.AdditionalContexts) > 0, "additional_contexts"},
 		{b.NoCache, "no_cache"},
+		{len(b.NoCacheFilter) > 0, "no_cache_filter"},
 		{len(b.SSH) > 0, "ssh"},
+		{b.Privileged, "privileged"},
+		{len(b.Platforms) > 0, "platforms"},
+		{len(b.ExtraHosts) > 0, "extra_hosts"},
+		{b.ShmSize != 0, "shm_size"},
+		{len(b.Ulimits) > 0, "ulimits"},
+		{len(b.Entitlements) > 0, "entitlements"},
+		{b.Provenance != "", "provenance"},
+		{b.SBOM != "", "sbom"},
+		{b.Isolation != "", "isolation"},
 	} {
 		if skipped.set {
 			m.warnf("service %s: build.%s has no quadlet equivalent; dropped", name, skipped.what)
@@ -1010,6 +1031,9 @@ func mapDependsOn(m *model, r refs, u *unitDef, name string, svc types.ServiceCo
 		}
 		if !cfg.Required {
 			m.warnf("service %s: depends_on %s required=false has no direct mapping; emitted as a hard dependency", name, dep)
+		}
+		if cfg.Restart {
+			m.warnf("service %s: depends_on %s restart=true (restart the dependent when the dependency is updated) has no quadlet equivalent; dropped", name, dep)
 		}
 	}
 	u.addList("Unit", "After", after...)

@@ -51,7 +51,7 @@ collide: creidhne.#Quadlet & {
 	}
 }
 
-// ─── source: testdata/collide-ipv6-nested/compose.yaml ───
+// ─── source: compose.yaml ───
 // name: collide
 // services:
 //   foo-bar:
