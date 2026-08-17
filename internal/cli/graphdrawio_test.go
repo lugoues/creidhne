@@ -107,6 +107,7 @@ func TestReduceKeepsFoldCandidateWithOtherEdges(t *testing.T) {
 // mxCell is the slice of the drawio schema the acceptance tests need.
 type mxCell struct {
 	ID     string  `xml:"id,attr"`
+	Value  string  `xml:"value,attr"`
 	Parent string  `xml:"parent,attr"`
 	Source string  `xml:"source,attr"`
 	Target string  `xml:"target,attr"`
@@ -209,10 +210,12 @@ func TestDrawioRoundTrip(t *testing.T) {
 	r := reduceGraph(g)
 	f := renderDrawio(t, g)
 
+	// Legend swatch samples are point-to-point edges with no endpoints; only
+	// connected edges represent relations.
 	countEdges := func(d mxDiagram) int {
 		n := 0
 		for _, c := range d.Model.Cells {
-			if c.Edge == "1" {
+			if c.Edge == "1" && c.Source != "" {
 				n++
 			}
 		}
@@ -243,11 +246,17 @@ func TestDrawioRoundTrip(t *testing.T) {
 	}
 
 	// Page 4 promises every visible unit: its in-box vertices (stack and
-	// quarantine children) must cover visible + orphans, deps-only units and
-	// external targets included.
+	// quarantine children, legend excluded) must cover visible + orphans,
+	// deps-only units and external targets included.
+	legendID := ""
+	for _, c := range f.Diagrams[3].Model.Cells {
+		if c.Value == "Legend" {
+			legendID = c.ID
+		}
+	}
 	units := 0
 	for _, c := range f.Diagrams[3].Model.Cells {
-		if c.Vertex == "1" && c.Parent != "1" && c.Parent != "" {
+		if c.Vertex == "1" && c.Parent != "1" && c.Parent != "" && c.Parent != legendID {
 			units++
 		}
 	}
@@ -271,7 +280,7 @@ func TestDrawioDepsLayering(t *testing.T) {
 	}
 	checked := 0
 	for _, c := range deps.Model.Cells {
-		if c.Edge != "1" {
+		if c.Edge != "1" || c.Source == "" { // legend samples have no endpoints
 			continue
 		}
 		if yOf[c.Source] <= yOf[c.Target] {
@@ -329,11 +338,12 @@ func TestDrawioDepsBeforeDirection(t *testing.T) {
 	}
 }
 
-// TestDrawioLegend: the overview carries a legend box whose swatches cover
-// exactly the node kinds present plus every edge style the document uses.
+// TestDrawioLegend: every page carries a legend covering exactly what that
+// page draws — the kinds and edge styles on it, nothing document-global.
 func TestDrawioLegend(t *testing.T) {
 	var raw struct {
 		Diagrams []struct {
+			Name  string `xml:"name,attr"`
 			Cells []struct {
 				ID     string `xml:"id,attr"`
 				Value  string `xml:"value,attr"`
@@ -348,34 +358,45 @@ func TestDrawioLegend(t *testing.T) {
 	if err := xml.Unmarshal(buf.Bytes(), &raw); err != nil {
 		t.Fatal(err)
 	}
-	overview := raw.Diagrams[0]
-	legendID := ""
-	for _, c := range overview.Cells {
-		if c.Value == "Legend" {
-			legendID = c.ID
+	// Per page: kind swatches (unlabeled vertices) and edge samples. The
+	// fixture draws: overview = hub boxes + one cross edge; networks =
+	// containers/networks with an internal and a cross edge; storage = one
+	// volume edge; detail = all five kinds with network/volume/image/cross;
+	// deps = containers, a network, an external, with cross and deps edges.
+	want := map[string][2]int{
+		"1. Overview":     {1, 1},
+		"2. Networks":     {2, 2},
+		"3. Storage":      {2, 1},
+		"4. Full detail":  {5, 4},
+		"5. Dependencies": {3, 2},
+	}
+	for _, d := range raw.Diagrams {
+		legendID := ""
+		for _, c := range d.Cells {
+			if c.Value == "Legend" {
+				legendID = c.ID
+			}
 		}
-	}
-	if legendID == "" {
-		t.Fatal("overview has no Legend box")
-	}
-	swatches, samples := 0, 0
-	for _, c := range overview.Cells {
-		if c.Parent != legendID {
+		if legendID == "" {
+			t.Errorf("%s has no Legend box", d.Name)
 			continue
 		}
-		if c.Edge == "1" {
-			samples++
-		} else if c.Vertex == "1" && c.Value == "" {
-			swatches++
+		swatches, samples := 0, 0
+		for _, c := range d.Cells {
+			if c.Parent != legendID {
+				continue
+			}
+			if c.Edge == "1" {
+				samples++
+			} else if c.Vertex == "1" && c.Value == "" {
+				swatches++
+			}
 		}
-	}
-	// Fixture kinds: container, build, network, volume, external (pod/kube/
-	// image/artifact absent and must not render swatches).
-	if swatches != 5 {
-		t.Errorf("legend has %d kind swatches, want 5 (only kinds present in the graph)", swatches)
-	}
-	if samples != 6 {
-		t.Errorf("legend has %d edge samples, want 6 (every edge style in use)", samples)
+		w := want[d.Name]
+		if swatches != w[0] || samples != w[1] {
+			t.Errorf("%s legend: %d swatches / %d samples, want %d / %d",
+				d.Name, swatches, samples, w[0], w[1])
+		}
 	}
 }
 

@@ -85,7 +85,9 @@ const (
 var xmlEsc = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;")
 
 // drawioPage accumulates the mxCell rows of one <diagram>. Ids are prefixed
-// per page so copy-paste between pages cannot collide.
+// per page so copy-paste between pages cannot collide. Each page records the
+// node kinds and edge styles it draws, so its legend shows exactly what is on
+// that page and nothing else.
 type drawioPage struct {
 	name   string
 	prefix string
@@ -93,6 +95,22 @@ type drawioPage struct {
 	seq    int
 	// extent of top-level cells only; children are parent-relative.
 	maxX, maxY float64
+	usedKinds  map[string]bool
+	usedEdges  map[string]bool
+}
+
+func (p *drawioPage) useKind(kind string) {
+	if p.usedKinds == nil {
+		p.usedKinds = map[string]bool{}
+	}
+	p.usedKinds[kind] = true
+}
+
+func (p *drawioPage) useEdge(key string) {
+	if p.usedEdges == nil {
+		p.usedEdges = map[string]bool{}
+	}
+	p.usedEdges[key] = true
 }
 
 func (p *drawioPage) nextID() string {
@@ -250,6 +268,7 @@ func (p *drawioPage) shelfLayout(r reducedGraph, kindOrder []string, keep func(g
 		box := p.vertex(stack, style, x, y, bw, bh, "1")
 		for ci, col := range cols {
 			for ri, id := range col.ids {
+				p.useKind(kindOf(id))
 				ids[id] = p.vertex(nodeLabel(r, id), nodeStyle(r.g.nodes[id]),
 					dwPadX+float64(ci)*(dwNodeW+dwGapX), dwPadTop+float64(ri)*(dwNodeH+dwGapY),
 					dwNodeW, dwNodeH, box)
@@ -263,15 +282,30 @@ func (p *drawioPage) shelfLayout(r reducedGraph, kindOrder []string, keep func(g
 
 	for _, e := range selected {
 		style, ok := drawioEdgeStyle[e.Rel]
+		key := e.Rel
 		if !ok {
-			style = drawioEdgeDeps
+			style, key = drawioEdgeDeps, "deps"
 		}
 		if r.crossEdge(e.From, e.To) {
-			style = drawioEdgeCross
+			style, key = drawioEdgeCross, "cross"
 		}
+		p.useEdge(key)
 		p.edge(ids[e.From], ids[e.To], style, "")
 	}
 	return ids, x, y, shelfH
+}
+
+// shelfLegend appends the page legend as one more shelf box, wrapping to a
+// new shelf exactly like a stack box would.
+func (p *drawioPage) shelfLegend(x, y, shelfH float64) {
+	bw, _ := p.legendSize()
+	if bw == 0 {
+		return
+	}
+	if x+bw > dwShelfMaxW {
+		x, y = dwMargin, y+shelfH+dwShelfGap
+	}
+	p.drawLegend(x, y)
 }
 
 func (p *drawioPage) heading(title, sub string) {
@@ -310,8 +344,6 @@ func pageOverview(r reducedGraph) *drawioPage {
 	p.heading("Overview",
 		fmt.Sprintf("%d units, %d relations. Drawn here: the %d cross-stack resource links (deduplicated per stack pair; %d relations cross a boundary in total, [Unit] ordering included — see page 5).",
 			r.counts.Units, r.counts.Relations, len(edges), r.counts.Cross))
-	// To the right of the heading text (which spans to x=1540).
-	drawLegend(p, r, 1580, 40)
 
 	hub := ""
 	for s, n := range netCross {
@@ -329,12 +361,14 @@ func pageOverview(r reducedGraph) *drawioPage {
 
 	boxes := map[string]string{}
 	if hub != "" {
+		p.useKind("stack")
 		boxes[hub] = p.vertex(
 			fmt.Sprintf("<b>%s</b><br/><font style='font-size:10px;color:#666'>ingress hub</font>", hub),
 			drawioHubStyle, 700, 560, 300, 80, "1")
 	}
 	const perRow = 4
 	for i, s := range spokes {
+		p.useKind("stack")
 		col, row := i%perRow, i/perRow
 		boxes[s] = p.vertex("<b>"+s+"</b>", drawioHubStyle,
 			60+float64(col)*340, 820+float64(row)*110, 260, 70, "1")
@@ -342,50 +376,59 @@ func pageOverview(r reducedGraph) *drawioPage {
 
 	for _, e := range edges {
 		style := drawioEdgeStyle[e.rel] + "strokeWidth=2;"
+		key := e.rel
 		if e.rel == "network" {
-			style = drawioEdgeCross
+			style, key = drawioEdgeCross, "cross"
 		}
+		p.useEdge(key)
 		p.edge(boxes[e.from], boxes[e.to], style, e.label)
 	}
+	p.drawLegend(1580, 40)
 	return p
 }
 
-// legendKindOrder is the display order of node-kind swatches; only kinds
-// actually present in the graph render.
-var legendKindOrder = []string{"container", "pod", "kube", "build", "image", "artifact", "network", "volume", "external"}
+// legendKindOrder is the display order of node-kind swatches. "stack" covers
+// the overview's stack-level boxes.
+var legendKindOrder = []string{"container", "pod", "kube", "build", "image", "artifact", "network", "volume", "external", "stack"}
 
-// legendEdges is every edge style the document uses, in display order.
-var legendEdges = []struct{ style, label string }{
-	{drawioEdgeStyle["network"], "joins network"},
-	{drawioEdgeStyle["volume"], "mounts volume"},
-	{drawioEdgeStyle["pod"], "pod member"},
-	{drawioEdgeStyle["image"], "built from"},
-	{drawioEdgeCross, "crosses a stack boundary"},
-	{drawioEdgeDeps, "[Unit] dependency (page 5)"},
+// legendEdgeOrder is the display order of edge swatches, keyed the way pages
+// record them: the resource rel name, "cross", or "deps".
+var legendEdgeOrder = []struct{ key, style, label string }{
+	{"network", drawioEdgeStyle["network"], "joins network"},
+	{"volume", drawioEdgeStyle["volume"], "mounts volume"},
+	{"pod", drawioEdgeStyle["pod"], "pod member"},
+	{"image", drawioEdgeStyle["image"], "built from"},
+	{"cross", drawioEdgeCross, "crosses a stack boundary"},
+	{"deps", drawioEdgeDeps, "[Unit] dependency"},
 }
 
-// drawLegend draws the document's visual vocabulary in a box at (x, y): a
-// swatch per node kind present in the graph, then one per edge style. It
-// lives on the overview because that is the page a reader opens first.
-func drawLegend(p *drawioPage, r reducedGraph, x, y float64) {
-	present := map[string]bool{}
-	for _, n := range r.g.nodes {
-		if n.External {
-			present["external"] = true
-			continue
-		}
-		present[n.Kind] = true
-	}
-	if len(r.orphans) > 0 {
-		present["external"] = true
-	}
-	var kinds []string
+// legendSize reports the box a page's legend needs, so shelf-style pages can
+// wrap it like any other box before drawing.
+func (p *drawioPage) legendSize() (w, h float64) {
+	rows := 0
 	for _, k := range legendKindOrder {
-		if present[k] {
-			kinds = append(kinds, k)
+		if p.usedKinds[k] {
+			rows++
 		}
 	}
+	for _, e := range legendEdgeOrder {
+		if p.usedEdges[e.key] {
+			rows++
+		}
+	}
+	if rows == 0 {
+		return 0, 0
+	}
+	return 14*2 + 96 + 10 + 190, 34 + float64(rows)*36 + 10
+}
 
+// drawLegend draws this page's visual vocabulary in a box at (x, y): one
+// swatch per node kind and edge style the page actually contains.
+func (p *drawioPage) drawLegend(x, y float64) {
+	bw, bh := p.legendSize()
+	if bw == 0 {
+		return
+	}
 	const (
 		rowH     = 36.0
 		swatchW  = 96.0
@@ -395,16 +438,20 @@ func drawLegend(p *drawioPage, r reducedGraph, x, y float64) {
 		padTop   = 34.0
 		labelGap = 10.0
 	)
-	rows := len(kinds) + len(legendEdges)
-	bw := padLeft*2 + swatchW + labelGap + labelW
-	bh := padTop + float64(rows)*rowH + 10
 	box := p.vertex("Legend", drawioStackStyle, x, y, bw, bh, "1")
 
+	swatchStyle := map[string]string{"stack": drawioHubStyle}
+	for k, s := range drawioNodeStyle {
+		swatchStyle[k] = s
+	}
 	kindLabel := map[string]string{"external": "external / unmanaged"}
-	ry := padTop
 	labelStyle := "text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#333333;fontFamily=Helvetica;"
-	for _, k := range kinds {
-		p.vertex("", drawioNodeStyle[k], padLeft, ry+(rowH-swatchH)/2, swatchW, swatchH, box)
+	ry := padTop
+	for _, k := range legendKindOrder {
+		if !p.usedKinds[k] {
+			continue
+		}
+		p.vertex("", swatchStyle[k], padLeft, ry+(rowH-swatchH)/2, swatchW, swatchH, box)
 		name := kindLabel[k]
 		if name == "" {
 			name = k
@@ -412,7 +459,10 @@ func drawLegend(p *drawioPage, r reducedGraph, x, y float64) {
 		p.vertex(name, labelStyle, padLeft+swatchW+labelGap, ry, labelW, rowH, box)
 		ry += rowH
 	}
-	for _, e := range legendEdges {
+	for _, e := range legendEdgeOrder {
+		if !p.usedEdges[e.key] {
+			continue
+		}
 		p.sampleEdge(e.style, box, padLeft, ry+rowH/2, padLeft+swatchW, ry+rowH/2)
 		p.vertex(e.label, labelStyle, padLeft+swatchW+labelGap, ry, labelW, rowH, box)
 		ry += rowH
@@ -429,8 +479,9 @@ func pageNetworks(r reducedGraph) *drawioPage {
 	}
 	p.heading("Network topology",
 		fmt.Sprintf("%d network relations. Containers on the left of each stack, the networks they join on the right. Red edges cross a stack boundary. Builds are folded into their container.", n))
-	p.shelfLayout(r, []string{"container", "pod", "kube", "network"},
+	_, x, y, shelfH := p.shelfLayout(r, []string{"container", "pod", "kube", "network"},
 		func(e graphEdge) bool { return e.Rel == "network" }, 120)
+	p.shelfLegend(x, y, shelfH)
 	return p
 }
 
@@ -447,8 +498,9 @@ func pageStorage(r reducedGraph) *drawioPage {
 	}
 	p.heading("Volumes and pods",
 		fmt.Sprintf("%d volume relations and %d pod memberships. Red edges are volumes shared across stacks.", nv, np))
-	p.shelfLayout(r, []string{"container", "pod", "kube", "volume"},
+	_, x, y, shelfH := p.shelfLayout(r, []string{"container", "pod", "kube", "volume"},
 		func(e graphEdge) bool { return e.Rel == "volume" || e.Rel == "pod" }, 120)
+	p.shelfLegend(x, y, shelfH)
 	return p
 }
 
@@ -500,6 +552,11 @@ func pageDetail(r reducedGraph) *drawioPage {
 			if b, ok := r.folded[id]; ok && r.hiddenBuilds[b] {
 				label += fmt.Sprintf("<br/><font style='font-size:9px;color:#a06000'>&#9670; %s</font>", b)
 			}
+			if n := r.g.nodes[id]; n.External {
+				p.useKind("external")
+			} else {
+				p.useKind(n.Kind)
+			}
 			ids[id] = p.vertex(label, nodeStyle(r.g.nodes[id]),
 				dwPadX, dwPadTop+float64(ri)*(dwNodeH+dwGapY), dwNodeW, dwNodeH, box)
 		}
@@ -516,14 +573,20 @@ func pageDetail(r reducedGraph) *drawioPage {
 		bw := dwPadX*2 + dwNodeW
 		bh := dwPadTop + dwPadBot + float64(rows)*dwNodeH + float64(rows-1)*dwGapY
 		if x+bw > dwShelfMaxW {
-			x, y = dwMargin, y+shelfH+dwShelfGap
+			x, y, shelfH = dwMargin, y+shelfH+dwShelfGap, 0
 		}
+		p.useKind("external")
 		box := p.vertex("unreferenced units", drawioExternalStackStyle, x, y, bw, bh, "1")
 		for ri, id := range r.orphans {
 			p.vertex(id, drawioNodeStyle["external"],
 				dwPadX, dwPadTop+float64(ri)*(dwNodeH+dwGapY), dwNodeW, dwNodeH, box)
 		}
+		if bh > shelfH {
+			shelfH = bh
+		}
+		x += bw + dwShelfGap
 	}
+	p.shelfLegend(x, y, shelfH)
 	return p
 }
 
@@ -625,6 +688,9 @@ func pageDeps(r reducedGraph) *drawioPage {
 			label := id
 			if n := r.g.nodes[id]; !n.External {
 				label += fmt.Sprintf("<br/><font style='font-size:9px;color:#888'>%s</font>", stackOf(n))
+				p.useKind(n.Kind)
+			} else {
+				p.useKind("external")
 			}
 			ids[id] = p.vertex(label, nodeStyle(r.g.nodes[id]), x, rowY, dwNodeW, dwNodeH, "1")
 			x += dwNodeW + dwGapX
@@ -636,12 +702,15 @@ func pageDeps(r reducedGraph) *drawioPage {
 	for _, k := range pairs {
 		rels := depRels[k]
 		sort.Strings(rels)
-		style := drawioEdgeDeps
+		style, key := drawioEdgeDeps, "deps"
 		if r.crossEdge(k.from, k.to) {
-			style = drawioEdgeCross
+			style, key = drawioEdgeCross, "cross"
 		}
+		p.useEdge(key)
 		p.edge(ids[k.from], ids[k.to], style, strings.Join(rels, "+"))
 	}
+	// Below the last band.
+	p.drawLegend(dwMargin, y+dwGapY)
 	return p
 }
 
