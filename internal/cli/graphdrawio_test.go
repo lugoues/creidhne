@@ -156,8 +156,8 @@ func renderDrawio(t *testing.T, g depGraph) mxFile {
 // overlap, and content inside the declared page size.
 func TestDrawioStructure(t *testing.T) {
 	f := renderDrawio(t, drawioFixture())
-	if len(f.Diagrams) != 4 {
-		t.Fatalf("want 4 pages, got %d", len(f.Diagrams))
+	if len(f.Diagrams) != 5 {
+		t.Fatalf("want 5 pages, got %d", len(f.Diagrams))
 	}
 	for _, d := range f.Diagrams {
 		ids := map[string]bool{}
@@ -201,47 +201,68 @@ func TestDrawioStructure(t *testing.T) {
 	}
 }
 
-// TestDrawioRoundTrip: no relation is silently lost. Page 4 carries every
-// kept resource edge, and its deps edges cover every non-resource pair that
-// lacks a resource edge (merged per pair).
+// TestDrawioRoundTrip: no relation is silently lost. Page 4 carries exactly
+// the kept resource edges; page 5 carries every declared [Unit] dependency
+// pair (merged per pair, nothing suppressed — the page is about ordering).
 func TestDrawioRoundTrip(t *testing.T) {
 	g := drawioFixture()
 	r := reduceGraph(g)
 	f := renderDrawio(t, g)
-	detail := f.Diagrams[3]
 
-	edges := 0
-	for _, c := range detail.Model.Cells {
-		if c.Edge == "1" {
-			edges++
+	countEdges := func(d mxDiagram) int {
+		n := 0
+		for _, c := range d.Model.Cells {
+			if c.Edge == "1" {
+				n++
+			}
 		}
+		return n
 	}
+
 	wantResource := 0
 	type pair struct{ from, to string }
-	resourcePair := map[pair]bool{}
 	depPairs := map[pair]bool{}
 	for _, e := range r.keptEdges() {
 		if relResource(e.Rel) {
 			wantResource++
-			resourcePair[pair{e.From, e.To}] = true
+		} else {
+			depPairs[pair{e.From, e.To}] = true
 		}
 	}
-	// A deps pair renders unless every one of its directives is subsumed by a
-	// resource edge on the same pair (only After/Requires/Wants are — a
-	// Conflicts= or Before= toward a resource is real semantics).
-	for _, e := range r.keptEdges() {
-		if relResource(e.Rel) {
-			continue
-		}
-		k := pair{e.From, e.To}
-		if resourcePair[k] && subsumedByQuadlet[e.Rel] {
-			continue
-		}
-		depPairs[k] = true
+	if got := countEdges(f.Diagrams[3]); got != wantResource {
+		t.Fatalf("detail page has %d edges, want %d (resource only)", got, wantResource)
 	}
-	wantDeps := len(depPairs)
-	if edges != wantResource+wantDeps {
-		t.Fatalf("detail page has %d edges, want %d resource + %d merged deps", edges, wantResource, wantDeps)
+	if got := countEdges(f.Diagrams[4]); got != len(depPairs) {
+		t.Fatalf("dependency page has %d edges, want %d merged deps pairs", got, len(depPairs))
+	}
+}
+
+// TestDrawioDepsLayering: on the dependency page a dependent sits strictly
+// below every unit it waits on (foundations in the top band).
+func TestDrawioDepsLayering(t *testing.T) {
+	f := renderDrawio(t, drawioFixture())
+	deps := f.Diagrams[4]
+	yOf := map[string]float64{}
+	byID := map[string]mxCell{}
+	for _, c := range deps.Model.Cells {
+		byID[c.ID] = c
+		if c.Vertex == "1" && c.Geo != nil {
+			yOf[c.ID] = c.Geo.Y
+		}
+	}
+	checked := 0
+	for _, c := range deps.Model.Cells {
+		if c.Edge != "1" {
+			continue
+		}
+		if yOf[c.Source] <= yOf[c.Target] {
+			t.Errorf("dependent %s (y=%g) must sit below its dependency %s (y=%g)",
+				c.Source, yOf[c.Source], c.Target, yOf[c.Target])
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("expected dependency edges on the fixture")
 	}
 }
 

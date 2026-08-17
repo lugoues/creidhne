@@ -7,13 +7,14 @@ import (
 	"strings"
 )
 
-// The drawio renderer emits a four-page uncompressed .drawio file:
+// The drawio renderer emits a five-page uncompressed .drawio file:
 //
-//	1. Overview    — stack-level boxes, cross-boundary resource relations only
-//	2. Networks    — per-stack: containers left, the networks they join right
-//	3. Storage     — per-stack: containers left, volumes right, pod membership
-//	4. Full detail — every visible unit and relation, deps as grey dotted,
-//	                 plus the orphan quarantine box
+//	1. Overview      — stack-level boxes, cross-boundary resource relations only
+//	2. Networks      — per-stack: containers left, the networks they join right
+//	3. Storage       — per-stack: containers left, volumes right, pod membership
+//	4. Full detail   — every visible unit and resource relation, plus the
+//	                   orphan quarantine box
+//	5. Dependencies  — the declared [Unit] dependency graph as a layered tree
 //
 // Geometry is computed here (shelf packing, column per kind); no layout
 // library, no drawio auto-layout: coordinates on disk keep the file usable
@@ -298,7 +299,7 @@ func pageOverview(r reducedGraph) *drawioPage {
 	}
 
 	p.heading("Overview",
-		fmt.Sprintf("%d units, %d relations. Drawn here: the %d cross-stack resource links (deduplicated per stack pair; %d relations cross a boundary in total, [Unit] ordering included — see page 4).",
+		fmt.Sprintf("%d units, %d relations. Drawn here: the %d cross-stack resource links (deduplicated per stack pair; %d relations cross a boundary in total, [Unit] ordering included — see page 5).",
 			r.counts.Units, r.counts.Relations, len(edges), r.counts.Cross))
 
 	hub := ""
@@ -371,117 +372,16 @@ func pageStorage(r reducedGraph) *drawioPage {
 	return p
 }
 
-// pageDetail draws everything visible. Resource edges keep their type
-// colours; [Unit] deps merge per node pair into one grey dotted edge, and a
-// pair already carrying a resource edge shows no deps edge at all (quadlet
-// wires that dependency itself — the deps line would be the redundancy the
-// deps/redundant-resource lint exists to flag). Orphans land in a dashed
-// quarantine box.
+// pageDetail draws everything visible, resource relations only — [Unit]
+// dependencies live on the dedicated dependency page. Orphans land in a
+// dashed quarantine box.
 func pageDetail(r reducedGraph) *drawioPage {
 	p := &drawioPage{name: "4. Full detail", prefix: "fd"}
 	p.heading("Full detail",
-		fmt.Sprintf("Every visible unit and relation. %d build units are folded into their container label. Grey dotted edges are [Unit] dependencies; After/Requires/Wants lines that merely repeat a resource reference are omitted (quadlet wires those itself).", r.counts.Folded))
+		fmt.Sprintf("Every visible unit and resource relation. %d build units are folded into their container label. [Unit] ordering/requirement dependencies are on page 5.", r.counts.Folded))
 
 	kinds := []string{"pod", "container", "kube", "build", "image", "artifact", "network", "volume", "external"}
-	ids, x, y, shelfH := p.shelfLayout(r, kinds, func(e graphEdge) bool { return relResource(e.Rel) }, 120)
-
-	// Deps edges, merged per pair; endpoints missing from the resource pass
-	// (a target only referenced by After=) get placed via a second pass:
-	// simplest is to draw deps only between already-placed nodes plus the
-	// external stack, which shelfLayout placed if any resource edge touched
-	// it. Nodes that appear in deps edges only are placed into their stack in
-	// a follow-up shelf below.
-	type pair struct{ from, to string }
-	depRels := map[pair][]string{}
-	resourcePair := map[pair]bool{}
-	for _, e := range r.keptEdges() {
-		if !r.visible[e.From] || !r.visible[e.To] {
-			continue
-		}
-		k := pair{e.From, e.To}
-		if relResource(e.Rel) {
-			resourcePair[k] = true
-		}
-	}
-	for _, e := range r.keptEdges() {
-		if !r.visible[e.From] || !r.visible[e.To] || relResource(e.Rel) {
-			continue
-		}
-		k := pair{e.From, e.To}
-		// Alongside a resource edge, only the directives quadlet wires itself
-		// (After/Requires/Wants — the same set the deps/redundant-resource
-		// lint checks) are redundant; Conflicts=, Before=, BindsTo= etc.
-		// toward a resource carry semantics of their own and must render.
-		if resourcePair[k] && subsumedByQuadlet[e.Rel] {
-			continue
-		}
-		depRels[k] = append(depRels[k], e.Rel)
-	}
-	// Place any deps-only endpoints (external targets, infra units with no
-	// resource coupling) in a trailing shelf pass.
-	missing := map[string]bool{}
-	for k := range depRels {
-		for _, id := range []string{k.from, k.to} {
-			if _, ok := ids[id]; !ok {
-				missing[id] = true
-			}
-		}
-	}
-	if len(missing) > 0 {
-		byStack := map[string][]string{}
-		for id := range missing {
-			s := stackOf(r.g.nodes[id])
-			byStack[s] = append(byStack[s], id)
-		}
-		stacks := make([]string, 0, len(byStack))
-		for s := range byStack {
-			stacks = append(stacks, s)
-		}
-		sort.Strings(stacks)
-		for _, stack := range stacks {
-			col := byStack[stack]
-			sort.Strings(col)
-			rows := len(col)
-			bw := dwPadX*2 + dwNodeW
-			bh := dwPadTop + dwPadBot + float64(rows)*dwNodeH + float64(rows-1)*dwGapY
-			if x+bw > dwShelfMaxW {
-				x, y, shelfH = dwMargin, y+shelfH+dwShelfGap, 0
-			}
-			style := drawioStackStyle
-			if stack == "external" {
-				style = drawioExternalStackStyle
-			}
-			box := p.vertex(stack, style, x, y, bw, bh, "1")
-			for ri, id := range col {
-				ids[id] = p.vertex(nodeLabel(r, id), nodeStyle(r.g.nodes[id]),
-					dwPadX, dwPadTop+float64(ri)*(dwNodeH+dwGapY), dwNodeW, dwNodeH, box)
-			}
-			if bh > shelfH {
-				shelfH = bh
-			}
-			x += bw + dwShelfGap
-		}
-	}
-	pairs := make([]pair, 0, len(depRels))
-	for k := range depRels {
-		pairs = append(pairs, k)
-	}
-	sort.Slice(pairs, func(i, j int) bool {
-		if pairs[i].from != pairs[j].from {
-			return pairs[i].from < pairs[j].from
-		}
-		return pairs[i].to < pairs[j].to
-	})
-	for _, k := range pairs {
-		src, sok := ids[k.from]
-		dst, dok := ids[k.to]
-		if !sok || !dok {
-			continue
-		}
-		rels := depRels[k]
-		sort.Strings(rels)
-		p.edge(src, dst, drawioEdgeDeps, strings.Join(rels, "+"))
-	}
+	_, x, y, shelfH := p.shelfLayout(r, kinds, func(e graphEdge) bool { return relResource(e.Rel) }, 120)
 
 	// Orphan quarantine: parsed but wired to nothing. Real signal, never
 	// silently dropped.
@@ -501,6 +401,112 @@ func pageDetail(r reducedGraph) *drawioPage {
 	return p
 }
 
+// pageDeps renders the declared [Unit] dependency graph as a layered tree:
+// foundations (units nothing here waits on) in the top band, each unit one
+// band below its deepest dependency (longest-path layering), arrows pointing
+// from a dependent up to what it awaits. Every declared directive renders —
+// this page is about ordering, so nothing is suppressed as redundant.
+// Directives per node pair merge into one labeled edge; cross-stack
+// dependencies keep the red override.
+func pageDeps(r reducedGraph) *drawioPage {
+	p := &drawioPage{name: "5. Dependencies", prefix: "dp"}
+
+	type pair struct{ from, to string }
+	depRels := map[pair][]string{}
+	nodeSet := map[string]bool{}
+	for _, e := range r.keptEdges() {
+		if relResource(e.Rel) || !r.visible[e.From] || !r.visible[e.To] {
+			continue
+		}
+		k := pair{e.From, e.To}
+		depRels[k] = append(depRels[k], e.Rel)
+		nodeSet[e.From], nodeSet[e.To] = true, true
+	}
+	p.heading("Dependency tree",
+		fmt.Sprintf("Declared [Unit] dependencies (%d edges between %d units), foundations on top. Quadlet's implicit wiring from resource references is not drawn — see pages 2-4 for those.",
+			len(depRels), len(nodeSet)))
+	if len(depRels) == 0 {
+		return p
+	}
+
+	// Longest-path layering over the declared edge direction, iteration
+	// bounded so a dependency cycle cannot hang the renderer (cyclic units
+	// settle wherever the last pass left them).
+	pairs := make([]pair, 0, len(depRels))
+	for k := range depRels {
+		pairs = append(pairs, k)
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].from != pairs[j].from {
+			return pairs[i].from < pairs[j].from
+		}
+		return pairs[i].to < pairs[j].to
+	})
+	layer := map[string]int{}
+	for iter, changed := 0, true; changed && iter <= len(nodeSet); iter++ {
+		changed = false
+		for _, k := range pairs {
+			if l := layer[k.to] + 1; l > layer[k.from] {
+				layer[k.from] = l
+				changed = true
+			}
+		}
+	}
+
+	byLayer := map[int][]string{}
+	maxLayer := 0
+	for id := range nodeSet {
+		l := layer[id]
+		byLayer[l] = append(byLayer[l], id)
+		if l > maxLayer {
+			maxLayer = l
+		}
+	}
+
+	// Bands top-down, nodes wrapped at the page width; sorted by stack then
+	// name so a stack's units cluster within their band.
+	ids := map[string]string{}
+	y := 120.0
+	for l := 0; l <= maxLayer; l++ {
+		band := byLayer[l]
+		if len(band) == 0 {
+			continue
+		}
+		sort.Slice(band, func(i, j int) bool {
+			si, sj := stackOf(r.g.nodes[band[i]]), stackOf(r.g.nodes[band[j]])
+			if si != sj {
+				return si < sj
+			}
+			return band[i] < band[j]
+		})
+		x, rowY := dwMargin, y
+		for _, id := range band {
+			if x+dwNodeW > dwShelfMaxW {
+				x, rowY = dwMargin, rowY+dwNodeH+dwGapY
+			}
+			label := nodeLabel(r, id)
+			if n := r.g.nodes[id]; !n.External {
+				label += fmt.Sprintf("<br/><font style='font-size:9px;color:#888'>%s</font>", stackOf(n))
+			}
+			ids[id] = p.vertex(label, nodeStyle(r.g.nodes[id]), x, rowY, dwNodeW, dwNodeH, "1")
+			x += dwNodeW + dwGapX
+		}
+		// Wide gap between bands so the layering reads as levels.
+		y = rowY + dwNodeH + 3*dwGapY
+	}
+
+	for _, k := range pairs {
+		rels := depRels[k]
+		sort.Strings(rels)
+		style := drawioEdgeDeps
+		if r.crossEdge(k.from, k.to) {
+			style = drawioEdgeCross
+		}
+		p.edge(ids[k.from], ids[k.to], style, strings.Join(rels, "+"))
+	}
+	return p
+}
+
 // writeDrawio renders the reduced graph as a four-page uncompressed .drawio
 // document. Uncompressed on purpose: compressed output is base64+deflate,
 // undiffable, and buys nothing at this size. No XML comments anywhere —
@@ -508,7 +514,7 @@ func pageDetail(r reducedGraph) *drawioPage {
 func writeDrawio(w io.Writer, g depGraph) {
 	r := reduceGraph(g)
 	fmt.Fprint(w, `<mxfile host="app.diagrams.net" agent="crei-graph" type="device" compressed="false">`+"\n")
-	for _, p := range []*drawioPage{pageOverview(r), pageNetworks(r), pageStorage(r), pageDetail(r)} {
+	for _, p := range []*drawioPage{pageOverview(r), pageNetworks(r), pageStorage(r), pageDetail(r), pageDeps(r)} {
 		p.xml(w)
 	}
 	fmt.Fprint(w, "</mxfile>\n")

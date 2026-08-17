@@ -58,9 +58,10 @@ func newGraphCmd() *cobra.Command {
 			"targets collected in one 'external' group; --flat disables clustering.\n\n" +
 			"Formats: dot (pipe to graphviz, e.g. 'crei graph | dot -Tsvg > g.svg'),\n" +
 			"mermaid (renders on GitHub or mermaid.live), json, or drawio (a\n" +
-			"four-page draw.io document: overview with cross-stack relations only,\n" +
-			"networks, storage, and full detail; open with app.diagrams.net or\n" +
-			"draw.io Desktop, e.g. 'crei graph --format drawio > estate.drawio').",
+			"five-page draw.io document: overview with cross-stack relations only,\n" +
+			"networks, storage, full detail, and a [Unit] dependency tree; open\n" +
+			"with app.diagrams.net or draw.io Desktop, e.g.\n" +
+			"'crei graph --format drawio > estate.drawio').",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig()
