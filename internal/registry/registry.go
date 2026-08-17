@@ -5,6 +5,7 @@ package registry
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,16 +29,23 @@ func ParseAge(s string) (time.Duration, error) {
 	if err != nil || n < 0 {
 		return 0, fmt.Errorf("invalid age %q: want <int>[dwh]", s)
 	}
+	var unit time.Duration
 	switch s[len(s)-1] {
 	case 'h':
-		return time.Duration(n) * time.Hour, nil
+		unit = time.Hour
 	case 'd':
-		return time.Duration(n) * 24 * time.Hour, nil
+		unit = 24 * time.Hour
 	case 'w':
-		return time.Duration(n) * 7 * 24 * time.Hour, nil
+		unit = 7 * 24 * time.Hour
 	default:
 		return 0, fmt.Errorf("invalid age unit in %q: want d, w, or h", s)
 	}
+	// Overflow would wrap negative, and every `minAge > 0` gate downstream
+	// would then silently disable the min-age safeguard.
+	if int64(n) > int64(math.MaxInt64)/int64(unit) {
+		return 0, fmt.Errorf("age %q overflows the representable range", s)
+	}
+	return time.Duration(n) * unit, nil
 }
 
 // Status classifies a pin by what it carries.

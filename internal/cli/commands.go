@@ -182,6 +182,14 @@ func newApplyCmd() *cobra.Command {
 				return err
 			}
 			printSummary(out, s, "to add", "to update", "to remove")
+			// Reload default comes from the config (reload_systemd, default on
+			// to match podman quadlet install); an explicit --reload-systemd
+			// flag overrides it for this run.
+			reload := cfg.ReloadSystemd
+			if cmd.Flags().Changed("reload-systemd") {
+				reload = reloadSystemd
+			}
+			userScope := underHome(dir)
 			if s.Added == 0 && s.Changed == 0 && s.Removed == 0 {
 				// Adopt/refresh recorded state even when the files are already
 				// current, so deployments from before crei.state gain one on
@@ -191,6 +199,15 @@ func newApplyCmd() *cobra.Command {
 					return err
 				}
 				fmt.Fprintln(out, "Nothing to do.")
+				// Still reload when enabled: a prior apply may have written the
+				// files and then failed its reload, and this rerun sees no file
+				// changes — exiting without reloading would leave systemd on
+				// the old definitions while reporting success.
+				if reload {
+					if err := reconcile.DaemonReload(userScope); err != nil {
+						return fmt.Errorf("daemon-reload: %w", err)
+					}
+				}
 				return nil
 			}
 			if !yes {
@@ -254,14 +271,6 @@ func newApplyCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "\nApplied: %d added, %d updated, %d removed\n", s.Added, s.Changed, s.Removed)
-			userScope := underHome(dir)
-			// Reload default comes from the config (reload_systemd, default on to
-			// match podman quadlet install); an explicit --reload-systemd flag
-			// overrides it for this run.
-			reload := cfg.ReloadSystemd
-			if cmd.Flags().Changed("reload-systemd") {
-				reload = reloadSystemd
-			}
 			if reload {
 				if err := reconcile.DaemonReload(userScope); err != nil {
 					return fmt.Errorf("daemon-reload: %w", err)
@@ -348,11 +357,16 @@ func printDiff(w io.Writer, changes []reconcile.Change, cfg config) error {
 			}
 			// Built-in differ: render a structured inline diff from the in-memory
 			// old/new content. A configured external tool formats (and colors) its
-			// own output, so pass it through indented.
-			if cfg.DiffTool == "" || cfg.DiffTool == "diff" {
+			// own output, so pass it through indented — but only for a regular
+			// live file: a directory/symlink being replaced by a file (a
+			// supported change) would make tools like cmp error out and block
+			// the plan/apply that performs the replacement.
+			live := filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name))
+			liveInfo, statErr := os.Lstat(live)
+			regular := statErr == nil && liveInfo.Mode().IsRegular()
+			if cfg.DiffTool == "" || cfg.DiffTool == "diff" || !regular {
 				renderInlineDiff(w, c.Existing, c.Content, cfg.DiffStyle, limitsFor(c.Name, cfg))
 			} else {
-				live := filepath.Join(cfg.QuadletDir, filepath.FromSlash(c.Name))
 				d, err := reconcile.RunDiff(live, c.Content, "live/"+c.Name, "new/"+c.Name, cfg.DiffTool)
 				if err != nil {
 					return err

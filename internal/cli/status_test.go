@@ -466,8 +466,28 @@ Result=
 	}
 
 	// Post-reboot: the build has no run this boot. Its image may still
-	// exist, so it reads plain "inactive", never "unbuilt".
+	// exist, so it reads plain "inactive", never "unbuilt". (The stub must
+	// answer for every requested unit: Show treats a partial response as an
+	// error rather than leaving units silently unverified.)
 	fakeSystemctl(t, `Id=hermes-build.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+
+Id=hermes.service
+LoadState=loaded
+ActiveState=inactive
+SubState=dead
+NeedDaemonReload=no
+ActiveEnterTimestamp=
+InactiveExitTimestamp=
+Result=
+
+Id=traefik.service
 LoadState=loaded
 ActiveState=inactive
 SubState=dead

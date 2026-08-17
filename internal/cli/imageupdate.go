@@ -212,6 +212,9 @@ func newImageUpdateCmd() *cobra.Command {
 			for _, a := range args {
 				only[a] = true
 			}
+			if err := checkImageNames(entries, only); err != nil {
+				return err
+			}
 			res := liveResolver()
 			now := time.Now()
 			var items, held []updateItem

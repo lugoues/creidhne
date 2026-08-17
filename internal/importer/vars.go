@@ -26,6 +26,8 @@ type envVar struct {
 	name       string
 	def        string
 	hasDefault bool
+	bare       bool // some occurrence had no default: the field stays required
+	warned     bool // mixed bare+default already reported
 }
 
 func newEnvSet(warnf func(string, ...any)) *envSet {
@@ -82,18 +84,28 @@ func varTokenSpans(s string) [][2]int {
 }
 
 // record registers a variable occurrence and returns the env-field reference.
+// A bare occurrence keeps the field required even when another occurrence
+// carries a default: compose resolves ${TAG:-latest} and a bare ${TAG}
+// independently (the bare one to empty when unset), and one CUE field default
+// would silently change the bare occurrence's value.
 func (e *envSet) record(name, def string, hasDefault bool) string {
 	v, ok := e.vars[name]
 	if !ok {
-		v = &envVar{name: name, def: def, hasDefault: hasDefault}
+		v = &envVar{name: name}
 		e.vars[name] = v
 		e.order = append(e.order, name)
-	} else if hasDefault {
-		if !v.hasDefault {
-			v.def, v.hasDefault = def, true
-		} else if v.def != def {
-			e.warnf("variable ${%s} has conflicting defaults (%q vs %q); keeping the first", name, v.def, def)
-		}
+	}
+	if !hasDefault {
+		v.bare = true
+	} else if !v.hasDefault && !v.bare {
+		v.def, v.hasDefault = def, true
+	} else if v.hasDefault && v.def != def {
+		e.warnf("variable ${%s} has conflicting defaults (%q vs %q); keeping the first", name, v.def, def)
+	}
+	if v.bare && (v.hasDefault || hasDefault) && !v.warned {
+		v.warned = true
+		e.warnf("variable ${%s} appears both bare and with a default; compose resolves the bare occurrence to empty when unset, which one CUE field cannot express — treating it as required", name)
+		v.hasDefault, v.def = false, ""
 	}
 	return sel("env", name)
 }
@@ -174,10 +186,23 @@ func scanRawVariables(paths []string) map[string]bool {
 			continue
 		}
 		s := string(raw)
+		var toks []string
 		for _, loc := range varTokenSpans(s) {
-			tok := s[loc[0]:loc[1]]
+			toks = append(toks, s[loc[0]:loc[1]])
+		}
+		// Worklist: a ${...} token's body can itself contain interpolations
+		// (${A:-${B}}); B's fallback-to-empty matters just as much as a
+		// top-level occurrence's, so nested tokens are scanned too.
+		for i := 0; i < len(toks); i++ {
+			tok := toks[i]
 			if tok == "$$" {
 				continue
+			}
+			if strings.HasPrefix(tok, "${") && strings.HasSuffix(tok, "}") {
+				body := tok[2 : len(tok)-1]
+				for _, loc := range varTokenSpans(body) {
+					toks = append(toks, body[loc[0]:loc[1]])
+				}
 			}
 			name, _, hasDefault, _, _ := parseVarToken(tok)
 			if name == "" {

@@ -138,9 +138,10 @@ func TestInjectBuildHashesDuplicateTag(t *testing.T) {
 }
 
 // TestInjectBuildHashesTagConsumerOrdering: a tag-matched consumer gains
-// After=<build service>. Quadlet wires ordering for Image=<stem>.build refs
-// itself but knows nothing about raw tags, so without this a restart --stale
-// can restart the container against the old image mid-rebuild.
+// Requires=/After=<build service> — the pair quadlet wires for
+// Image=<stem>.build refs itself but cannot know about for raw tags. After=
+// alone orders a joint restart; Requires= makes a failed rebuild block the
+// consumer instead of restarting it against the old image.
 func TestInjectBuildHashesTagConsumerOrdering(t *testing.T) {
 	build := buildUnit("img", "FROM alpine\n", "localhost/app:latest")
 	build.Service = "img-build.service"
@@ -148,7 +149,7 @@ func TestInjectBuildHashesTagConsumerOrdering(t *testing.T) {
 	consumer.Service = "app.service"
 	pre := containerUnit("pre", "localhost/app:latest")
 	pre.Service = "pre.service"
-	pre.Data["Unit"] = map[string]any{"After": []any{"img-build.service"}}
+	pre.Data["Unit"] = map[string]any{"After": []any{"img-build.service"}, "Requires": []any{"img-build.service"}}
 	byUnit := containerUnit("by-unit", "img.build")
 	byUnit.Service = "by-unit.service"
 
@@ -156,19 +157,21 @@ func TestInjectBuildHashesTagConsumerOrdering(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	after := func(u UnitRecord) []any {
+	deps := func(u UnitRecord, directive string) []any {
 		unit, _ := u.Data["Unit"].(map[string]any)
-		list, _ := unit["After"].([]any)
+		list, _ := unit[directive].([]any)
 		return list
 	}
-	if got := after(consumer); len(got) != 1 || got[0] != "img-build.service" {
-		t.Errorf("tag consumer After = %v, want [img-build.service]", got)
-	}
-	if got := after(pre); len(got) != 1 {
-		t.Errorf("already-declared After must not be duplicated, got %v", got)
-	}
-	if got := after(byUnit); len(got) != 0 {
-		t.Errorf("Image=<stem>.build consumer is ordered by quadlet itself; After = %v, want none", got)
+	for _, directive := range []string{"After", "Requires"} {
+		if got := deps(consumer, directive); len(got) != 1 || got[0] != "img-build.service" {
+			t.Errorf("tag consumer %s = %v, want [img-build.service]", directive, got)
+		}
+		if got := deps(pre, directive); len(got) != 1 {
+			t.Errorf("already-declared %s must not be duplicated, got %v", directive, got)
+		}
+		if got := deps(byUnit, directive); len(got) != 0 {
+			t.Errorf("Image=<stem>.build consumer is wired by quadlet itself; %s = %v, want none", directive, got)
+		}
 	}
 }
 
@@ -185,5 +188,13 @@ func TestHashDataBinaryContent(t *testing.T) {
 	text := map[string]any{"Context": map[string]any{"f": "hello"}}
 	if hashData(text) != hashData(map[string]any{"Context": map[string]any{"f": "hello"}}) {
 		t.Fatal("hashing must stay deterministic for text data")
+	}
+	// Literal text spelling a binary marker must not collide with the binary
+	// content that produces that marker (domain separation via "!text:").
+	binary := string([]byte{0xde, 0xff})
+	impostor := hashableString(binary) // the marker binary normalizes to
+	if hashData(map[string]any{"Context": map[string]any{"f": binary}}) ==
+		hashData(map[string]any{"Context": map[string]any{"f": impostor}}) {
+		t.Fatal("marker-impersonating text must not collide with the binary it names")
 	}
 }

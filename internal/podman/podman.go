@@ -130,24 +130,18 @@ func RemoveSecret(name string) error {
 	return err
 }
 
-// ReadSecret returns a secret's value via inspect --showsecret. JSON (not a
-// template) so the value round-trips byte-exact: template output appends a
-// newline that would be indistinguishable from one in the value.
+// ReadSecret returns a secret's value via inspect --showsecret, using a Go
+// template rather than JSON: JSON strings cannot carry invalid UTF-8, so a
+// binary secret would come back with its invalid bytes replaced and adopt
+// --replace would then destroy the original. The template prints the raw
+// bytes plus exactly one trailing newline appended by podman's writer, which
+// is stripped; the value's own newlines (trailing ones included) survive.
 func ReadSecret(name string) ([]byte, error) {
-	out, err := run("secret", "inspect", "--showsecret", "--", name)
+	out, err := run("secret", "inspect", "--showsecret", "--format", "{{.SecretData}}", "--", name)
 	if err != nil {
 		return nil, err
 	}
-	var infos []struct {
-		SecretData string `json:"SecretData"`
-	}
-	if err := json.Unmarshal(out, &infos); err != nil {
-		return nil, fmt.Errorf("parse podman secret inspect %s: %w", name, err)
-	}
-	if len(infos) != 1 {
-		return nil, fmt.Errorf("podman secret inspect %s: expected 1 secret, got %d", name, len(infos))
-	}
-	return []byte(infos[0].SecretData), nil
+	return bytes.TrimSuffix(out, []byte("\n")), nil
 }
 
 // createSecretArgs builds the argv for `podman secret create`. The "--"

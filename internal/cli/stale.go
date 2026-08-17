@@ -179,7 +179,16 @@ func diffStale(out io.Writer, cfg config) error {
 		if hint := restartHint(r.Path, rec); hint != "" {
 			fmt.Fprintln(out, yellow("! "+hint))
 		}
-		old, ok := rec.InEffectAt(in.Runtime[r.Service].ActiveEnter)
+		// The same effective timestamp classification used: ActiveEnter for a
+		// unit that reached active, else InactiveExit — a completed oneshot
+		// build (runtime "done") never enters active, and querying history at
+		// the zero time would wrongly claim it predates the record.
+		rt := in.Runtime[r.Service]
+		started := rt.ActiveEnter
+		if started.IsZero() {
+			started = rt.InactiveExit
+		}
+		old, ok := rec.InEffectAt(started)
 		switch {
 		case !ok:
 			fmt.Fprintln(out, dim("  running config predates recorded history; no diff available (history starts with the first apply on crei >= this version)"))

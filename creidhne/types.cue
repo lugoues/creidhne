@@ -17,7 +17,9 @@ import (
 // Port mapping: [ip:]hostPort[-range][:containerPort[-range]][/protocol]. The
 // host IP may be IPv4 or a bracketed IPv6 address ([::1]:80:90), matching
 // podman/quadlet (see quadlet's ports_ipv6.container test).
-#PortMapping: =~"^((\\[[0-9a-fA-F:]+\\]|[0-9.]*):)?[0-9]+(-[0-9]+)?(:[0-9]+(-[0-9]+)?)?(/(tcp|udp|sctp))?$" | =~"^[0-9]+(-[0-9]+)?$"
+// The bracketed host form admits dots too: IPv4-mapped IPv6 literals
+// ("[::ffff:192.0.2.1]:8080:80") are valid podman host addresses.
+#PortMapping: =~"^((\\[[0-9a-fA-F:.]+\\]|[0-9.]*):)?[0-9]+(-[0-9]+)?(:[0-9]+(-[0-9]+)?)?(/(tcp|udp|sctp))?$" | =~"^[0-9]+(-[0-9]+)?$"
 
 // Key=Value pair for labels, annotations, environment variables
 #KeyValue: =~"^[^=]+=.*$"
@@ -121,9 +123,12 @@ _#renderLabel: {
 
 // #UnitNameBase is a systemd unit basename, what quadlet's ServiceName=
 // accepts: the generated unit becomes <base>.service. Restricted to the
-// systemd unit-name charset, and a unit-type suffix is rejected (quadlet
-// appends .service itself, so "foo.service" would yield foo.service.service).
-#UnitNameBase: string & =~"^[A-Za-z0-9:_.\\\\-]+$" & !~"\\.(service|socket|target|timer|path|mount|automount|device|swap|slice|scope)$"
+// systemd unit-name charset (with at most one @ instance separator, as in
+// "worker@blue"), capped at 247 bytes so the name plus ".service" stays
+// under systemd's UNIT_NAME_MAX of 256, and a unit-type suffix is rejected
+// (quadlet appends .service itself, so "foo.service" would yield
+// foo.service.service).
+#UnitNameBase: string & =~"^[A-Za-z0-9:_.\\\\-]+(@[A-Za-z0-9:_.\\\\-]+)?$" & strings.MaxRunes(247) & !~"\\.(service|socket|target|timer|path|mount|automount|device|swap|slice|scope)$"
 
 // #RefSelf is the base handle for kinds referenced by a bare ref (network, pod,
 // image, build, container, ...). It flattens to the plain #ref.
@@ -255,9 +260,12 @@ _#pct: =~"^[0-9]+%$"
 // Units: us, ms, s, min, h, d, w.  See systemd.time(7).
 _#systemdDuration: =~"^[0-9]+(us|ms|s|min|h|d|w)( [0-9]+(us|ms|s|min|h|d|w))*$"
 
-// Like _#systemdDuration, plus the ns unit that only systemd's nanosecond
-// parser (config_parse_nsec, e.g. TimerSlackNSec=) accepts.
-_#systemdNsecDuration: =~"^[0-9]+(ns|us|ms|s|min|h|d|w)( [0-9]+(ns|us|ms|s|min|h|d|w))*$"
+// Like _#systemdDuration, plus the ns/nsec unit that only systemd's
+// nanosecond parser (config_parse_nsec, e.g. TimerSlackNSec=) accepts.
+// Deliberately as curated as _#systemdDuration: the long-form aliases
+// systemd also tolerates (seconds, msec, ...) are not modeled anywhere in
+// this schema.
+_#systemdNsecDuration: =~"^[0-9]+(ns|nsec|us|ms|s|min|h|d|w)( [0-9]+(ns|nsec|us|ms|s|min|h|d|w))*$"
 
 // Go duration format, including fractional and compound spans (e.g. "30s",
 // "1h30m", "500ms", "0.5s"). Units: ns, us, ms, s, m, h.  See Go

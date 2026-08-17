@@ -160,6 +160,20 @@ func Show(userScope bool, units []string) (map[string]UnitStatus, error) {
 		// Treat as unavailable so status degrades with a note, not silence.
 		return nil, fmt.Errorf("systemctl returned no unit properties: %s", firstNonEmptyLine(out))
 	}
+	// A partial response is just as suspect: real systemctl emits a block for
+	// every requested unit (not-found included), so a missing block means a
+	// shim or a truncated response. Silently omitting it would leave callers
+	// (status --check above all) treating the unit as verified when nothing
+	// was.
+	var missing []string
+	for _, u := range units {
+		if _, ok := parsed[u]; !ok {
+			missing = append(missing, u)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("systemctl returned no properties for %s", strings.Join(missing, ", "))
+	}
 	return parsed, nil
 }
 

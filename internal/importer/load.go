@@ -55,13 +55,17 @@ func loadCompose(opts Options) (*types.Project, error) {
 	// WithEnvFiles/WithDotEnv/WithOsEnv below.
 	fns = append(fns, composecli.WithoutEnvironmentResolution)
 	if opts.ResolveEnv {
-		for _, f := range opts.EnvFiles {
-			fns = append(fns, composecli.WithEnvFiles(f))
-		}
-		fns = append(fns, composecli.WithDotEnv)
+		// OS env merges first: Mapping.Merge is first-writer-wins, and
+		// compose gives the process environment precedence over .env values.
 		if opts.UseOsEnv {
 			fns = append(fns, composecli.WithOsEnv)
 		}
+		// One WithEnvFiles call with the whole list: it replaces EnvFiles
+		// wholesale, so per-file calls would keep only the last. With no
+		// files it discovers the default <working dir>/.env — which
+		// WithDotEnv alone never does (it reads only ProjectOptions.EnvFiles).
+		fns = append(fns, composecli.WithEnvFiles(opts.EnvFiles...))
+		fns = append(fns, composecli.WithDotEnv)
 	} else {
 		fns = append(fns, composecli.WithInterpolation(false))
 	}

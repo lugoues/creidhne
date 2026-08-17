@@ -364,9 +364,13 @@ func promptSecretValue(name string) ([]byte, bool, error) {
 	return []byte(typed), false, nil
 }
 
+// validateLength enforces the same bounds as the --length flag: the schema's
+// floor is 8, and a recorded length below it would fail every later project
+// load once the policy lands in registries/secrets.cue.
 func validateLength(s string) error {
-	if n, err := strconv.Atoi(strings.TrimSpace(s)); err != nil || n < 1 {
-		return errors.New("length must be a positive integer")
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < secretLengthMin || n > secretLengthMax {
+		return fmt.Errorf("length must be an integer in %d..%d (the schema minimum is %d)", secretLengthMin, secretLengthMax, secretLengthMin)
 	}
 	return nil
 }

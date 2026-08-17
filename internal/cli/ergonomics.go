@@ -193,8 +193,22 @@ func runInit(out io.Writer, projectDir string) error {
 	// The sample main.cue is scaffolding for a fresh project; writing it into
 	// one that already has .cue files is just noise (the schema, config, and
 	// vendored copy below are still (re)synced either way).
+	// os.ReadDir rather than filepath.Glob: a project path containing glob
+	// metacharacters (an unmatched '[') would make Glob error, and a discarded
+	// error would misread an existing project as fresh.
 	freshProject := false
-	if existing, _ := filepath.Glob(filepath.Join(projectDir, "*.cue")); len(existing) == 0 {
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return err
+	}
+	hasCue := false
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".cue") {
+			hasCue = true
+			break
+		}
+	}
+	if !hasCue {
 		freshProject = true
 		created, err = writeIfAbsent(filepath.Join(projectDir, "main.cue"), sampleMainFor(module))
 		if err != nil {

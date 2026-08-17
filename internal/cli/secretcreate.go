@@ -15,6 +15,14 @@ import (
 // matching the interactive prompt's default.
 const defaultSecretLength = 32
 
+// Generated-length bounds shared by --length and the interactive prompt: the
+// schema's floor is 8, podman refuses secrets over 512KB, and a multi-KB
+// generated password is a typo, not a policy.
+const (
+	secretLengthMin = 8
+	secretLengthMax = 4096
+)
+
 // newSecretCreateCmd is the one secret-making verb, podman-shaped: it registers
 // the secret in the crei-owned registry (unless already declared) and creates
 // its value in podman, in one step. It replaced the former add/create pair.
@@ -45,12 +53,11 @@ func newSecretCreateCmd() *cobra.Command {
 			default:
 				return fmt.Errorf("invalid --charset %q (want alphanumeric, hex, or base64)", charset)
 			}
-			// The schema's floor is 8; podman refuses secrets over 512KB, and a
-			// multi-KB generated password is a typo, not a policy. Validating
-			// here keeps an invalid length out of both podman and the registry
-			// (a recorded length below 8 would fail every later project load).
-			if length != 0 && (length < 8 || length > 4096) {
-				return fmt.Errorf("--length %d is out of range (8..4096, the schema minimum is 8)", length)
+			// Validating here keeps an invalid length out of both podman and
+			// the registry (a recorded length below the schema floor would
+			// fail every later project load).
+			if length != 0 && (length < secretLengthMin || length > secretLengthMax) {
+				return fmt.Errorf("--length %d is out of range (%d..%d, the schema minimum is %d)", length, secretLengthMin, secretLengthMax, secretLengthMin)
 			}
 			if manual && (length != 0 || charset != "") {
 				return fmt.Errorf("--manual takes no --length/--charset (a manual secret has no generate policy)")
@@ -276,8 +283,30 @@ func stageSecretRegistration(projectDir string, entries []eval.SecretEntry, idx 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create %s: %w", dir, err)
 	}
-	staged := filepath.Join(dir, ".secrets.cue.staged")
-	if err := os.WriteFile(staged, content, 0o644); err != nil {
+	// The commit is a rename over secrets.cue, which fails on a non-regular
+	// destination (a directory). Detect that now, while podman is untouched.
+	dest := filepath.Join(dir, "secrets.cue")
+	if fi, err := os.Lstat(dest); err == nil && !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("%s exists but is not a regular file (%s); refusing to replace it", dest, fi.Mode())
+	}
+	// A unique temp name so two concurrent crei runs can't clobber each
+	// other's staged content.
+	tmp, err := os.CreateTemp(dir, ".secrets.cue.*.staged")
+	if err != nil {
+		return "", fmt.Errorf("stage registry update: %w", err)
+	}
+	staged := tmp.Name()
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(staged)
+		return "", fmt.Errorf("stage %s: %w", staged, err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(staged)
+		return "", fmt.Errorf("stage %s: %w", staged, err)
+	}
+	if err := os.Chmod(staged, 0o644); err != nil {
+		_ = os.Remove(staged)
 		return "", fmt.Errorf("stage %s: %w", staged, err)
 	}
 	return staged, nil

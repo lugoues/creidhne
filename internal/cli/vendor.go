@@ -13,8 +13,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"cuelang.org/go/cue/ast"
+	"cuelang.org/go/cue/parser"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +35,11 @@ type vendorPin struct {
 	Ref    string `json:"ref"`
 	Commit string `json:"commit"`
 	Hash   string `json:"hash"`
+	// Source is recorded only when it differs from the default
+	// https://<module>.git, so a module vendored with --source (a local path
+	// or private remote) restores from the same place on a no-argument
+	// `crei vendor`. Older locks without it fall back to the default.
+	Source string `json:"source,omitempty"`
 }
 
 func newVendorCmd() *cobra.Command {
@@ -91,7 +99,7 @@ func newVendorCmd() *cobra.Command {
 			}
 			for _, module := range sortedKeys(lock.Modules) {
 				pin := lock.Modules[module]
-				updated, err := vendorModule(out, cueMod, module, pin.Ref, "", lock.Modules)
+				updated, err := vendorModule(out, cueMod, module, pin.Ref, pin.Source, lock.Modules)
 				if err != nil {
 					return err
 				}
@@ -171,8 +179,9 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 	if _, err := exec.LookPath("git"); err != nil {
 		return nil, errors.New("crei vendor needs git on PATH")
 	}
+	defaultSource := "https://" + module + ".git"
 	if source == "" {
-		source = "https://" + module + ".git"
+		source = defaultSource
 	}
 	tmp, err := os.MkdirTemp("", "crei-vendor-*")
 	if err != nil {
@@ -237,7 +246,11 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 		refShown = "HEAD"
 	}
 	fmt.Fprintf(out, "vendored %s@%s (%.12s): %d file(s) into cue.mod/usr/%s\n", module, refShown, commit, len(files), module)
-	return &vendorPin{Ref: ref, Commit: commit, Hash: hashTree(files)}, nil
+	pin := &vendorPin{Ref: ref, Commit: commit, Hash: hashTree(files)}
+	if source != defaultSource {
+		pin.Source = source
+	}
+	return pin, nil
 }
 
 // moduleDeclaration reads the module path (major-version suffix stripped)
@@ -275,6 +288,13 @@ func collectModuleFiles(repo string) (map[string][]byte, error) {
 		if !strings.HasSuffix(d.Name(), ".cue") {
 			return nil
 		}
+		// A fetched module is third-party content: a symlinked .cue "file"
+		// pointing at an arbitrary readable host path would smuggle that
+		// file's contents into cue.mod/usr (and from there, likely into a
+		// commit). Refuse anything but a regular file.
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s: not a regular file (%s); refusing to vendor symlinked or special module content", path, d.Type())
+		}
 		rel, err := filepath.Rel(repo, path)
 		if err != nil {
 			return err
@@ -288,8 +308,6 @@ func collectModuleFiles(repo string) (map[string][]byte, error) {
 	})
 	return files, err
 }
-
-var importLine = regexp.MustCompile(`(?m)^\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?"([^"]+)"`)
 
 // checkImports enforces the vendored-dependencies rule: a vendored module may
 // import the CUE standard library (paths without a domain), the creidhne
@@ -307,7 +325,11 @@ func checkImports(module string, files map[string][]byte, vendored map[string]ve
 	}
 	var offending []string
 	for _, rel := range sortedKeys(files) {
-		for _, imp := range cueImports(files[rel]) {
+		imports, err := cueImports(rel, files[rel])
+		if err != nil {
+			return err
+		}
+		for _, imp := range imports {
 			first, _, _ := strings.Cut(imp, "/")
 			// An import is path[@version][:package]; matching is on the path.
 			pathOnly, _, _ := strings.Cut(imp, ":")
@@ -328,23 +350,31 @@ func checkImports(module string, files map[string][]byte, vendored map[string]ve
 	return nil
 }
 
-// cueImports extracts import paths from a CUE file: both the single-line form
-// and the parenthesized block.
-func cueImports(src []byte) []string {
+// cueImports extracts import paths from a CUE file via the real parser, so
+// every syntactic form (aliases, comments inside the declaration, block and
+// single imports) is seen — a regexp would let an unusual-but-valid spelling
+// smuggle an unvendored dependency past checkImports. An unparseable file is
+// an error: it could not be evaluated after vendoring anyway.
+func cueImports(name string, src []byte) ([]string, error) {
+	f, err := parser.ParseFile(name, src, parser.ImportsOnly)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", name, err)
+	}
 	var out []string
-	// Block form: import ( "a" x "b" )
-	block := regexp.MustCompile(`(?s)import\s*\((.*?)\)`)
-	for _, m := range block.FindAllSubmatch(src, -1) {
-		for _, im := range importLine.FindAllSubmatch(m[1], -1) {
-			out = append(out, string(im[1]))
+	for _, decl := range f.Decls {
+		imp, ok := decl.(*ast.ImportDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range imp.Specs {
+			p, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				return nil, fmt.Errorf("%s: import path %s: %w", name, spec.Path.Value, err)
+			}
+			out = append(out, p)
 		}
 	}
-	// Single form: import "a" / import alias "a"
-	single := regexp.MustCompile(`(?m)^import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?"([^"]+)"`)
-	for _, m := range single.FindAllSubmatch(src, -1) {
-		out = append(out, string(m[1]))
-	}
-	return out
+	return out, nil
 }
 
 // hashTree is a stable content hash over the vendored files.
@@ -368,6 +398,12 @@ func hashVendoredDir(dir string) (string, int, error) {
 		}
 		if d.IsDir() || !strings.HasSuffix(d.Name(), ".cue") {
 			return nil
+		}
+		// Same rule as collectModuleFiles: hash only regular files, so a
+		// symlink planted in the installed tree reads as drift, not as its
+		// target's contents.
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s: not a regular file (%s)", path, d.Type())
 		}
 		rel, err := filepath.Rel(dir, path)
 		if err != nil {

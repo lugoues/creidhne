@@ -60,10 +60,11 @@ func injectBuildHashes(quads []Quadlet) error {
 
 	// Pass 2: stamp. The build carries its own hash; a container carries the
 	// hash of the build its Image resolves to. A tag-matched consumer also
-	// gains an After= on the producing build: quadlet auto-wires ordering for
-	// Image=<stem>.build references but knows nothing about raw tags, and
-	// without it a restart --stale can restart the container against the old
-	// image while the rebuild is still running.
+	// gains Requires=/After= on the producing build — the same pair quadlet
+	// auto-wires for Image=<stem>.build references but cannot know about for
+	// raw tags. After= alone orders a joint restart but would still start the
+	// consumer against the old image when the rebuild fails; Requires= makes
+	// the failed build block it, matching quadlet's own semantics.
 	for _, q := range quads {
 		for _, u := range q.Units {
 			switch u.Kind {
@@ -80,7 +81,8 @@ func injectBuildHashes(quads []Quadlet) error {
 				}
 				stampAnnotation(u.Data, "Container", h)
 				if svc := tagService[img]; svc != "" && svc != u.Service {
-					ensureAfter(u.Data, svc)
+					ensureUnitDep(u.Data, "After", svc)
+					ensureUnitDep(u.Data, "Requires", svc)
 				}
 			}
 		}
@@ -88,15 +90,16 @@ func injectBuildHashes(quads []Quadlet) error {
 	return nil
 }
 
-// ensureAfter adds svc to the unit's [Unit] After= list unless some form of the
-// list (flat or nested) already names it, creating the Unit section if needed.
-func ensureAfter(data map[string]any, svc string) {
+// ensureUnitDep adds svc to the unit's [Unit] <directive> list unless some
+// form of the list (flat or nested) already names it, creating the Unit
+// section if needed.
+func ensureUnitDep(data map[string]any, directive, svc string) {
 	unit, ok := data["Unit"].(map[string]any)
 	if !ok {
 		unit = map[string]any{}
 		data["Unit"] = unit
 	}
-	existing, _ := unit["After"].([]any)
+	existing, _ := unit[directive].([]any)
 	for _, e := range existing {
 		switch v := e.(type) {
 		case string:
@@ -111,7 +114,7 @@ func ensureAfter(data map[string]any, svc string) {
 			}
 		}
 	}
-	unit["After"] = append(existing, svc)
+	unit[directive] = append(existing, svc)
 }
 
 // buildImageTags extracts a build's ImageTag values from its data. The schema
@@ -161,7 +164,9 @@ func hashData(data map[string]any) string {
 // encoding. encoding/json substitutes U+FFFD for invalid bytes, so two binary
 // contents differing only in those bytes would otherwise encode — and hash —
 // identically, leaving the build unstale after a real context change. Valid
-// strings pass through untouched, so hashes of all-text builds are unchanged.
+// strings pass through untouched (hashes of all-text builds are unchanged),
+// except ones that could impersonate a marker, which get a "!text:" prefix so
+// text and binary values can never encode to the same bytes.
 func normalizeForHash(v any) any {
 	switch x := v.(type) {
 	case string:
@@ -184,11 +189,19 @@ func normalizeForHash(v any) any {
 }
 
 func hashableString(s string) string {
-	if utf8.ValidString(s) && !strings.ContainsRune(s, utf8.RuneError) {
-		return s
+	if !utf8.ValidString(s) {
+		// Binary is digested before json ever sees it, so the U+FFFD
+		// substitution ambiguity never arises for these bytes.
+		sum := sha256.Sum256([]byte(s))
+		return "!binary:sha256:" + hex.EncodeToString(sum[:])
 	}
-	sum := sha256.Sum256([]byte(s))
-	return "!binary:sha256:" + hex.EncodeToString(sum[:])
+	// Domain-separate the rare literal text that spells a marker: without
+	// this, text "!binary:sha256:<h>" would collide with the binary content
+	// hashing to <h> (and "!text:..." must escape too, recursively).
+	if strings.HasPrefix(s, "!binary:") || strings.HasPrefix(s, "!text:") {
+		return "!text:" + s
+	}
+	return s
 }
 
 // stampAnnotation appends "creidhne.build-hash=<hash>" to a section's

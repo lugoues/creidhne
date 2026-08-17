@@ -127,6 +127,12 @@ func resolveAssetGlob(dir, glob string) ([]assetFile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("asset %q: %w", m, err)
 		}
+		// WithFilesOnly only excludes directories; a FIFO would make the
+		// ReadFile below block forever, hanging every command that loads
+		// the project.
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("asset %q: not a regular file (%s)", m, info.Mode())
+		}
 		content, err := os.ReadFile(resolved)
 		if err != nil {
 			return nil, fmt.Errorf("asset %q: %w", m, err)

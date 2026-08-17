@@ -1,6 +1,9 @@
 package eval_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func quadletWith(container string) string {
 	return "package naming\nimport q \"github.com/lugoues/creidhne@v0\"\n" +
@@ -21,6 +24,8 @@ func TestValidatorsAcceptPodmanValues(t *testing.T) {
 		"fractional second":   `Container: {Image: "img", HealthInterval: "0.5s"}`,
 		"fractional compound": `Container: {Image: "img", HealthInterval: "1.5h30m"}`,
 		"3-digit octal mode":  `Container: {Image: "img", Secret: [{name: "s", type: "mount", mode: "400"}]}`,
+		"ipv4-mapped ipv6 host port": `Container: {Image: "img", PublishPort: ["[::ffff:192.0.2.1]:8080:80"]}`,
+		"instance service name":      `Container: {Image: "img", ServiceName: "worker@blue"}`,
 	}
 	for desc, cu := range accept {
 		t.Run(desc, func(t *testing.T) {
@@ -67,6 +72,8 @@ func TestSchemaRejectsVacuousUnits(t *testing.T) {
 		"kube empty yaml path":      `#kube: Kube: Yaml: [""]`,
 		"empty service name":        `#container: Container: {Image: "img", ServiceName: ""}`,
 		"service-suffixed override": `#container: Container: {Image: "img", ServiceName: "web.service"}`,
+		// 248 chars: name + ".service" would reach systemd's UNIT_NAME_MAX.
+		"overlong service name": `#container: Container: {Image: "img", ServiceName: "` + strings.Repeat("x", 248) + `"}`,
 	}
 	for desc, cu := range reject {
 		t.Run(desc, func(t *testing.T) {

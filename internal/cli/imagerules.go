@@ -18,13 +18,18 @@ import (
 func imageRuleFindings(focus, all []eval.Quadlet, entries []eval.ImageEntry) []ruleFinding {
 	var out []ruleFinding
 
-	// refs a container renders when it consumes a registry entry.
+	// refs a container renders when it consumes a registry entry. A pinned
+	// entry renders image@digest only: a container carrying the bare image
+	// string is hardcoding it, not consuming the entry's #ref, so pins and
+	// tag updates would never reach it — exactly what image/unmanaged exists
+	// to flag.
 	managed := map[string]bool{}
 	for _, e := range entries {
 		if e.Digest != "" {
 			managed[e.Image+"@"+e.Digest] = true
+		} else {
+			managed[e.Image] = true // unpinned entries render the bare image
 		}
-		managed[e.Image] = true // unpinned entries render the bare image
 	}
 
 	// Actual sibling-unit filenames, resolved against the whole project. A

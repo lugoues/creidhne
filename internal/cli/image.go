@@ -138,6 +138,12 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 			if status == registry.Managed {
 				if c, err := nextPin(e, r, defAge, now, res); err == nil && c.Reason != "" {
 					row.note += "; holding back " + c.Reason + " " + short(c.Digest)
+				} else if err != nil {
+					// A lock excludes the entry from available updates, but a
+					// failed lookup is still a failed lookup: without counting
+					// it, an outage on locked entries exits 0 as "current".
+					row.note += "; lookup failed: " + firstLine(err.Error())
+					failures++
 				}
 			}
 			rows = append(rows, row)
@@ -172,6 +178,33 @@ func checkOutdated(entries []eval.ImageEntry, defAge time.Duration, now time.Tim
 		rows = append(rows, row)
 	}
 	return rows, available, failures
+}
+
+// checkImageNames rejects requested entry names that don't exist in the
+// registry: a typo'd `crei image pin typo` exiting 0 with "Nothing to pin"
+// reads as success while doing nothing.
+func checkImageNames(entries []eval.ImageEntry, only map[string]bool) error {
+	if len(only) == 0 {
+		return nil
+	}
+	known := map[string]bool{}
+	available := make([]string, 0, len(entries))
+	for _, e := range entries {
+		known[e.Key] = true
+		available = append(available, e.Key)
+	}
+	var unknown []string
+	for name := range only {
+		if !known[name] {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	sort.Strings(available)
+	return fmt.Errorf("no registry entr(y/ies) named %s (available: %s)", strings.Join(unknown, ", "), strings.Join(available, ", "))
 }
 
 func short(digest string) string {
