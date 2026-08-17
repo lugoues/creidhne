@@ -126,6 +126,15 @@ func (p *drawioPage) edge(src, dst, style, label string) {
 		p.nextID(), xmlEsc.Replace(label), style, src, dst))
 }
 
+// sampleEdge emits a free-standing edge between two explicit points (in the
+// parent's coordinate space) — no source/target cells. Used by the legend's
+// style swatches.
+func (p *drawioPage) sampleEdge(style, parent string, x1, y1, x2, y2 float64) {
+	p.rows = append(p.rows, fmt.Sprintf(
+		`<mxCell id="%s" style="%s" edge="1" parent="%s"><mxGeometry relative="1" as="geometry"><mxPoint x="%g" y="%g" as="sourcePoint"/><mxPoint x="%g" y="%g" as="targetPoint"/></mxGeometry></mxCell>`,
+		p.nextID(), style, parent, x1, y1, x2, y2))
+}
+
 // xml renders the whole <diagram>, sizing the page to its content: a fixed
 // page size with content beyond it is exactly the opens-looking-empty failure
 // this renderer replaces.
@@ -301,6 +310,8 @@ func pageOverview(r reducedGraph) *drawioPage {
 	p.heading("Overview",
 		fmt.Sprintf("%d units, %d relations. Drawn here: the %d cross-stack resource links (deduplicated per stack pair; %d relations cross a boundary in total, [Unit] ordering included — see page 5).",
 			r.counts.Units, r.counts.Relations, len(edges), r.counts.Cross))
+	// To the right of the heading text (which spans to x=1540).
+	drawLegend(p, r, 1580, 40)
 
 	hub := ""
 	for s, n := range netCross {
@@ -337,6 +348,75 @@ func pageOverview(r reducedGraph) *drawioPage {
 		p.edge(boxes[e.from], boxes[e.to], style, e.label)
 	}
 	return p
+}
+
+// legendKindOrder is the display order of node-kind swatches; only kinds
+// actually present in the graph render.
+var legendKindOrder = []string{"container", "pod", "kube", "build", "image", "artifact", "network", "volume", "external"}
+
+// legendEdges is every edge style the document uses, in display order.
+var legendEdges = []struct{ style, label string }{
+	{drawioEdgeStyle["network"], "joins network"},
+	{drawioEdgeStyle["volume"], "mounts volume"},
+	{drawioEdgeStyle["pod"], "pod member"},
+	{drawioEdgeStyle["image"], "built from"},
+	{drawioEdgeCross, "crosses a stack boundary"},
+	{drawioEdgeDeps, "[Unit] dependency (page 5)"},
+}
+
+// drawLegend draws the document's visual vocabulary in a box at (x, y): a
+// swatch per node kind present in the graph, then one per edge style. It
+// lives on the overview because that is the page a reader opens first.
+func drawLegend(p *drawioPage, r reducedGraph, x, y float64) {
+	present := map[string]bool{}
+	for _, n := range r.g.nodes {
+		if n.External {
+			present["external"] = true
+			continue
+		}
+		present[n.Kind] = true
+	}
+	if len(r.orphans) > 0 {
+		present["external"] = true
+	}
+	var kinds []string
+	for _, k := range legendKindOrder {
+		if present[k] {
+			kinds = append(kinds, k)
+		}
+	}
+
+	const (
+		rowH     = 36.0
+		swatchW  = 96.0
+		swatchH  = 26.0
+		labelW   = 190.0
+		padLeft  = 14.0
+		padTop   = 34.0
+		labelGap = 10.0
+	)
+	rows := len(kinds) + len(legendEdges)
+	bw := padLeft*2 + swatchW + labelGap + labelW
+	bh := padTop + float64(rows)*rowH + 10
+	box := p.vertex("Legend", drawioStackStyle, x, y, bw, bh, "1")
+
+	kindLabel := map[string]string{"external": "external / unmanaged"}
+	ry := padTop
+	labelStyle := "text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#333333;fontFamily=Helvetica;"
+	for _, k := range kinds {
+		p.vertex("", drawioNodeStyle[k], padLeft, ry+(rowH-swatchH)/2, swatchW, swatchH, box)
+		name := kindLabel[k]
+		if name == "" {
+			name = k
+		}
+		p.vertex(name, labelStyle, padLeft+swatchW+labelGap, ry, labelW, rowH, box)
+		ry += rowH
+	}
+	for _, e := range legendEdges {
+		p.sampleEdge(e.style, box, padLeft, ry+rowH/2, padLeft+swatchW, ry+rowH/2)
+		p.vertex(e.label, labelStyle, padLeft+swatchW+labelGap, ry, labelW, rowH, box)
+		ry += rowH
+	}
 }
 
 func pageNetworks(r reducedGraph) *drawioPage {
@@ -414,7 +494,13 @@ func pageDetail(r reducedGraph) *drawioPage {
 		}
 		box := p.vertex(stack, style, x, y, bw, bh, "1")
 		for ri, id := range col {
-			ids[id] = p.vertex(nodeLabel(r, id), nodeStyle(r.g.nodes[id]),
+			// Full filename: this single-column box mixes kinds, so stems
+			// alone would render foo.service and foo.target identically.
+			label := id
+			if b, ok := r.folded[id]; ok && r.hiddenBuilds[b] {
+				label += fmt.Sprintf("<br/><font style='font-size:9px;color:#a06000'>&#9670; %s</font>", b)
+			}
+			ids[id] = p.vertex(label, nodeStyle(r.g.nodes[id]),
 				dwPadX, dwPadTop+float64(ri)*(dwNodeH+dwGapY), dwNodeW, dwNodeH, box)
 		}
 		if bh > shelfH {

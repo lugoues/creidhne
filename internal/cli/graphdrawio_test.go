@@ -329,6 +329,56 @@ func TestDrawioDepsBeforeDirection(t *testing.T) {
 	}
 }
 
+// TestDrawioLegend: the overview carries a legend box whose swatches cover
+// exactly the node kinds present plus every edge style the document uses.
+func TestDrawioLegend(t *testing.T) {
+	var raw struct {
+		Diagrams []struct {
+			Cells []struct {
+				ID     string `xml:"id,attr"`
+				Value  string `xml:"value,attr"`
+				Parent string `xml:"parent,attr"`
+				Vertex string `xml:"vertex,attr"`
+				Edge   string `xml:"edge,attr"`
+			} `xml:"mxGraphModel>root>mxCell"`
+		} `xml:"diagram"`
+	}
+	var buf bytes.Buffer
+	writeDrawio(&buf, drawioFixture())
+	if err := xml.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	overview := raw.Diagrams[0]
+	legendID := ""
+	for _, c := range overview.Cells {
+		if c.Value == "Legend" {
+			legendID = c.ID
+		}
+	}
+	if legendID == "" {
+		t.Fatal("overview has no Legend box")
+	}
+	swatches, samples := 0, 0
+	for _, c := range overview.Cells {
+		if c.Parent != legendID {
+			continue
+		}
+		if c.Edge == "1" {
+			samples++
+		} else if c.Vertex == "1" && c.Value == "" {
+			swatches++
+		}
+	}
+	// Fixture kinds: container, build, network, volume, external (pod/kube/
+	// image/artifact absent and must not render swatches).
+	if swatches != 5 {
+		t.Errorf("legend has %d kind swatches, want 5 (only kinds present in the graph)", swatches)
+	}
+	if samples != 6 {
+		t.Errorf("legend has %d edge samples, want 6 (every edge style in use)", samples)
+	}
+}
+
 // TestDrawioFlatRejected: stack boxes are the point of the drawio output.
 func TestDrawioFlatRejected(t *testing.T) {
 	dir := setupProject(t, `package config
