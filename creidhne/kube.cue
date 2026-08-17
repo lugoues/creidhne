@@ -4,8 +4,12 @@ package creidhne
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
-	#ref:     "\(_stem).kube"
-	#service: "\(*Kube.ServiceName | _stem).service"
+	#ref: "\(_stem).kube"
+	// Guard comprehension, not `*X | ...` — see container.cue #service.
+	#service: [
+		if Kube.ServiceName != _|_ {"\(Kube.ServiceName).service"},
+		"\(_stem).service",
+	][0]
 
 	// #self: reference handle.
 	#self: #RefSelf & {_kind: "kube", source: #ref}

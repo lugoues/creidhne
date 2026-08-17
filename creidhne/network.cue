@@ -6,8 +6,12 @@ import "list"
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
-	#ref:     "\(_stem).network"
-	#service: "\(*Network.ServiceName | "\(_stem)-network").service"
+	#ref: "\(_stem).network"
+	// Guard comprehension, not `*X | ...` — see container.cue #service.
+	#service: [
+		if Network.ServiceName != _|_ {"\(Network.ServiceName).service"},
+		"\(_stem)-network.service",
+	][0]
 
 	// #self: reference handle for a Network= field, optionally decorated with
 	// connection options: units.networks.X.#self & {ip: "10.0.0.5", alias: ["web"]}.

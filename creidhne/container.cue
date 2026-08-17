@@ -16,7 +16,18 @@ import (
 	#ref: "\(_stem).container"
 	// ServiceName= overrides the generated unit's basename, so everything that
 	// targets the unit (cross-refs, start/stop/status) must follow it.
-	#service: "\(*Container.ServiceName | _stem).service"
+	//
+	// Guard comprehension, NOT `"\(*Container.ServiceName | _stem).service"`:
+	// the manifest forces #service for every unit, and a default-marked
+	// disjunction into Container evaluates the whole section eagerly — in
+	// composed helpers (e.g. a container whose Image comes from a build's
+	// #self) that collapses the {Image} | {Rootfs} disjunction into a bogus
+	// "Image: field not allowed". The `[if ..., fallback][0]` idiom (same as
+	// #ImageEntry._digest) reads the field without that forcing.
+	#service: [
+		if Container.ServiceName != _|_ {"\(Container.ServiceName).service"},
+		"\(_stem).service",
+	][0]
 
 	// #self: reference handle (e.g. for Network=container:... reuse via .container).
 	#self: #RefSelf & {_kind: "container", source: #ref}

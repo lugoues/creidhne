@@ -6,8 +6,15 @@ import "list"
 	name: string
 	// _stem is injected by #Units; identity is computed inline from it.
 	_stem:    string
-	#ref:     "\(_stem).pod"
-	#service: "\(*Pod.ServiceName | "\(_stem)-pod").service"
+	#ref: "\(_stem).pod"
+	// Guard comprehension, not `*Pod.ServiceName | ...`: a default-marked
+	// disjunction here forces the section struct eagerly (the manifest
+	// evaluates #service for every unit), which can collapse in-section
+	// disjunctions in composed helpers. See container.cue #service.
+	#service: [
+		if Pod.ServiceName != _|_ {"\(Pod.ServiceName).service"},
+		"\(_stem)-pod.service",
+	][0]
 
 	// #self: reference handle for a Pod= field.
 	#self: #RefSelf & {_kind: "pod", source: #ref}

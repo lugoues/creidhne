@@ -9,8 +9,12 @@ import "list"
 	#ref: "\(_stem).build"
 	// Build is populated by the embedded forms below; this declaration only
 	// makes the identifier lexically resolvable for #service.
-	Build:    _
-	#service: "\(*Build.ServiceName | "\(_stem)-build").service"
+	Build: _
+	// Guard comprehension, not `*X | ...` — see container.cue #service.
+	#service: [
+		if Build.ServiceName != _|_ {"\(Build.ServiceName).service"},
+		"\(_stem)-build.service",
+	][0]
 
 	// #self: reference handle (e.g. Image= built by this .build).
 	#self: #RefSelf & {_kind: "build", source: #ref}
