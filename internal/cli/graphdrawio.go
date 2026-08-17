@@ -403,7 +403,10 @@ var legendEdgeOrder = []struct{ key, style, label string }{
 }
 
 // legendSize reports the box a page's legend needs, so shelf-style pages can
-// wrap it like any other box before drawing.
+// wrap it like any other box before drawing. Zero when the page drew nothing:
+// a page with no content has no visual vocabulary to explain, and an empty
+// "Legend" frame there would be noise, not information — deliberately no
+// legend on empty pages.
 func (p *drawioPage) legendSize() (w, h float64) {
 	rows := 0
 	for _, k := range legendKindOrder {
