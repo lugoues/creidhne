@@ -9,3 +9,6 @@
 /testing-old/
 /repro-pipe-loss-isolate.ts
 /nohup.out
+
+# Real-world test projects (separate git repos, never committed from here)
+/test-repos/
