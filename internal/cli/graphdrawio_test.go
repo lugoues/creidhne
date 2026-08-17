@@ -266,7 +266,9 @@ func TestDrawioRoundTrip(t *testing.T) {
 }
 
 // TestDrawioDepsLayering: on the dependency page a dependent sits strictly
-// below every unit it waits on (foundations in the top band).
+// below every unit it waits on (foundations in the top band). Holds for
+// acyclic fixtures like this one; a dependency cycle's members share a band
+// by design (SCC condensation).
 func TestDrawioDepsLayering(t *testing.T) {
 	f := renderDrawio(t, drawioFixture())
 	deps := f.Diagrams[4]
@@ -436,6 +438,42 @@ func TestDrawioOverviewLayeredFlow(t *testing.T) {
 	}
 	if !(xOf["a"] < xOf["infra"] && xOf["b"] < xOf["infra"]) {
 		t.Errorf("the shared network stack must sit rightmost: %v", xOf)
+	}
+}
+
+// TestDrawioOverviewCycleStaysCompact: stacks joining each other's networks
+// form a legal cycle; its members must share one column (SCC condensation)
+// rather than inflating layer assignments to the iteration cap.
+func TestDrawioOverviewCycleStaysCompact(t *testing.T) {
+	c := func(stem, img string, nets ...any) eval.UnitRecord {
+		return eval.UnitRecord{Kind: "container", Stem: stem, Filename: stem + ".container",
+			Service: stem + ".service", Data: map[string]any{
+				"imageString": img, "networkStrings": nets, "Container": map[string]any{},
+			}}
+	}
+	nw := func(stem string) eval.UnitRecord {
+		return eval.UnitRecord{Kind: "network", Stem: stem, Filename: stem + ".network",
+			Service: stem + "-network.service", Data: map[string]any{}}
+	}
+	all := []eval.Quadlet{
+		{Name: "a", Units: []eval.UnitRecord{c("a", "docker.io/a:1", "b.network"), nw("a")}},
+		{Name: "b", Units: []eval.UnitRecord{c("b", "docker.io/b:1", "a.network"), nw("b")}},
+		{Name: "feeder", Units: []eval.UnitRecord{c("feeder", "docker.io/f:1", "a.network")}},
+	}
+	f := renderDrawio(t, buildGraph(all, all))
+	xOf := map[string]float64{}
+	for _, cell := range f.Diagrams[0].Model.Cells {
+		if cell.Vertex == "1" && cell.Geo != nil && strings.HasPrefix(cell.Value, "<b>") {
+			name := strings.TrimPrefix(cell.Value, "<b>")
+			name = name[:strings.Index(name, "<")]
+			xOf[name] = cell.Geo.X
+		}
+	}
+	if xOf["a"] != xOf["b"] {
+		t.Errorf("cycle members must share a column: %v", xOf)
+	}
+	if !(xOf["feeder"] < xOf["a"]) {
+		t.Errorf("the feeder must sit left of the cycle it points at: %v", xOf)
 	}
 }
 

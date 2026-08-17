@@ -194,6 +194,87 @@ func (p *drawioPage) xml(w io.Writer) {
 	fmt.Fprint(w, "      </root>\n    </mxGraphModel>\n  </diagram>\n")
 }
 
+// layerAcyclic assigns longest-path layers to a digraph after condensing
+// strongly connected components: every member of a cycle shares one layer.
+// A plain relaxation has no fixed point on a cycle — it inflates the layers
+// to whatever the iteration cap is, exploding the page into mostly-empty
+// columns — while the condensation is a DAG, so relaxation converges.
+func layerAcyclic(nodes []string, edges [][2]string) map[string]int {
+	ordered := append([]string(nil), nodes...)
+	sort.Strings(ordered)
+	adj := map[string][]string{}
+	for _, e := range edges {
+		if e[0] != e[1] {
+			adj[e[0]] = append(adj[e[0]], e[1])
+		}
+	}
+	for k := range adj {
+		sort.Strings(adj[k])
+	}
+
+	// Tarjan SCC, deterministic via the sorted iteration order above.
+	index := map[string]int{}
+	low := map[string]int{}
+	onStack := map[string]bool{}
+	comp := map[string]int{}
+	var stack []string
+	idx, ncomp := 0, 0
+	var strong func(v string)
+	strong = func(v string) {
+		index[v], low[v] = idx, idx
+		idx++
+		stack = append(stack, v)
+		onStack[v] = true
+		for _, w := range adj[v] {
+			if _, seen := index[w]; !seen {
+				strong(w)
+				if low[w] < low[v] {
+					low[v] = low[w]
+				}
+			} else if onStack[w] && index[w] < low[v] {
+				low[v] = index[w]
+			}
+		}
+		if low[v] == index[v] {
+			for {
+				w := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				onStack[w] = false
+				comp[w] = ncomp
+				if w == v {
+					break
+				}
+			}
+			ncomp++
+		}
+	}
+	for _, v := range ordered {
+		if _, seen := index[v]; !seen {
+			strong(v)
+		}
+	}
+
+	clayer := make([]int, ncomp)
+	for changed := true; changed; {
+		changed = false
+		for _, e := range edges {
+			a, b := comp[e[0]], comp[e[1]]
+			if a == b {
+				continue
+			}
+			if l := clayer[a] + 1; l > clayer[b] {
+				clayer[b] = l
+				changed = true
+			}
+		}
+	}
+	out := make(map[string]int, len(nodes))
+	for _, v := range nodes {
+		out[v] = clayer[comp[v]]
+	}
+	return out
+}
+
 // nodeLabel renders a unit vertex label: the stem, plus the folded build's
 // name as a second line when the build renders nowhere else.
 func nodeLabel(r reducedGraph, id string) string {
@@ -488,21 +569,16 @@ func pageOverview(r reducedGraph) *drawioPage {
 	// left-to-right along the arrows.
 	const boxW, boxH = 260.0, 74.0
 	const colGap, rowGap = 340.0, 56.0
-	layer := map[string]int{}
 	stacks := make([]string, 0, len(involved))
 	for s := range involved {
 		stacks = append(stacks, s)
 	}
 	sort.Strings(stacks)
-	for iter, changed := 0, true; changed && iter <= len(stacks); iter++ {
-		changed = false
-		for _, e := range edges {
-			if l := layer[e.from] + 1; l > layer[e.to] {
-				layer[e.to] = l
-				changed = true
-			}
-		}
+	stackEdges := make([][2]string, 0, len(edges))
+	for _, e := range edges {
+		stackEdges = append(stackEdges, [2]string{e.from, e.to})
 	}
+	layer := layerAcyclic(stacks, stackEdges)
 	maxLayer := 0
 	byCol := map[int][]string{}
 	for _, s := range stacks {
@@ -817,9 +893,10 @@ func pageDeps(r reducedGraph) *drawioPage {
 		return p
 	}
 
-	// Longest-path layering over the declared edge direction, iteration
-	// bounded so a dependency cycle cannot hang the renderer (cyclic units
-	// settle wherever the last pass left them).
+	// Longest-path layering over the condensed graph (layerAcyclic), edges
+	// reversed so foundations (pure dependencies) land in the top band; a
+	// dependency cycle's members share one band instead of inflating the
+	// page to the iteration cap.
 	pairs := make([]pair, 0, len(depRels))
 	for k := range depRels {
 		pairs = append(pairs, k)
@@ -830,16 +907,15 @@ func pageDeps(r reducedGraph) *drawioPage {
 		}
 		return pairs[i].to < pairs[j].to
 	})
-	layer := map[string]int{}
-	for iter, changed := 0, true; changed && iter <= len(nodeSet); iter++ {
-		changed = false
-		for _, k := range pairs {
-			if l := layer[k.to] + 1; l > layer[k.from] {
-				layer[k.from] = l
-				changed = true
-			}
-		}
+	nodes := make([]string, 0, len(nodeSet))
+	for id := range nodeSet {
+		nodes = append(nodes, id)
 	}
+	depEdges := make([][2]string, 0, len(pairs))
+	for _, k := range pairs {
+		depEdges = append(depEdges, [2]string{k.to, k.from})
+	}
+	layer := layerAcyclic(nodes, depEdges)
 
 	byLayer := map[int][]string{}
 	maxLayer := 0
