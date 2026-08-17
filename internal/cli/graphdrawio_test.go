@@ -400,6 +400,34 @@ func TestDrawioLegend(t *testing.T) {
 	}
 }
 
+// TestDrawioOverviewChordAvoidsHub: with a hub and two opposite spokes that
+// share an edge, the spoke-to-spoke chord must carry a waypoint bowing it
+// around the hub instead of running straight through the hub box.
+func TestDrawioOverviewChordAvoidsHub(t *testing.T) {
+	c := func(stem, img string, nets ...any) eval.UnitRecord {
+		return eval.UnitRecord{Kind: "container", Stem: stem, Filename: stem + ".container",
+			Service: stem + ".service", Data: map[string]any{
+				"imageString": img, "networkStrings": nets, "Container": map[string]any{},
+			}}
+	}
+	nw := func(stem string) eval.UnitRecord {
+		return eval.UnitRecord{Kind: "network", Stem: stem, Filename: stem + ".network",
+			Service: stem + "-network.service", Data: map[string]any{}}
+	}
+	all := []eval.Quadlet{
+		// proxy attaches both other stacks' networks: the hub.
+		{Name: "proxy", Units: []eval.UnitRecord{c("proxy", "docker.io/p:1", "a.network", "b.network")}},
+		{Name: "a", Units: []eval.UnitRecord{c("a", "docker.io/a:1", "b.network"), nw("a")}},
+		{Name: "b", Units: []eval.UnitRecord{c("b", "docker.io/b:1"), nw("b")}},
+	}
+	var buf bytes.Buffer
+	writeDrawio(&buf, buildGraph(all, all))
+	overview := strings.SplitAfter(buf.String(), "</diagram>")[0]
+	if !strings.Contains(overview, `<Array as="points">`) {
+		t.Fatal("expected the spoke-to-spoke chord to carry a hub-avoiding waypoint")
+	}
+}
+
 // TestDrawioFlatRejected: stack boxes are the point of the drawio output.
 func TestDrawioFlatRejected(t *testing.T) {
 	dir := setupProject(t, `package config

@@ -145,6 +145,31 @@ func (p *drawioPage) edge(src, dst, style, label string) {
 		p.nextID(), xmlEsc.Replace(label), style, src, dst))
 }
 
+// edgeVia emits a connection with explicit waypoints (page coordinates).
+func (p *drawioPage) edgeVia(src, dst, style, label string, points ...[2]float64) {
+	var pts strings.Builder
+	pts.WriteString(`<Array as="points">`)
+	for _, pt := range points {
+		fmt.Fprintf(&pts, `<mxPoint x="%g" y="%g"/>`, pt[0], pt[1])
+	}
+	pts.WriteString(`</Array>`)
+	p.rows = append(p.rows, fmt.Sprintf(
+		`<mxCell id="%s" value="%s" style="%s" edge="1" parent="1" source="%s" target="%s"><mxGeometry relative="1" as="geometry">%s</mxGeometry></mxCell>`,
+		p.nextID(), xmlEsc.Replace(label), style, src, dst, pts.String()))
+}
+
+// distPointSeg is the distance from point (px,py) to segment (x1,y1)-(x2,y2).
+func distPointSeg(px, py, x1, y1, x2, y2 float64) float64 {
+	dx, dy := x2-x1, y2-y1
+	l2 := dx*dx + dy*dy
+	if l2 == 0 {
+		return math.Hypot(px-x1, py-y1)
+	}
+	t := ((px-x1)*dx + (py-y1)*dy) / l2
+	t = math.Max(0, math.Min(1, t))
+	return math.Hypot(px-(x1+t*dx), py-(y1+t*dy))
+}
+
 // sampleEdge emits a free-standing edge between two explicit points (in the
 // parent's coordinate space) — no source/target cells. Used by the legend's
 // style swatches.
@@ -551,6 +576,10 @@ func pageOverview(r reducedGraph) *drawioPage {
 	radialize := func(style string) string {
 		return strings.Replace(style, "edgeStyle=orthogonalEdgeStyle;rounded=1;jettySize=auto;", "edgeStyle=none;", 1)
 	}
+	// A spoke-to-spoke chord between (near-)opposite spokes would run straight
+	// through the hub box, hiding the line and its label under it; bow those
+	// around the hub with a waypoint pushed radially clear of it.
+	hubClear := math.Hypot(hubW, hubH)/2 + 40
 	for _, e := range edges {
 		style := drawioEdgeStyle[e.rel] + "strokeWidth=2;"
 		key := e.rel
@@ -558,7 +587,25 @@ func pageOverview(r reducedGraph) *drawioPage {
 			style, key = drawioEdgeCross, "cross"
 		}
 		p.useEdge(key)
-		p.edge(boxes[e.from], boxes[e.to], radialize(style), e.label)
+		style = radialize(style)
+		a, b := rects[e.from], rects[e.to]
+		if hub != "" && e.from != hub && e.to != hub &&
+			distPointSeg(cx, cy, a.cx(), a.cy(), b.cx(), b.cy()) < hubClear {
+			mx, my := (a.cx()+b.cx())/2, (a.cy()+b.cy())/2
+			vx, vy := mx-cx, my-cy
+			if l := math.Hypot(vx, vy); l < 1 {
+				// Diametric chord: bow perpendicular to it instead.
+				vx, vy = -(b.cy() - a.cy()), b.cx() - a.cx()
+				l = math.Hypot(vx, vy)
+				vx, vy = vx/l, vy/l
+			} else {
+				vx, vy = vx/l, vy/l
+			}
+			p.edgeVia(boxes[e.from], boxes[e.to], style, e.label,
+				[2]float64{cx + vx*(hubClear+60), cy + vy*(hubClear+60)})
+			continue
+		}
+		p.edge(boxes[e.from], boxes[e.to], style, e.label)
 	}
 	p.drawLegend(cx+radius+spokeW/2+60, 140)
 	return p
