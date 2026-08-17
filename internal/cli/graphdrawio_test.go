@@ -225,15 +225,34 @@ func TestDrawioRoundTrip(t *testing.T) {
 	for _, e := range r.keptEdges() {
 		if relResource(e.Rel) {
 			wantResource++
-		} else {
-			depPairs[pair{e.From, e.To}] = true
+			continue
 		}
+		k := pair{e.From, e.To}
+		if e.Rel == "Before" || e.Rel == "OnFailure" || e.Rel == "OnSuccess" {
+			k = pair{e.To, e.From}
+		}
+		depPairs[k] = true
 	}
 	if got := countEdges(f.Diagrams[3]); got != wantResource {
 		t.Fatalf("detail page has %d edges, want %d (resource only)", got, wantResource)
 	}
+	// Deps pairs merge in *normalized* orientation (Before= flips), so count
+	// via the same normalization.
 	if got := countEdges(f.Diagrams[4]); got != len(depPairs) {
 		t.Fatalf("dependency page has %d edges, want %d merged deps pairs", got, len(depPairs))
+	}
+
+	// Page 4 promises every visible unit: its in-box vertices (stack and
+	// quarantine children) must cover visible + orphans, deps-only units and
+	// external targets included.
+	units := 0
+	for _, c := range f.Diagrams[3].Model.Cells {
+		if c.Vertex == "1" && c.Parent != "1" && c.Parent != "" {
+			units++
+		}
+	}
+	if want := len(r.visible) + len(r.orphans); units != want {
+		t.Fatalf("detail page places %d units, want %d (visible + orphans)", units, want)
 	}
 }
 
@@ -263,6 +282,50 @@ func TestDrawioDepsLayering(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("expected dependency edges on the fixture")
+	}
+}
+
+// TestDrawioDepsBeforeDirection: Before=X means X waits on the declarer, so
+// the rendered edge (normalized: dependent -> dependency) must run from the
+// directive's target back to the declaring unit. The fixture declares
+// app.container Before=app-network.service.
+func TestDrawioDepsBeforeDirection(t *testing.T) {
+	var raw struct {
+		Diagrams []struct {
+			Cells []struct {
+				ID     string `xml:"id,attr"`
+				Value  string `xml:"value,attr"`
+				Source string `xml:"source,attr"`
+				Target string `xml:"target,attr"`
+				Edge   string `xml:"edge,attr"`
+			} `xml:"mxGraphModel>root>mxCell"`
+		} `xml:"diagram"`
+	}
+	var buf bytes.Buffer
+	writeDrawio(&buf, drawioFixture())
+	if err := xml.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	page := raw.Diagrams[4]
+	labelOf := map[string]string{}
+	for _, c := range page.Cells {
+		labelOf[c.ID] = c.Value
+	}
+	found := false
+	for _, c := range page.Cells {
+		if c.Edge != "1" || c.Value != "Before" {
+			continue
+		}
+		found = true
+		if !strings.HasPrefix(labelOf[c.Source], "app.network") {
+			t.Errorf("Before edge source = %q, want the directive's target app.network (it is the unit that waits)", labelOf[c.Source])
+		}
+		if !strings.HasPrefix(labelOf[c.Target], "app.container") {
+			t.Errorf("Before edge target = %q, want the declaring unit app.container", labelOf[c.Target])
+		}
+	}
+	if !found {
+		t.Fatal("expected a Before edge on the fixture")
 	}
 }
 

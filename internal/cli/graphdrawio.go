@@ -381,7 +381,47 @@ func pageDetail(r reducedGraph) *drawioPage {
 		fmt.Sprintf("Every visible unit and resource relation. %d build units are folded into their container label. [Unit] ordering/requirement dependencies are on page 5.", r.counts.Folded))
 
 	kinds := []string{"pod", "container", "kube", "build", "image", "artifact", "network", "volume", "external"}
-	_, x, y, shelfH := p.shelfLayout(r, kinds, func(e graphEdge) bool { return relResource(e.Rel) }, 120)
+	ids, x, y, shelfH := p.shelfLayout(r, kinds, func(e graphEdge) bool { return relResource(e.Rel) }, 120)
+
+	// Units whose only relationships are [Unit] dependencies have no resource
+	// edge to place them, but this page promises every visible unit: place
+	// them in trailing per-stack boxes (their edges render on page 5).
+	missing := map[string][]string{}
+	for id := range r.visible {
+		if _, placed := ids[id]; placed {
+			continue
+		}
+		s := stackOf(r.g.nodes[id])
+		missing[s] = append(missing[s], id)
+	}
+	stacks := make([]string, 0, len(missing))
+	for s := range missing {
+		stacks = append(stacks, s)
+	}
+	sort.Strings(stacks)
+	for _, stack := range stacks {
+		col := missing[stack]
+		sort.Strings(col)
+		rows := len(col)
+		bw := dwPadX*2 + dwNodeW
+		bh := dwPadTop + dwPadBot + float64(rows)*dwNodeH + float64(rows-1)*dwGapY
+		if x+bw > dwShelfMaxW {
+			x, y, shelfH = dwMargin, y+shelfH+dwShelfGap, 0
+		}
+		style := drawioStackStyle
+		if stack == "external" {
+			style = drawioExternalStackStyle
+		}
+		box := p.vertex(stack, style, x, y, bw, bh, "1")
+		for ri, id := range col {
+			ids[id] = p.vertex(nodeLabel(r, id), nodeStyle(r.g.nodes[id]),
+				dwPadX, dwPadTop+float64(ri)*(dwNodeH+dwGapY), dwNodeW, dwNodeH, box)
+		}
+		if bh > shelfH {
+			shelfH = bh
+		}
+		x += bw + dwShelfGap
+	}
 
 	// Orphan quarantine: parsed but wired to nothing. Real signal, never
 	// silently dropped.
@@ -411,6 +451,13 @@ func pageDetail(r reducedGraph) *drawioPage {
 func pageDeps(r reducedGraph) *drawioPage {
 	p := &drawioPage{name: "5. Dependencies", prefix: "dp"}
 
+	// Edges are normalized so from = the unit that waits, to = what it waits
+	// on. Most directives already declare that direction (After=, Requires=,
+	// ...); the ones systemd defines the other way around are flipped here,
+	// or the tree would draw startup order upside down for them: Before=X
+	// makes X wait on the declarer, and OnFailure=/OnSuccess=X start X from
+	// the declarer's outcome. Labels keep the declared directive name.
+	reversed := map[string]bool{"Before": true, "OnFailure": true, "OnSuccess": true}
 	type pair struct{ from, to string }
 	depRels := map[pair][]string{}
 	nodeSet := map[string]bool{}
@@ -419,6 +466,9 @@ func pageDeps(r reducedGraph) *drawioPage {
 			continue
 		}
 		k := pair{e.From, e.To}
+		if reversed[e.Rel] {
+			k = pair{e.To, e.From}
+		}
 		depRels[k] = append(depRels[k], e.Rel)
 		nodeSet[e.From], nodeSet[e.To] = true, true
 	}
@@ -484,7 +534,9 @@ func pageDeps(r reducedGraph) *drawioPage {
 			if x+dwNodeW > dwShelfMaxW {
 				x, rowY = dwMargin, rowY+dwNodeH+dwGapY
 			}
-			label := nodeLabel(r, id)
+			// Full filename, not the stem: this page mixes kinds outside
+			// their columns, and a container and its network share a stem.
+			label := id
 			if n := r.g.nodes[id]; !n.External {
 				label += fmt.Sprintf("<br/><font style='font-size:9px;color:#888'>%s</font>", stackOf(n))
 			}
