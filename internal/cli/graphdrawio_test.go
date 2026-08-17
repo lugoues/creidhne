@@ -400,10 +400,10 @@ func TestDrawioLegend(t *testing.T) {
 	}
 }
 
-// TestDrawioOverviewChordAvoidsHub: with a hub and two opposite spokes that
-// share an edge, the spoke-to-spoke chord must carry a waypoint bowing it
-// around the hub instead of running straight through the hub box.
-func TestDrawioOverviewChordAvoidsHub(t *testing.T) {
+// TestDrawioOverviewLayeredFlow: the overview lays stacks out left-to-right
+// by dependency depth — a pure producer sits in an earlier column than every
+// stack it points at, and a shared network everyone attaches lands rightmost.
+func TestDrawioOverviewLayeredFlow(t *testing.T) {
 	c := func(stem, img string, nets ...any) eval.UnitRecord {
 		return eval.UnitRecord{Kind: "container", Stem: stem, Filename: stem + ".container",
 			Service: stem + ".service", Data: map[string]any{
@@ -415,16 +415,27 @@ func TestDrawioOverviewChordAvoidsHub(t *testing.T) {
 			Service: stem + "-network.service", Data: map[string]any{}}
 	}
 	all := []eval.Quadlet{
-		// proxy attaches both other stacks' networks: the hub.
+		// proxy -> a and b; a -> infra; b -> infra: proxy leftmost, infra rightmost.
 		{Name: "proxy", Units: []eval.UnitRecord{c("proxy", "docker.io/p:1", "a.network", "b.network")}},
-		{Name: "a", Units: []eval.UnitRecord{c("a", "docker.io/a:1", "b.network"), nw("a")}},
-		{Name: "b", Units: []eval.UnitRecord{c("b", "docker.io/b:1"), nw("b")}},
+		{Name: "a", Units: []eval.UnitRecord{c("a", "docker.io/a:1", "infra.network"), nw("a")}},
+		{Name: "b", Units: []eval.UnitRecord{c("b", "docker.io/b:1", "infra.network"), nw("b")}},
+		{Name: "infra", Units: []eval.UnitRecord{nw("infra"), c("infracd", "docker.io/i:1", "infra.network")}},
 	}
-	var buf bytes.Buffer
-	writeDrawio(&buf, buildGraph(all, all))
-	overview := strings.SplitAfter(buf.String(), "</diagram>")[0]
-	if !strings.Contains(overview, `<Array as="points">`) {
-		t.Fatal("expected the spoke-to-spoke chord to carry a hub-avoiding waypoint")
+	f := renderDrawio(t, buildGraph(all, all))
+	overview := f.Diagrams[0]
+	xOf := map[string]float64{}
+	for _, cell := range overview.Model.Cells {
+		if cell.Vertex == "1" && cell.Geo != nil && strings.HasPrefix(cell.Value, "<b>") {
+			name := strings.TrimPrefix(cell.Value, "<b>")
+			name = name[:strings.Index(name, "<")]
+			xOf[name] = cell.Geo.X
+		}
+	}
+	if !(xOf["proxy"] < xOf["a"] && xOf["proxy"] < xOf["b"]) {
+		t.Errorf("proxy must sit left of the stacks it points at: %v", xOf)
+	}
+	if !(xOf["a"] < xOf["infra"] && xOf["b"] < xOf["infra"]) {
+		t.Errorf("the shared network stack must sit rightmost: %v", xOf)
 	}
 }
 

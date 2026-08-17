@@ -145,31 +145,6 @@ func (p *drawioPage) edge(src, dst, style, label string) {
 		p.nextID(), xmlEsc.Replace(label), style, src, dst))
 }
 
-// edgeVia emits a connection with explicit waypoints (page coordinates).
-func (p *drawioPage) edgeVia(src, dst, style, label string, points ...[2]float64) {
-	var pts strings.Builder
-	pts.WriteString(`<Array as="points">`)
-	for _, pt := range points {
-		fmt.Fprintf(&pts, `<mxPoint x="%g" y="%g"/>`, pt[0], pt[1])
-	}
-	pts.WriteString(`</Array>`)
-	p.rows = append(p.rows, fmt.Sprintf(
-		`<mxCell id="%s" value="%s" style="%s" edge="1" parent="1" source="%s" target="%s"><mxGeometry relative="1" as="geometry">%s</mxGeometry></mxCell>`,
-		p.nextID(), xmlEsc.Replace(label), style, src, dst, pts.String()))
-}
-
-// distPointSeg is the distance from point (px,py) to segment (x1,y1)-(x2,y2).
-func distPointSeg(px, py, x1, y1, x2, y2 float64) float64 {
-	dx, dy := x2-x1, y2-y1
-	l2 := dx*dx + dy*dy
-	if l2 == 0 {
-		return math.Hypot(px-x1, py-y1)
-	}
-	t := ((px-x1)*dx + (py-y1)*dy) / l2
-	t = math.Max(0, math.Min(1, t))
-	return math.Hypot(px-(x1+t*dx), py-(y1+t*dy))
-}
-
 // sampleEdge emits a free-standing edge between two explicit points (in the
 // parent's coordinate space) — no source/target cells. Used by the legend's
 // style swatches.
@@ -467,8 +442,9 @@ func (p *drawioPage) heading(title, sub string) {
 }
 
 // pageOverview draws stack-level boxes and only the resource relations that
-// cross a stack boundary, deduplicated per (from-stack, to-stack, type). The
-// stack with the most cross-boundary network relations is the ingress hub.
+// cross a stack boundary, deduplicated per (from-stack, to-stack, type), in a
+// left-to-right layered flow. The stack with the most cross-boundary network
+// relations is captioned as the ingress hub.
 func pageOverview(r reducedGraph) *drawioPage {
 	p := &drawioPage{name: "1. Overview", prefix: "ov"}
 
@@ -504,82 +480,86 @@ func pageOverview(r reducedGraph) *drawioPage {
 			hub = s
 		}
 	}
-	var spokes []string
+
+	// Layered horizontal flow (draw.io's network-simplex arrangement is what
+	// this approximates): longest-path layering over the stack digraph puts
+	// pure producers on the left and pure consumers (the shared networks:
+	// infrastructure, socket-proxy) on the right, with everything reading
+	// left-to-right along the arrows.
+	const boxW, boxH = 260.0, 74.0
+	const colGap, rowGap = 340.0, 56.0
+	layer := map[string]int{}
+	stacks := make([]string, 0, len(involved))
 	for s := range involved {
-		if s != hub {
-			spokes = append(spokes, s)
+		stacks = append(stacks, s)
+	}
+	sort.Strings(stacks)
+	for iter, changed := 0, true; changed && iter <= len(stacks); iter++ {
+		changed = false
+		for _, e := range edges {
+			if l := layer[e.from] + 1; l > layer[e.to] {
+				layer[e.to] = l
+				changed = true
+			}
 		}
 	}
-	sort.Strings(spokes)
+	maxLayer := 0
+	byCol := map[int][]string{}
+	for _, s := range stacks {
+		byCol[layer[s]] = append(byCol[layer[s]], s)
+		if layer[s] > maxLayer {
+			maxLayer = layer[s]
+		}
+	}
 
-	// Radial layout: hub in the middle, spokes on a circle sized so their
-	// boxes cannot touch, ordered so spoke pairs that connect to each other
-	// sit adjacent (greedy chain over inter-spoke edge weight) — a chord to
-	// the box next door instead of across the whole wheel.
-	const spokeW, spokeH, hubW, hubH = 260.0, 70.0, 300.0, 80.0
-	weight := map[[2]string]int{}
-	hubWeight := map[string]int{}
+	// Row order: first column by name; later columns by the average row of
+	// their predecessors, so an edge lands roughly beside its source.
+	preds := map[string][]string{}
 	for _, e := range edges {
-		if e.from == hub {
-			hubWeight[e.to]++
-		} else if e.to == hub {
-			hubWeight[e.from]++
-		} else {
-			weight[[2]string{e.from, e.to}]++
-			weight[[2]string{e.to, e.from}]++
-		}
+		preds[e.to] = append(preds[e.to], e.from)
 	}
-	var ordered []string
-	rem := append([]string(nil), spokes...)
-	for len(rem) > 0 {
-		best, bestScore := 0, -1
-		for i, s := range rem {
-			var score int
-			if len(ordered) == 0 {
-				score = hubWeight[s]
-			} else {
-				score = weight[[2]string{ordered[len(ordered)-1], s}]*1000 + hubWeight[s]
-			}
-			if score > bestScore {
-				best, bestScore = i, score
-			}
-		}
-		ordered = append(ordered, rem[best])
-		rem = append(rem[:best], rem[best+1:]...)
-	}
-
-	n := float64(len(ordered))
-	radius := math.Max(430, n*(spokeW+70)/(2*math.Pi))
-	cx := dwMargin + radius + spokeW/2
-	cy := 170 + radius + spokeH/2 // topmost spoke box lands at y≈170
-
+	row := map[string]int{}
 	boxes := map[string]string{}
 	rects := map[string]dwRect{}
-	if hub != "" {
-		p.useKind("stack")
-		hr := dwRect{cx - hubW/2, cy - hubH/2, hubW, hubH}
-		boxes[hub] = p.vertex(
-			fmt.Sprintf("<b>%s</b><br/><font style='font-size:10px;color:#666'>ingress hub</font>", hub),
-			drawioHubStyle, hr.x, hr.y, hubW, hubH, "1")
-		rects[hub] = hr
-	}
-	for i, s := range ordered {
-		p.useKind("stack")
-		angle := -math.Pi/2 + float64(i)*2*math.Pi/n
-		br := dwRect{cx + radius*math.Cos(angle) - spokeW/2, cy + radius*math.Sin(angle) - spokeH/2, spokeW, spokeH}
-		boxes[s] = p.vertex("<b>"+s+"</b>", drawioHubStyle, br.x, br.y, spokeW, spokeH, "1")
-		rects[s] = br
+	for col := 0; col <= maxLayer; col++ {
+		names := byCol[col]
+		if len(names) == 0 {
+			continue
+		}
+		bary := map[string]float64{}
+		for _, s := range names {
+			sum, n := 0.0, 0
+			for _, pr := range preds[s] {
+				if ri, ok := row[pr]; ok {
+					sum += float64(ri)
+					n++
+				}
+			}
+			if n == 0 {
+				bary[s] = math.MaxFloat64
+			} else {
+				bary[s] = sum / float64(n)
+			}
+		}
+		sort.SliceStable(names, func(i, j int) bool {
+			if col > 0 && bary[names[i]] != bary[names[j]] {
+				return bary[names[i]] < bary[names[j]]
+			}
+			return names[i] < names[j]
+		})
+		for ri, s := range names {
+			row[s] = ri
+			p.useKind("stack")
+			label := "<b>" + s + "</b>"
+			if s == hub {
+				label += "<br/><font style='font-size:10px;color:#666'>ingress hub</font>"
+			}
+			br := dwRect{dwMargin + float64(col)*(boxW+colGap), 140 + float64(ri)*(boxH+rowGap), boxW, boxH}
+			boxes[s] = p.vertex(label, drawioHubStyle, br.x, br.y, boxW, boxH, "1")
+			rects[s] = br
+		}
 	}
 
-	// Straight edges: radial spokes routed orthogonally turn into staircases;
-	// straight lines read as the wheel they are.
-	radialize := func(style string) string {
-		return strings.Replace(style, "edgeStyle=orthogonalEdgeStyle;rounded=1;jettySize=auto;", "edgeStyle=none;", 1)
-	}
-	// A spoke-to-spoke chord between (near-)opposite spokes would run straight
-	// through the hub box, hiding the line and its label under it; bow those
-	// around the hub with a waypoint pushed radially clear of it.
-	hubClear := math.Hypot(hubW, hubH)/2 + 40
 	for _, e := range edges {
 		style := drawioEdgeStyle[e.rel] + "strokeWidth=2;"
 		key := e.rel
@@ -587,27 +567,9 @@ func pageOverview(r reducedGraph) *drawioPage {
 			style, key = drawioEdgeCross, "cross"
 		}
 		p.useEdge(key)
-		style = radialize(style)
-		a, b := rects[e.from], rects[e.to]
-		if hub != "" && e.from != hub && e.to != hub &&
-			distPointSeg(cx, cy, a.cx(), a.cy(), b.cx(), b.cy()) < hubClear {
-			mx, my := (a.cx()+b.cx())/2, (a.cy()+b.cy())/2
-			vx, vy := mx-cx, my-cy
-			if l := math.Hypot(vx, vy); l < 1 {
-				// Diametric chord: bow perpendicular to it instead.
-				vx, vy = -(b.cy() - a.cy()), b.cx() - a.cx()
-				l = math.Hypot(vx, vy)
-				vx, vy = vx/l, vy/l
-			} else {
-				vx, vy = vx/l, vy/l
-			}
-			p.edgeVia(boxes[e.from], boxes[e.to], style, e.label,
-				[2]float64{cx + vx*(hubClear+60), cy + vy*(hubClear+60)})
-			continue
-		}
-		p.edge(boxes[e.from], boxes[e.to], style, e.label)
+		p.edge(boxes[e.from], boxes[e.to], style+attachHint(rects[e.from], rects[e.to]), e.label)
 	}
-	p.drawLegend(cx+radius+spokeW/2+60, 140)
+	p.drawLegend(dwMargin+float64(maxLayer+1)*(boxW+colGap)+60, 140)
 	return p
 }
 
