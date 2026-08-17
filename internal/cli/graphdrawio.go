@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 )
@@ -153,6 +154,31 @@ func (p *drawioPage) sampleEdge(style, parent string, x1, y1, x2, y2 float64) {
 		p.nextID(), style, parent, x1, y1, x2, y2))
 }
 
+// dwRect is a node's absolute page rectangle, kept so edges can be given
+// deterministic attachment sides instead of whatever the router improvises.
+type dwRect struct{ x, y, w, h float64 }
+
+func (r dwRect) cx() float64 { return r.x + r.w/2 }
+func (r dwRect) cy() float64 { return r.y + r.h/2 }
+
+// attachHint routes an edge out of the source side facing the target and into
+// the target side facing the source, based on the dominant axis between their
+// centers. Uncontrolled attachment points are where most of the orthogonal
+// router's spaghetti comes from.
+func attachHint(s, t dwRect) string {
+	dx, dy := t.cx()-s.cx(), t.cy()-s.cy()
+	if math.Abs(dx) >= math.Abs(dy) {
+		if dx >= 0 {
+			return "exitX=1;exitY=0.5;entryX=0;entryY=0.5;"
+		}
+		return "exitX=0;exitY=0.5;entryX=1;entryY=0.5;"
+	}
+	if dy >= 0 {
+		return "exitX=0.5;exitY=1;entryX=0.5;entryY=0;"
+	}
+	return "exitX=0.5;exitY=0;entryX=0.5;entryY=1;"
+}
+
 // xml renders the whole <diagram>, sizing the page to its content: a fixed
 // page size with content beyond it is exactly the opens-looking-empty failure
 // this renderer replaces.
@@ -230,13 +256,26 @@ func (p *drawioPage) shelfLayout(r reducedGraph, kindOrder []string, keep func(g
 		k := kindOf(id)
 		byStack[s][k] = append(byStack[s][k], id)
 	}
-	stacks := make([]string, 0, len(stackSet))
-	for s := range stackSet {
-		stacks = append(stacks, s)
+	// Stacks that share edges sit next to each other; alphabetical order put
+	// related stacks at opposite ends of the page with the connection lost in
+	// the crossing.
+	stacks := orderStacksByConnectivity(stackSet, selected, func(id string) string {
+		return stackOf(r.g.nodes[id])
+	})
+
+	// Attacher rows (containers/pods/kubes) stay alphabetical — people search
+	// them by name. Resource columns order by the average row of their
+	// in-stack attachers instead (barycenter), so an attachment edge runs to
+	// roughly the row beside it rather than across the whole box.
+	attacherKind := map[string]bool{"container": true, "pod": true, "kube": true}
+	neighbors := map[string][]string{}
+	for _, e := range selected {
+		neighbors[e.From] = append(neighbors[e.From], e.To)
+		neighbors[e.To] = append(neighbors[e.To], e.From)
 	}
-	sort.Strings(stacks)
 
 	ids = map[string]string{}
+	rects := map[string]dwRect{}
 	x, y, shelfH = dwMargin, y0, 0
 	for _, stack := range stacks {
 		type column struct {
@@ -245,12 +284,42 @@ func (p *drawioPage) shelfLayout(r reducedGraph, kindOrder []string, keep func(g
 		}
 		var cols []column
 		rows := 0
+		attacherRow := map[string]int{}
 		for _, k := range kindOrder {
 			col := byStack[stack][k]
 			if len(col) == 0 {
 				continue
 			}
 			sort.Strings(col)
+			if attacherKind[k] {
+				for ri, id := range col {
+					attacherRow[id] = ri
+				}
+			} else {
+				// Barycenter of in-stack attacher rows; unattached-in-stack
+				// nodes sink to the bottom, name-ordered.
+				bary := map[string]float64{}
+				for _, id := range col {
+					sum, n := 0.0, 0
+					for _, nb := range neighbors[id] {
+						if row, ok := attacherRow[nb]; ok {
+							sum += float64(row)
+							n++
+						}
+					}
+					if n == 0 {
+						bary[id] = math.MaxFloat64
+					} else {
+						bary[id] = sum / float64(n)
+					}
+				}
+				sort.SliceStable(col, func(i, j int) bool {
+					if bary[col[i]] != bary[col[j]] {
+						return bary[col[i]] < bary[col[j]]
+					}
+					return col[i] < col[j]
+				})
+			}
 			cols = append(cols, column{k, col})
 			if len(col) > rows {
 				rows = len(col)
@@ -269,9 +338,11 @@ func (p *drawioPage) shelfLayout(r reducedGraph, kindOrder []string, keep func(g
 		for ci, col := range cols {
 			for ri, id := range col.ids {
 				p.useKind(kindOf(id))
+				rx := dwPadX + float64(ci)*(dwNodeW+dwGapX)
+				ry := dwPadTop + float64(ri)*(dwNodeH+dwGapY)
 				ids[id] = p.vertex(nodeLabel(r, id), nodeStyle(r.g.nodes[id]),
-					dwPadX+float64(ci)*(dwNodeW+dwGapX), dwPadTop+float64(ri)*(dwNodeH+dwGapY),
-					dwNodeW, dwNodeH, box)
+					rx, ry, dwNodeW, dwNodeH, box)
+				rects[id] = dwRect{x + rx, y + ry, dwNodeW, dwNodeH}
 			}
 		}
 		if bh > shelfH {
@@ -290,9 +361,66 @@ func (p *drawioPage) shelfLayout(r reducedGraph, kindOrder []string, keep func(g
 			style, key = drawioEdgeCross, "cross"
 		}
 		p.useEdge(key)
-		p.edge(ids[e.From], ids[e.To], style, "")
+		p.edge(ids[e.From], ids[e.To], style+attachHint(rects[e.From], rects[e.To]), "")
 	}
 	return ids, x, y, shelfH
+}
+
+// orderStacksByConnectivity seats stacks so neighbors on the page are
+// neighbors in the graph: heaviest-connected stack first, then repeatedly the
+// unplaced stack most connected to the one just placed (falling back to all
+// placed, then name). Deterministic.
+func orderStacksByConnectivity(stackSet map[string]bool, edges []graphEdge, stackOfID func(string) string) []string {
+	weight := map[[2]string]int{}
+	total := map[string]int{}
+	for _, e := range edges {
+		a, b := stackOfID(e.From), stackOfID(e.To)
+		if a == b {
+			continue
+		}
+		weight[[2]string{a, b}]++
+		weight[[2]string{b, a}]++
+		total[a]++
+		total[b]++
+	}
+	remaining := make([]string, 0, len(stackSet))
+	for s := range stackSet {
+		remaining = append(remaining, s)
+	}
+	sort.Strings(remaining)
+
+	var out []string
+	take := func(i int) string {
+		s := remaining[i]
+		remaining = append(remaining[:i], remaining[i+1:]...)
+		return s
+	}
+	for len(remaining) > 0 {
+		best, bestScore := 0, -1
+		for i, s := range remaining {
+			var score int
+			if len(out) == 0 {
+				score = total[s]
+			} else {
+				// Adjacency to the stack just placed dominates; ties break on
+				// connectivity to everything placed so far.
+				score = weight[[2]string{out[len(out)-1], s}]*1000 + sumWeights(weight, out, s)
+			}
+			if score > bestScore {
+				best, bestScore = i, score
+			}
+		}
+		out = append(out, take(best))
+	}
+	return out
+}
+
+func sumWeights(weight map[[2]string]int, placed []string, s string) int {
+	n := 0
+	for _, pl := range placed {
+		n += weight[[2]string{pl, s}]
+	}
+	return n
 }
 
 // shelfLegend appends the page legend as one more shelf box, wrapping to a
@@ -359,21 +487,70 @@ func pageOverview(r reducedGraph) *drawioPage {
 	}
 	sort.Strings(spokes)
 
-	boxes := map[string]string{}
-	if hub != "" {
-		p.useKind("stack")
-		boxes[hub] = p.vertex(
-			fmt.Sprintf("<b>%s</b><br/><font style='font-size:10px;color:#666'>ingress hub</font>", hub),
-			drawioHubStyle, 700, 560, 300, 80, "1")
+	// Radial layout: hub in the middle, spokes on a circle sized so their
+	// boxes cannot touch, ordered so spoke pairs that connect to each other
+	// sit adjacent (greedy chain over inter-spoke edge weight) — a chord to
+	// the box next door instead of across the whole wheel.
+	const spokeW, spokeH, hubW, hubH = 260.0, 70.0, 300.0, 80.0
+	weight := map[[2]string]int{}
+	hubWeight := map[string]int{}
+	for _, e := range edges {
+		if e.from == hub {
+			hubWeight[e.to]++
+		} else if e.to == hub {
+			hubWeight[e.from]++
+		} else {
+			weight[[2]string{e.from, e.to}]++
+			weight[[2]string{e.to, e.from}]++
+		}
 	}
-	const perRow = 4
-	for i, s := range spokes {
-		p.useKind("stack")
-		col, row := i%perRow, i/perRow
-		boxes[s] = p.vertex("<b>"+s+"</b>", drawioHubStyle,
-			60+float64(col)*340, 820+float64(row)*110, 260, 70, "1")
+	var ordered []string
+	rem := append([]string(nil), spokes...)
+	for len(rem) > 0 {
+		best, bestScore := 0, -1
+		for i, s := range rem {
+			var score int
+			if len(ordered) == 0 {
+				score = hubWeight[s]
+			} else {
+				score = weight[[2]string{ordered[len(ordered)-1], s}]*1000 + hubWeight[s]
+			}
+			if score > bestScore {
+				best, bestScore = i, score
+			}
+		}
+		ordered = append(ordered, rem[best])
+		rem = append(rem[:best], rem[best+1:]...)
 	}
 
+	n := float64(len(ordered))
+	radius := math.Max(430, n*(spokeW+70)/(2*math.Pi))
+	cx := dwMargin + radius + spokeW/2
+	cy := 170 + radius + spokeH/2 // topmost spoke box lands at y≈170
+
+	boxes := map[string]string{}
+	rects := map[string]dwRect{}
+	if hub != "" {
+		p.useKind("stack")
+		hr := dwRect{cx - hubW/2, cy - hubH/2, hubW, hubH}
+		boxes[hub] = p.vertex(
+			fmt.Sprintf("<b>%s</b><br/><font style='font-size:10px;color:#666'>ingress hub</font>", hub),
+			drawioHubStyle, hr.x, hr.y, hubW, hubH, "1")
+		rects[hub] = hr
+	}
+	for i, s := range ordered {
+		p.useKind("stack")
+		angle := -math.Pi/2 + float64(i)*2*math.Pi/n
+		br := dwRect{cx + radius*math.Cos(angle) - spokeW/2, cy + radius*math.Sin(angle) - spokeH/2, spokeW, spokeH}
+		boxes[s] = p.vertex("<b>"+s+"</b>", drawioHubStyle, br.x, br.y, spokeW, spokeH, "1")
+		rects[s] = br
+	}
+
+	// Straight edges: radial spokes routed orthogonally turn into staircases;
+	// straight lines read as the wheel they are.
+	radialize := func(style string) string {
+		return strings.Replace(style, "edgeStyle=orthogonalEdgeStyle;rounded=1;jettySize=auto;", "edgeStyle=none;", 1)
+	}
 	for _, e := range edges {
 		style := drawioEdgeStyle[e.rel] + "strokeWidth=2;"
 		key := e.rel
@@ -381,9 +558,9 @@ func pageOverview(r reducedGraph) *drawioPage {
 			style, key = drawioEdgeCross, "cross"
 		}
 		p.useEdge(key)
-		p.edge(boxes[e.from], boxes[e.to], style, e.label)
+		p.edge(boxes[e.from], boxes[e.to], radialize(style), e.label)
 	}
-	p.drawLegend(1580, 40)
+	p.drawLegend(cx+radius+spokeW/2+60, 140)
 	return p
 }
 
@@ -665,16 +842,40 @@ func pageDeps(r reducedGraph) *drawioPage {
 		}
 	}
 
-	// Bands top-down, nodes wrapped at the page width; sorted by stack then
-	// name so a stack's units cluster within their band.
+	// Bands top-down, nodes wrapped at the page width. The top band orders by
+	// stack then name; every band below orders by the barycenter (average x)
+	// of the dependencies it points at, so edges run near-vertically to the
+	// band above instead of criss-crossing the width of the page.
 	ids := map[string]string{}
+	rects := map[string]dwRect{}
 	y := 120.0
 	for l := 0; l <= maxLayer; l++ {
 		band := byLayer[l]
 		if len(band) == 0 {
 			continue
 		}
+		bary := map[string]float64{}
+		for _, id := range band {
+			sum, n := 0.0, 0
+			for _, k := range pairs {
+				if k.from != id {
+					continue
+				}
+				if tr, ok := rects[k.to]; ok {
+					sum += tr.cx()
+					n++
+				}
+			}
+			if n == 0 {
+				bary[id] = math.MaxFloat64
+			} else {
+				bary[id] = sum / float64(n)
+			}
+		}
 		sort.Slice(band, func(i, j int) bool {
+			if l > 0 && bary[band[i]] != bary[band[j]] {
+				return bary[band[i]] < bary[band[j]]
+			}
 			si, sj := stackOf(r.g.nodes[band[i]]), stackOf(r.g.nodes[band[j]])
 			if si != sj {
 				return si < sj
@@ -696,6 +897,7 @@ func pageDeps(r reducedGraph) *drawioPage {
 				p.useKind("external")
 			}
 			ids[id] = p.vertex(label, nodeStyle(r.g.nodes[id]), x, rowY, dwNodeW, dwNodeH, "1")
+			rects[id] = dwRect{x, rowY, dwNodeW, dwNodeH}
 			x += dwNodeW + dwGapX
 		}
 		// Wide gap between bands so the layering reads as levels.
@@ -710,7 +912,7 @@ func pageDeps(r reducedGraph) *drawioPage {
 			style, key = drawioEdgeCross, "cross"
 		}
 		p.useEdge(key)
-		p.edge(ids[k.from], ids[k.to], style, strings.Join(rels, "+"))
+		p.edge(ids[k.from], ids[k.to], style+attachHint(rects[k.from], rects[k.to]), strings.Join(rels, "+"))
 	}
 	// Below the last band.
 	p.drawLegend(dwMargin, y+dwGapY)
