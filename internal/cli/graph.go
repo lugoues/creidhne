@@ -57,7 +57,10 @@ func newGraphCmd() *cobra.Command {
 			"Nodes are clustered by their owning quadlet, with external systemd\n" +
 			"targets collected in one 'external' group; --flat disables clustering.\n\n" +
 			"Formats: dot (pipe to graphviz, e.g. 'crei graph | dot -Tsvg > g.svg'),\n" +
-			"mermaid (renders on GitHub or mermaid.live), or json.",
+			"mermaid (renders on GitHub or mermaid.live), json, or drawio (a\n" +
+			"four-page draw.io document: overview with cross-stack relations only,\n" +
+			"networks, storage, and full detail; open with app.diagrams.net or\n" +
+			"draw.io Desktop, e.g. 'crei graph --format drawio > estate.drawio').",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := resolveConfig()
@@ -87,13 +90,18 @@ func newGraphCmd() *cobra.Command {
 				writeMermaid(out, g, !flat)
 			case "json":
 				return writeGraphJSON(out, g)
+			case "drawio":
+				if flat {
+					return fmt.Errorf("--flat is not supported with --format drawio: the stack boxes are the point of that output")
+				}
+				writeDrawio(out, g)
 			default:
-				return fmt.Errorf("invalid --format %q (want dot, mermaid, or json)", format)
+				return fmt.Errorf("invalid --format %q (want dot, mermaid, json, or drawio)", format)
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&format, "format", "dot", "output format: dot, mermaid, or json")
+	cmd.Flags().StringVar(&format, "format", "dot", "output format: dot, mermaid, json, or drawio")
 	cmd.Flags().BoolVar(&flat, "flat", false, "don't cluster nodes by quadlet (dot and mermaid only)")
 	return cmd
 }
