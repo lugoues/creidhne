@@ -22,6 +22,9 @@ func drawioFixture() depGraph {
 			"Unit": map[string]any{
 				"After":    []any{"network-online.target", "db.service"},
 				"Requires": []any{"db.service"},
+				// Not subsumed by the Network= reference: must render as a
+				// deps edge even though a resource edge covers the same pair.
+				"Before": []any{"app-network.service"},
 			},
 			"Container": map[string]any{},
 		}},
@@ -50,7 +53,7 @@ func drawioFixture() depGraph {
 // quadlet, deps to an external target) are all marked.
 func TestReduceGraphCounts(t *testing.T) {
 	r := reduceGraph(drawioFixture())
-	want := reduceCounts{Units: 8, Relations: 8, Cross: 4, Folded: 1, Orphans: 1}
+	want := reduceCounts{Units: 8, Relations: 9, Cross: 4, Folded: 1, Orphans: 1}
 	if r.counts != want {
 		t.Fatalf("counts = %+v, want %+v", r.counts, want)
 	}
@@ -221,16 +224,22 @@ func TestDrawioRoundTrip(t *testing.T) {
 		if relResource(e.Rel) {
 			wantResource++
 			resourcePair[pair{e.From, e.To}] = true
-		} else {
-			depPairs[pair{e.From, e.To}] = true
 		}
 	}
-	wantDeps := 0
-	for k := range depPairs {
-		if !resourcePair[k] {
-			wantDeps++
+	// A deps pair renders unless every one of its directives is subsumed by a
+	// resource edge on the same pair (only After/Requires/Wants are — a
+	// Conflicts= or Before= toward a resource is real semantics).
+	for _, e := range r.keptEdges() {
+		if relResource(e.Rel) {
+			continue
 		}
+		k := pair{e.From, e.To}
+		if resourcePair[k] && subsumedByQuadlet[e.Rel] {
+			continue
+		}
+		depPairs[k] = true
 	}
+	wantDeps := len(depPairs)
 	if edges != wantResource+wantDeps {
 		t.Fatalf("detail page has %d edges, want %d resource + %d merged deps", edges, wantResource, wantDeps)
 	}

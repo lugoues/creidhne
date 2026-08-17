@@ -298,8 +298,8 @@ func pageOverview(r reducedGraph) *drawioPage {
 	}
 
 	p.heading("Overview",
-		fmt.Sprintf("%d units, %d relations. Only the %d relations that cross a stack boundary are drawn here (resource coupling only; [Unit] ordering is on page 4).",
-			r.counts.Units, r.counts.Relations, r.counts.Cross))
+		fmt.Sprintf("%d units, %d relations. Drawn here: the %d cross-stack resource links (deduplicated per stack pair; %d relations cross a boundary in total, [Unit] ordering included — see page 4).",
+			r.counts.Units, r.counts.Relations, len(edges), r.counts.Cross))
 
 	hub := ""
 	for s, n := range netCross {
@@ -380,7 +380,7 @@ func pageStorage(r reducedGraph) *drawioPage {
 func pageDetail(r reducedGraph) *drawioPage {
 	p := &drawioPage{name: "4. Full detail", prefix: "fd"}
 	p.heading("Full detail",
-		fmt.Sprintf("Every visible unit and relation. %d build units are folded into their container label. Grey dotted edges are [Unit] ordering/requirement dependencies; ones redundant with a resource reference are omitted.", r.counts.Folded))
+		fmt.Sprintf("Every visible unit and relation. %d build units are folded into their container label. Grey dotted edges are [Unit] dependencies; After/Requires/Wants lines that merely repeat a resource reference are omitted (quadlet wires those itself).", r.counts.Folded))
 
 	kinds := []string{"pod", "container", "kube", "build", "image", "artifact", "network", "volume", "external"}
 	ids, x, y, shelfH := p.shelfLayout(r, kinds, func(e graphEdge) bool { return relResource(e.Rel) }, 120)
@@ -401,6 +401,18 @@ func pageDetail(r reducedGraph) *drawioPage {
 		k := pair{e.From, e.To}
 		if relResource(e.Rel) {
 			resourcePair[k] = true
+		}
+	}
+	for _, e := range r.keptEdges() {
+		if !r.visible[e.From] || !r.visible[e.To] || relResource(e.Rel) {
+			continue
+		}
+		k := pair{e.From, e.To}
+		// Alongside a resource edge, only the directives quadlet wires itself
+		// (After/Requires/Wants — the same set the deps/redundant-resource
+		// lint checks) are redundant; Conflicts=, Before=, BindsTo= etc.
+		// toward a resource carry semantics of their own and must render.
+		if resourcePair[k] && subsumedByQuadlet[e.Rel] {
 			continue
 		}
 		depRels[k] = append(depRels[k], e.Rel)
@@ -409,9 +421,6 @@ func pageDetail(r reducedGraph) *drawioPage {
 	// resource coupling) in a trailing shelf pass.
 	missing := map[string]bool{}
 	for k := range depRels {
-		if resourcePair[k] {
-			continue
-		}
 		for _, id := range []string{k.from, k.to} {
 			if _, ok := ids[id]; !ok {
 				missing[id] = true
@@ -464,9 +473,6 @@ func pageDetail(r reducedGraph) *drawioPage {
 		return pairs[i].to < pairs[j].to
 	})
 	for _, k := range pairs {
-		if resourcePair[k] {
-			continue
-		}
 		src, sok := ids[k.from]
 		dst, dok := ids[k.to]
 		if !sok || !dok {
