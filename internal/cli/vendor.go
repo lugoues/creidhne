@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,6 +184,14 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 	if source == "" {
 		source = defaultSource
 	}
+	recordSource := source
+	if source != defaultSource {
+		var note string
+		source, recordSource, note = normalizeVendorSource(source)
+		if note != "" {
+			fmt.Fprintln(out, yellow("! "+note))
+		}
+	}
 	tmp, err := os.MkdirTemp("", "crei-vendor-*")
 	if err != nil {
 		return nil, err
@@ -247,10 +256,36 @@ func vendorModule(out io.Writer, cueMod, module, ref, source string, vendored ma
 	}
 	fmt.Fprintf(out, "vendored %s@%s (%.12s): %d file(s) into cue.mod/usr/%s\n", module, refShown, commit, len(files), module)
 	pin := &vendorPin{Ref: ref, Commit: commit, Hash: hashTree(files)}
-	if source != defaultSource {
-		pin.Source = source
+	if recordSource != defaultSource {
+		pin.Source = recordSource
 	}
 	return pin, nil
+}
+
+// normalizeVendorSource prepares a --source for cloning and for the lock.
+// A local path becomes absolute for both (a relative path recorded in the
+// lock would resolve against whatever directory a later restore happens to
+// run from). An http(s) URL carrying userinfo keeps it for the clone but has
+// it stripped from the recorded form: crei-vendor.json is a commonly
+// committed file, and a token pasted into --source must never land there.
+func normalizeVendorSource(source string) (cloneSource, recordSource, note string) {
+	cloneSource, recordSource = source, source
+	if u, err := url.Parse(source); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		if u.User != nil {
+			u.User = nil
+			recordSource = u.String()
+			note = "credentials in --source are used for this fetch but not recorded in cue.mod/" + vendorLockName + "; configure a git credential helper (or SSH) for restores"
+		}
+		return cloneSource, recordSource, note
+	}
+	if !strings.Contains(source, "://") {
+		if _, err := os.Stat(source); err == nil {
+			if abs, err := filepath.Abs(source); err == nil {
+				cloneSource, recordSource = abs, abs
+			}
+		}
+	}
+	return cloneSource, recordSource, note
 }
 
 // moduleDeclaration reads the module path (major-version suffix stripped)
@@ -353,10 +388,11 @@ func checkImports(module string, files map[string][]byte, vendored map[string]ve
 // cueImports extracts import paths from a CUE file via the real parser, so
 // every syntactic form (aliases, comments inside the declaration, block and
 // single imports) is seen — a regexp would let an unusual-but-valid spelling
-// smuggle an unvendored dependency past checkImports. An unparseable file is
-// an error: it could not be evaluated after vendoring anyway.
+// smuggle an unvendored dependency past checkImports. The whole file is
+// parsed (not ImportsOnly): a module with broken CUE after its imports must
+// fail here, not install cleanly and then break every project evaluation.
 func cueImports(name string, src []byte) ([]string, error) {
-	f, err := parser.ParseFile(name, src, parser.ImportsOnly)
+	f, err := parser.ParseFile(name, src)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", name, err)
 	}

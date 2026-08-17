@@ -212,28 +212,31 @@ func createOne(out io.Writer, cfg config, o createOpts) error {
 		}
 	}
 
-	// Stage the registry update before touching podman: creating (and above
-	// all --replace-ing) the secret value is the irreversible half, so an
-	// unwritable registries/secrets.cue must abort while podman is unchanged.
-	var staged string
+	// Commit the registry update before touching podman: creating (and above
+	// all --replace-ing) the secret value is the irreversible half, while the
+	// registry is declarative — a declared-but-missing secret is a supported
+	// state that `secret create` / `-a` reconciles. So an unwritable (or
+	// immutable) registries/secrets.cue aborts while podman is unchanged, and
+	// a podman failure afterwards leaves a consistent "declared, not yet
+	// created" project rather than a changed secret nobody recorded.
 	if !handAuthored {
-		staged, err = stageSecretRegistration(projectDir, entries, entryIdx, eff)
+		staged, err := stageSecretRegistration(projectDir, entries, entryIdx, eff)
 		if err != nil {
 			return err
 		}
+		if staged != "" {
+			if err := commitSecretRegistration(out, projectDir, staged, eff); err != nil {
+				return err
+			}
+		}
 	}
 	if err := podmanCreateSecret(name, value, o.replace); err != nil {
-		if staged != "" {
-			_ = os.Remove(staged)
+		if !handAuthored {
+			return fmt.Errorf("%w\n  the entry stays registered in registries/secrets.cue; re-run 'crei secret create %s' (or -a) to create the value", err, o.key)
 		}
 		return err
 	}
 	fmt.Fprintf(out, "%s created (%s)\n", green(name), how)
-	if staged != "" {
-		if err := commitSecretRegistration(out, projectDir, staged, eff); err != nil {
-			return err
-		}
-	}
 	// A generated value crei cannot regenerate (manual entry, or declared only
 	// in the hand-authored field) is shown once; policy-backed values are not
 	// (rotate regenerates them).

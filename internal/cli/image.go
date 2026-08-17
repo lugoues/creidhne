@@ -204,6 +204,9 @@ func checkImageNames(entries []eval.ImageEntry, only map[string]bool) error {
 	}
 	sort.Strings(unknown)
 	sort.Strings(available)
+	if len(available) == 0 {
+		return fmt.Errorf("no registry entr(y/ies) named %s (the registry is empty; add entries with crei image add)", strings.Join(unknown, ", "))
+	}
 	return fmt.Errorf("no registry entr(y/ies) named %s (available: %s)", strings.Join(unknown, ", "), strings.Join(available, ", "))
 }
 

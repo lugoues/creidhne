@@ -45,16 +45,18 @@ func newImagePinCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			if len(entries) == 0 {
-				fmt.Fprintln(out, "No image registry (registries/images.cue).")
-				return nil
-			}
 			only := map[string]bool{}
 			for _, a := range args {
 				only[a] = true
 			}
+			// Validate names before the empty-registry early return: a typo'd
+			// name must fail even when there are no entries at all.
 			if err := checkImageNames(entries, only); err != nil {
 				return err
+			}
+			if len(entries) == 0 {
+				fmt.Fprintln(out, "No image registry (registries/images.cue).")
+				return nil
 			}
 
 			changed, failed := 0, 0
