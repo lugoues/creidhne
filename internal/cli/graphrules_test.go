@@ -150,14 +150,17 @@ c: creidhne.#Quadlet & {name: "c", units: #container: Container: {Image: "docker
 	// PodmanArgs can rename or disable the infra container.
 	proj = setupProject(t, `package config
 import "github.com/lugoues/creidhne@v0"
-p: creidhne.#Quadlet & {name: "p", units: #pod: Pod: PodmanArgs: ["--infra-name=inf"]}
+p: creidhne.#Quadlet & {name: "p", units: #pod: Pod: PodmanArgs: ["--infra-name=\"inf\""]}
 q: creidhne.#Quadlet & {name: "q", units: #pod: Pod: PodmanArgs: ["--infra=false"]}
+r: creidhne.#Quadlet & {name: "r", units: #pod: Pod: PodmanArgs: ["--infra=false", "--infra=true"]}
 c: creidhne.#Quadlet & {name: "c", units: #container: Container: {Image: "docker.io/x", ContainerName: "systemd-p-infra"}}
 d: creidhne.#Quadlet & {name: "d", units: #container: Container: {Image: "docker.io/x", ContainerName: "systemd-q-infra"}}
 e: creidhne.#Quadlet & {name: "e", units: #container: Container: {Image: "docker.io/x", ContainerName: "inf"}}
+f: creidhne.#Quadlet & {name: "f", units: #container: Container: {Image: "docker.io/x", ContainerName: "systemd-r-infra"}}
 `)
 	out, err = runCmd(t, "--dir", proj, "validate")
-	if err == nil || !strings.Contains(out, `"inf" is shared by`) || strings.Contains(out, "-infra") {
+	if err == nil || !strings.Contains(out, `"inf" is shared by`) || !strings.Contains(out, `"systemd-r-infra" is shared by`) ||
+		strings.Contains(out, `"systemd-p-infra"`) || strings.Contains(out, `"systemd-q-infra"`) {
 		t.Fatalf("PodmanArgs infra overrides not honored: %v\n%s", err, out)
 	}
 }

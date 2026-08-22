@@ -224,9 +224,12 @@ func sortFindings(fs []ruleFinding) {
 // nestedStr reads a string under data[section][key] ("" when absent).
 // podInfraName returns the name podman gives the pod's infra container:
 // "<pod>-infra" unless PodmanArgs renames it (--infra-name) or disables it
-// (--infra=false), in which case it returns "".
+// (--infra=false), in which case it returns "". Later flags win, as in
+// podman's own flag parsing. Values are unquoted only at their ends; full
+// systemd quoting rules are out of scope for a lint heuristic.
 func podInfraName(data map[string]any, pod string) string {
 	infra := pod + "-infra"
+	enabled := true
 	sec, _ := data["Pod"].(map[string]any)
 	var args []string
 	var flatten func(v any)
@@ -242,18 +245,35 @@ func podInfraName(data map[string]any, pod string) string {
 	}
 	flatten(sec["PodmanArgs"])
 	for i, a := range args {
+		next := ""
+		if i+1 < len(args) {
+			next = args[i+1]
+		}
 		switch {
 		case a == "--infra=false" || a == "--no-infra":
-			return ""
-		case a == "--infra" && i+1 < len(args) && args[i+1] == "false":
-			return ""
+			enabled = false
+		case a == "--infra=true", a == "--infra" && next != "false":
+			enabled = true
+		case a == "--infra" && next == "false":
+			enabled = false
 		case strings.HasPrefix(a, "--infra-name="):
-			infra = strings.TrimPrefix(a, "--infra-name=")
-		case a == "--infra-name" && i+1 < len(args):
-			infra = args[i+1]
+			infra = trimQuotes(strings.TrimPrefix(a, "--infra-name="))
+		case a == "--infra-name" && next != "":
+			infra = trimQuotes(next)
 		}
 	}
+	if !enabled {
+		return ""
+	}
 	return infra
+}
+
+// trimQuotes strips one layer of matching surrounding quotes.
+func trimQuotes(s string) string {
+	if len(s) >= 2 && (s[0] == '"' || s[0] == '\'') && s[len(s)-1] == s[0] {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 func nestedStr(data map[string]any, section, key string) string {
