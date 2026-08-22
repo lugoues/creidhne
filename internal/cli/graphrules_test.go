@@ -119,6 +119,35 @@ b: creidhne.#Quadlet & {name: "b", units: #container: Container: {Image: "docker
 	}
 }
 
+// TestPodAndContainerMayShareName: libpod keeps pod and container names in
+// separate spaces, so docktail.pod and docktail.container both resolving to
+// "systemd-docktail" is fine; only the pod's "<name>-infra" container collides.
+func TestPodAndContainerMayShareName(t *testing.T) {
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+docktail: creidhne.#Quadlet & {
+	name: "docktail"
+	units: {
+		#pod: {}
+		#container: Container: {Image: "docker.io/x", Pod: units.#pod.#self}
+	}
+}
+`)
+	if out, err := runCmd(t, "--dir", proj, "validate"); err != nil {
+		t.Fatalf("pod and container sharing a name must pass validate: %v\n%s", err, out)
+	}
+
+	proj = setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+p: creidhne.#Quadlet & {name: "p", units: #pod: {}}
+c: creidhne.#Quadlet & {name: "c", units: #container: Container: {Image: "docker.io/x", ContainerName: "systemd-p-infra"}}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err == nil || !strings.Contains(out, `"systemd-p-infra" is shared by`) {
+		t.Fatalf("container named like the pod infra must fail validate: %v\n%s", err, out)
+	}
+}
+
 // TestOrphanAndRouterWarnings: an unattached plain network and a router name
 // defined by two units both warn; validate still passes.
 func TestOrphanAndRouterWarnings(t *testing.T) {

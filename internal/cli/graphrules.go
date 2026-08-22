@@ -115,26 +115,36 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 	}
 
 	// Duplicate effective runtime names: podman rejects the second container,
-	// and helpers (hosts books) resolve names to the wrong peer.
-	names := map[string][]string{}
+	// and helpers (hosts books) resolve names to the wrong peer. Pods and
+	// containers are separate name spaces in libpod (only IDs are shared),
+	// so a pod and a container may share a name; what does collide is a
+	// pod's infra container, which podman names "<pod>-infra".
+	ctrNames := map[string][]string{}
+	podNames := map[string][]string{}
 	for _, u := range attachable {
-		name := ""
 		switch u.Kind {
 		case "container":
-			name = nestedStr(u.Data, "Container", "ContainerName")
+			name := nestedStr(u.Data, "Container", "ContainerName")
+			if name == "" {
+				name = "systemd-" + u.Stem
+			}
+			ctrNames[name] = append(ctrNames[name], u.Filename)
 		case "pod":
-			name = nestedStr(u.Data, "Pod", "PodName")
+			name := nestedStr(u.Data, "Pod", "PodName")
+			if name == "" {
+				name = "systemd-" + u.Stem
+			}
+			podNames[name] = append(podNames[name], u.Filename)
+			ctrNames[name+"-infra"] = append(ctrNames[name+"-infra"], u.Filename)
 		}
-		if name == "" {
-			name = "systemd-" + u.Stem
-		}
-		names[name] = append(names[name], u.Filename)
 	}
-	for name, units := range names {
-		if len(units) > 1 {
-			sort.Strings(units)
-			out = append(out, ruleFinding{Rule: "graph/duplicate-name", Unit: units[0],
-				Message: fmt.Sprintf("effective runtime name %q is shared by %s; podman requires uniqueness and name-based references resolve arbitrarily", name, strings.Join(units, ", "))})
+	for _, names := range []map[string][]string{ctrNames, podNames} {
+		for name, units := range names {
+			if len(units) > 1 {
+				sort.Strings(units)
+				out = append(out, ruleFinding{Rule: "graph/duplicate-name", Unit: units[0],
+					Message: fmt.Sprintf("effective runtime name %q is shared by %s; podman requires uniqueness and name-based references resolve arbitrarily", name, strings.Join(units, ", "))})
+			}
 		}
 	}
 
