@@ -146,6 +146,20 @@ c: creidhne.#Quadlet & {name: "c", units: #container: Container: {Image: "docker
 	if err == nil || !strings.Contains(out, `"systemd-p-infra" is shared by`) {
 		t.Fatalf("container named like the pod infra must fail validate: %v\n%s", err, out)
 	}
+
+	// PodmanArgs can rename or disable the infra container.
+	proj = setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+p: creidhne.#Quadlet & {name: "p", units: #pod: Pod: PodmanArgs: ["--infra-name=inf"]}
+q: creidhne.#Quadlet & {name: "q", units: #pod: Pod: PodmanArgs: ["--infra=false"]}
+c: creidhne.#Quadlet & {name: "c", units: #container: Container: {Image: "docker.io/x", ContainerName: "systemd-p-infra"}}
+d: creidhne.#Quadlet & {name: "d", units: #container: Container: {Image: "docker.io/x", ContainerName: "systemd-q-infra"}}
+e: creidhne.#Quadlet & {name: "e", units: #container: Container: {Image: "docker.io/x", ContainerName: "inf"}}
+`)
+	out, err = runCmd(t, "--dir", proj, "validate")
+	if err == nil || !strings.Contains(out, `"inf" is shared by`) || strings.Contains(out, "-infra") {
+		t.Fatalf("PodmanArgs infra overrides not honored: %v\n%s", err, out)
+	}
 }
 
 // TestOrphanAndRouterWarnings: an unattached plain network and a router name

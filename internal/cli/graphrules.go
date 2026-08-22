@@ -135,7 +135,9 @@ func graphRuleFindings(all []eval.Quadlet) []ruleFinding {
 				name = "systemd-" + u.Stem
 			}
 			podNames[name] = append(podNames[name], u.Filename)
-			ctrNames[name+"-infra"] = append(ctrNames[name+"-infra"], u.Filename)
+			if infra := podInfraName(u.Data, name); infra != "" {
+				ctrNames[infra] = append(ctrNames[infra], u.Filename)
+			}
 		}
 	}
 	for _, names := range []map[string][]string{ctrNames, podNames} {
@@ -220,6 +222,40 @@ func sortFindings(fs []ruleFinding) {
 }
 
 // nestedStr reads a string under data[section][key] ("" when absent).
+// podInfraName returns the name podman gives the pod's infra container:
+// "<pod>-infra" unless PodmanArgs renames it (--infra-name) or disables it
+// (--infra=false), in which case it returns "".
+func podInfraName(data map[string]any, pod string) string {
+	infra := pod + "-infra"
+	sec, _ := data["Pod"].(map[string]any)
+	var args []string
+	var flatten func(v any)
+	flatten = func(v any) {
+		switch v := v.(type) {
+		case string:
+			args = append(args, strings.Fields(v)...)
+		case []any:
+			for _, e := range v {
+				flatten(e)
+			}
+		}
+	}
+	flatten(sec["PodmanArgs"])
+	for i, a := range args {
+		switch {
+		case a == "--infra=false" || a == "--no-infra":
+			return ""
+		case a == "--infra" && i+1 < len(args) && args[i+1] == "false":
+			return ""
+		case strings.HasPrefix(a, "--infra-name="):
+			infra = strings.TrimPrefix(a, "--infra-name=")
+		case a == "--infra-name" && i+1 < len(args):
+			infra = args[i+1]
+		}
+	}
+	return infra
+}
+
 func nestedStr(data map[string]any, section, key string) string {
 	sec, ok := data[section].(map[string]any)
 	if !ok {
