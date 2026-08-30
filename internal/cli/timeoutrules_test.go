@@ -30,6 +30,10 @@ inf: creidhne.#Quadlet & {name: "inf", units: #container: {
 	Container: {Image: "docker.io/y", StopTimeout: 300}
 	Service: TimeoutStopSec: "infinity"
 }}
+zero: creidhne.#Quadlet & {name: "zero", units: #container: {
+	Container: {Image: "docker.io/z", StopTimeout: 300}
+	Service: TimeoutStopSec: "0"
+}}
 `)
 	if out, err := runCmd(t, "--dir", proj, "validate"); err != nil {
 		t.Fatalf("coherent timeouts must pass: %v\n%s", err, out)
@@ -64,7 +68,7 @@ func TestStopTimeoutPodmanArgsOverride(t *testing.T) {
 	proj := setupProject(t, `package config
 import "github.com/lugoues/creidhne@v0"
 a: creidhne.#Quadlet & {name: "a", units: #container: {
-	Container: {Image: "docker.io/x", PodmanArgs: ["--stop-timeout=45"]}
+	Container: {Image: "docker.io/x", PodmanArgs: ["--stop-timeout=\"45\""]}
 	Service: TimeoutStopSec: "30"
 }}
 `)

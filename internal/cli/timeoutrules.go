@@ -69,11 +69,11 @@ func stopGrace(u eval.UnitRecord) (int64, bool) {
 		for i, a := range args {
 			switch {
 			case strings.HasPrefix(a, "--stop-timeout="):
-				if v, err := strconv.ParseInt(strings.TrimPrefix(a, "--stop-timeout="), 10, 64); err == nil {
+				if v, err := strconv.ParseInt(trimQuotes(strings.TrimPrefix(a, "--stop-timeout=")), 10, 64); err == nil {
 					grace, set = v, true
 				}
 			case a == "--stop-timeout" && i+1 < len(args):
-				if v, err := strconv.ParseInt(args[i+1], 10, 64); err == nil {
+				if v, err := strconv.ParseInt(trimQuotes(args[i+1]), 10, 64); err == nil {
 					grace, set = v, true
 				}
 			}
@@ -91,16 +91,16 @@ func serviceStopTimeout(data map[string]any) (secs float64, key string, set, inf
 		if !ok {
 			continue
 		}
-		switch v := v.(type) {
-		case int64:
-			return float64(v), k, true, false
-		case float64:
-			return v, k, true, false
-		case string:
+		if v, ok := v.(string); ok {
 			if v == "infinity" {
 				return 0, k, false, true
 			}
 			if s, ok := parseTimeSpan(v); ok {
+				// A zero span disables the timeout (parse_sec_fix_0
+				// semantics, SysV compat), same as infinity.
+				if s == 0 {
+					return 0, k, false, true
+				}
 				return s, k, true, false
 			}
 		}
