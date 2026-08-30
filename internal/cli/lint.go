@@ -159,6 +159,8 @@ func lintQuadlets(focus, all []eval.Quadlet) []ruleFinding {
 		}
 	}
 
+	findings = append(findings, timeoutRuleFindings(focus)...)
+
 	return findings
 }
 

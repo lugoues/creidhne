@@ -33,6 +33,9 @@ var ruleDefaults = map[string]string{
 	// Redundant [Unit] dependencies (lint.go).
 	"deps/redundant-resource":       sevWarn, // After/Requires/Wants duplicating a resource ref
 	"deps/redundant-network-online": sevWarn, // hand-written network-online dep
+	// Stop-timeout coherence (timeoutrules.go).
+	"service/stop-timeout":         sevError, // explicit TimeoutStopSec <= explicit StopTimeout
+	"service/stop-timeout-default": sevWarn,  // incoherent against assumed 10s/90s defaults
 	// Image registry (imagerules.go).
 	"image/unpinned": sevWarn, // registry entry with a tag but no digest
 	// Off by default: not using the registry is a supported choice ("if it's

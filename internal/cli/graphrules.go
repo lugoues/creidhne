@@ -231,19 +231,7 @@ func podInfraName(data map[string]any, pod string) string {
 	infra := pod + "-infra"
 	enabled := true
 	sec, _ := data["Pod"].(map[string]any)
-	var args []string
-	var flatten func(v any)
-	flatten = func(v any) {
-		switch v := v.(type) {
-		case string:
-			args = append(args, strings.Fields(v)...)
-		case []any:
-			for _, e := range v {
-				flatten(e)
-			}
-		}
-	}
-	flatten(sec["PodmanArgs"])
+	args := flattenArgs(sec["PodmanArgs"])
 	for i, a := range args {
 		next := ""
 		if i+1 < len(args) {
@@ -266,6 +254,21 @@ func podInfraName(data map[string]any, pod string) string {
 		return ""
 	}
 	return infra
+}
+
+// flattenArgs splits a PodmanArgs-shaped value (strings or nested string
+// lists) into whitespace-separated argument words.
+func flattenArgs(v any) []string {
+	var args []string
+	switch v := v.(type) {
+	case string:
+		args = append(args, strings.Fields(v)...)
+	case []any:
+		for _, e := range v {
+			args = append(args, flattenArgs(e)...)
+		}
+	}
+	return args
 }
 
 // trimQuotes strips one layer of matching surrounding quotes.

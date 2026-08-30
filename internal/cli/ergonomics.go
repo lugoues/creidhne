@@ -550,6 +550,7 @@ quadlet_dir = "~/.config/containers/systemd"
 # graph/pair-unwired (warn), graph/duplicate-name (error),
 # graph/orphan-network (warn), graph/duplicate-router (warn),
 # deps/redundant-resource (warn), deps/redundant-network-online (warn),
+# service/stop-timeout (error), service/stop-timeout-default (warn),
 # image/unpinned (warn), image/unmanaged (off).
 # [lint]
 # "graph/orphan-network" = "off"
