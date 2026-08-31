@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/huh/spinner"
+	"charm.land/huh/v2"
+	"charm.land/huh/v2/spinner"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -21,7 +21,7 @@ import (
 // plainly otherwise (piped/CI output stays clean).
 func withSpinner(out io.Writer, title string, action func()) {
 	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		if err := spinner.New().Title(title).Output(f).Action(action).Run(); err == nil {
+		if err := spinner.New().Title(title).WithOutput(f).Action(action).Run(); err == nil {
 			return
 		}
 		// Spinner failure must never eat the work: tea errors leave the
