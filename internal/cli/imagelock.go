@@ -102,7 +102,7 @@ func newImageLockCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if len(entries) == 0 {
 				fmt.Fprintln(out, "No image registry (registries/images.cue).")
 				return nil
@@ -146,7 +146,7 @@ func newImageUnlockCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if len(entries) == 0 {
 				fmt.Fprintln(out, "No image registry (registries/images.cue).")
 				return nil

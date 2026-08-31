@@ -84,7 +84,7 @@ func newPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if err := renderPlan(out, changes, cfg, noDiff); err != nil {
 				return err
 			}
@@ -127,7 +127,7 @@ func newDiffCmd() *cobra.Command {
 				return err
 			}
 			if stale {
-				return diffStale(cmd.OutOrStdout(), cfg)
+				return diffStale(styledOut(cmd.OutOrStdout()), cfg)
 			}
 			desired, err := generate(cfg.ProjectDir)
 			if err != nil {
@@ -137,7 +137,7 @@ func newDiffCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if err := printDiff(out, changes, cfg); err != nil {
 				return err
 			}
@@ -171,7 +171,7 @@ func newApplyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			dir := cfg.QuadletDir
 			changes, err := reconcile.ComputePlan(desired, dir)
 			if err != nil {

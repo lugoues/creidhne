@@ -90,7 +90,7 @@ func newImportComposeCmd() *cobra.Command {
 				// The document alone goes to stdout; the conversion report
 				// moves to stderr below, so `-o - > app.cue` stays valid CUE.
 				fmt.Fprint(out, string(res.CUE))
-				out = cmd.ErrOrStderr()
+				out = styledOut(cmd.ErrOrStderr())
 			} else {
 				if !filepath.IsAbs(dest) {
 					dest = filepath.Join(cfg.ProjectDir, dest)
@@ -103,6 +103,7 @@ func newImportComposeCmd() *cobra.Command {
 				if err := os.WriteFile(dest, res.CUE, 0o644); err != nil {
 					return err
 				}
+				out = styledOut(out)
 				abs, _ := filepath.Abs(dest)
 				fmt.Fprintf(out, "wrote %s\n", abs)
 			}

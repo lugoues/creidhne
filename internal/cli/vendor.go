@@ -68,7 +68,7 @@ func newVendorCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			cueMod := filepath.Join(cfg.ProjectDir, "cue.mod")
 			if _, err := os.Stat(cueMod); err != nil {
 				return fmt.Errorf("no cue.mod in %s (run crei init first)", cfg.ProjectDir)

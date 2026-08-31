@@ -460,7 +460,7 @@ func newRestartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			rows, pending, err := lifecycleRows(out, cfg, args, staleOnly, true)
 			if err != nil {
 				return err
@@ -548,7 +548,7 @@ func newLogsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			rows, _, err := lifecycleRows(out, cfg, args, staleOnly, false)
 			if err != nil {
 				return err

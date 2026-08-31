@@ -15,7 +15,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/lipgloss"
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -70,20 +71,30 @@ func styleEachLine(style func(string) string, s string) string {
 // printDiagnostic styles a translated cue error: finding lines loud, their
 // indented positions and the whole raw detail dim, so the actionable line
 // carries the color weight.
+// styledOut wraps a writer so styled output is downsampled to its color
+// profile and stripped entirely for non-terminals -- the detection lipgloss
+// v1 ran globally at render time, done per-writer in v2. Commands that emit
+// raw content (render, import's CUE document, graph formats, logs) write
+// their bytes unwrapped.
+func styledOut(w io.Writer) io.Writer {
+	return colorprofile.NewWriter(w, os.Environ())
+}
+
 func printDiagnostic(de *eval.DiagnosticError) {
+	stderr := styledOut(os.Stderr)
 	for i, line := range strings.Split(de.Findings, "\n") {
 		switch {
 		case i == 0:
-			fmt.Fprintln(os.Stderr, red("Error: "+line))
+			fmt.Fprintln(stderr, red("Error: "+line))
 		case strings.HasPrefix(line, "    "):
-			fmt.Fprintln(os.Stderr, dim(line))
+			fmt.Fprintln(stderr, dim(line))
 		default:
-			fmt.Fprintln(os.Stderr, red(line))
+			fmt.Fprintln(stderr, red(line))
 		}
 	}
 	if de.Detail != "" {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, styleEachLine(dim, de.Detail))
+		fmt.Fprintln(stderr, "")
+		fmt.Fprintln(stderr, styleEachLine(dim, de.Detail))
 	}
 }
 

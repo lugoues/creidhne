@@ -203,7 +203,7 @@ func newImageUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			only := map[string]bool{}
 			for _, a := range args {
 				only[a] = true

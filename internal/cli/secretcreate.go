@@ -66,7 +66,7 @@ func newSecretCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			existing, err := podmanListSecrets()
 			if err != nil {
 				return err

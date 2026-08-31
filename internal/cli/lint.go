@@ -95,7 +95,7 @@ func newLintCmd() *cobra.Command {
 			findings = append(findings, imageRuleFindings(focus, all, entries)...)
 			findings = levels.apply(findings)
 			sortFindings(findings)
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if len(findings) == 0 {
 				fmt.Fprintln(out, "lint: no findings")
 				return nil

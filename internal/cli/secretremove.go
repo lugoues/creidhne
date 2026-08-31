@@ -25,7 +25,7 @@ func newSecretRemoveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if len(entries) == 0 {
 				fmt.Fprintln(out, "No crei-owned secret registry (registries/secrets.cue).")
 				return nil

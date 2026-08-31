@@ -60,7 +60,7 @@ func newImageAddCmd() *cobra.Command {
 				}
 			}
 
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			// A bare ref means :latest (podman semantics); make the channel
 			// explicit so the entry is trackable and pins now.
 			if r.Tag == "" && r.Digest == "" {

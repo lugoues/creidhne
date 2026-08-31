@@ -83,7 +83,7 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			rows, _, err := lifecycleRows(out, cfg, args, false, false)
 			if err != nil {
 				return err
@@ -138,7 +138,7 @@ func newStopCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			rows, _, err := lifecycleRows(out, cfg, args, false, false)
 			if err != nil {
 				return err

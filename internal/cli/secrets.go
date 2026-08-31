@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"charm.land/huh/v2"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	lipgloss "charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/spf13/cobra"
 
 	"github.com/lugoues/creidhne/internal/podman"
@@ -161,7 +161,7 @@ func newSecretsPruneCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			referenced, err := referencedSecretNames(cfg)
 			if err != nil {
 				return err
@@ -235,7 +235,7 @@ func newSecretsAdoptCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			declared, err := declaredSecretNames(cfg)
 			if err != nil {
 				return err
@@ -285,7 +285,7 @@ func newSecretsListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			if len(declared) == 0 {
 				fmt.Fprintf(out, "No secrets declared (%q field or registries/secrets.cue).\n", cfg.SecretsField)
 				return nil

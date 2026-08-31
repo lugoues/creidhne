@@ -57,7 +57,7 @@ func newValidateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			// Named-rule findings (graph contracts, image registry): rules at
 			// severity error fail validation, warn reports, off is silent —
 			// per the [lint] config. crei lint shows the same findings.
@@ -102,7 +102,7 @@ func newConfigCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			printConfig(cmd.OutOrStdout(), cfg)
+			printConfig(styledOut(cmd.OutOrStdout()), cfg)
 			return nil
 		},
 	}

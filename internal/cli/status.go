@@ -104,7 +104,7 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := styledOut(cmd.OutOrStdout())
 			in, notes, err := gatherStatus(cfg, args)
 			if err != nil {
 				return err
