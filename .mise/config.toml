@@ -2,14 +2,12 @@
 # wraps common dev tasks; it is NOT required to *use* the binary.
 
 [tools]
+"aqua:cli/cli" = "latest"
+"aqua:tombi-toml/tombi" = "1.5.0"
+aube = "latest"
 cue = "0.17.1"
 go = "latest"
-aube = "latest"
-"npm:@withgraphite/graphite-cli" = "stable"
-"aqua:tombi-toml/tombi" = "1.5.0"
 golangci-lint = "2.13.2"
-"aqua:cli/cli" = "latest"
-"npm:@openai/codex" = "latest"
 
 [settings]
 activate_aggressive = true
