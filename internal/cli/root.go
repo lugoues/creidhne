@@ -76,6 +76,11 @@ func styleEachLine(style func(string) string, s string) string {
 // (spinners, in-place redraw) based on where output is going.
 func terminalFile(w io.Writer) (*os.File, bool) {
 	if cw, ok := w.(*colorprofile.Writer); ok {
+		// A NoTTY profile strips the cursor sequences live UIs depend on
+		// (e.g. a real PTY with TERM=dumb): stay on the plain path.
+		if cw.Profile == colorprofile.NoTTY {
+			return nil, false
+		}
 		w = cw.Forward
 	}
 	f, ok := w.(*os.File)
