@@ -7,7 +7,7 @@ go = "latest"
 aube = "latest"
 "npm:@withgraphite/graphite-cli" = "stable"
 "aqua:tombi-toml/tombi" = "0.9.20"
-golangci-lint = "2.12.2"
+golangci-lint = "2.13.2"
 "aqua:cli/cli" = "latest"
 "npm:@openai/codex" = "latest"
 
