@@ -1,6 +1,6 @@
 
 [Container]
-Image=docker.io/library/redis:7.2
+Image=docker.io/library/redis:7.2@sha256:74566c6910d13ae61e7ce73ebd3127438a1fe805b309b097c323142719ec8a5b
 LogDriver=journald
 LogOpt=label=QUADLET=app
 LogOpt=label=QUADLET_UNIT_NAME=app-tracker

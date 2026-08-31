@@ -19,12 +19,12 @@ services:
     cpus: 4.0
     mem_limit: 8G
   rabbitmq:
-    image: docker.io/library/rabbitmq:3
+    image: docker.io/library/rabbitmq:3@sha256:87178a0ee3e2f52980ba356d38646ed1056705ff2d5ff281f8965456eaa0c1e3
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
   init:
-    image: docker.io/library/bash:5
+    image: docker.io/library/bash:5@sha256:a19c811ee9e97fa8a080001d82b8e0ded303f0795cffdb1cbd162731bc8ce208
     entrypoint:
       - /bin/bash
       - -c

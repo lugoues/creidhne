@@ -1,7 +1,7 @@
 name: swarmy
 services:
   app:
-    image: docker.io/library/nginx:1.27
+    image: docker.io/library/nginx:1.27@sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d
     links: [db]
     pid: host
     ipc: host
@@ -26,7 +26,7 @@ services:
       update_config: {parallelism: 2}
       restart_policy: {condition: on-failure}
   db:
-    image: docker.io/library/postgres:16
+    image: docker.io/library/postgres:16@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
     mac_address: "02:42:ac:11:00:02"
 configs:
   app_config:
