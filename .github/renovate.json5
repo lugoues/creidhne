@@ -9,6 +9,13 @@
   // Batch the noise: everything lands early Monday, non-major Go updates in
   // one PR. Majors, actions, and mise tools stay individual.
   schedule: ['before 6am on monday'],
+  // Test fixtures are scanned otherwise: the quadlet manager reads Image= in
+  // the golden .container files and the compose manager reads the importer
+  // fixtures. Golden trees assert byte-equality; never touch them.
+  ignorePaths: [
+    '**/node_modules/**',
+    '**/testdata/**',
+  ],
   postUpdateOptions: ['gomodTidy'],
   packageRules: [
     {
