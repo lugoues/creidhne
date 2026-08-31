@@ -11,7 +11,6 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/huh/v2/spinner"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/registry"
@@ -20,7 +19,7 @@ import (
 // withSpinner runs a long fetch under huh's spinner when out is a terminal,
 // plainly otherwise (piped/CI output stays clean).
 func withSpinner(out io.Writer, title string, action func()) {
-	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+	if f, ok := terminalFile(out); ok {
 		if err := spinner.New().Title(title).WithOutput(f).Action(action).Run(); err == nil {
 			return
 		}

@@ -172,7 +172,7 @@ func newInitCmd() *cobra.Command {
 			"re-syncs the tooling).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInit(cmd.OutOrStdout(), flagProjectDir)
+			return runInit(styledOut(cmd.OutOrStdout()), flagProjectDir)
 		},
 	}
 }
@@ -351,7 +351,7 @@ func syncVendoredSchema(moduleRoot string) {
 		return
 	}
 	_ = os.RemoveAll(backup)
-	fmt.Fprintln(os.Stderr, dim("refreshed vendored schema in cue.mod/usr to match this crei build"))
+	fmt.Fprintln(styledOut(os.Stderr), dim("refreshed vendored schema in cue.mod/usr to match this crei build"))
 }
 
 // vendoredMatchesEmbedded reports whether the vendored copy is exactly the

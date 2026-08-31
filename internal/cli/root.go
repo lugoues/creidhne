@@ -49,7 +49,7 @@ func Execute() {
 		if errors.As(err, &de) {
 			printDiagnostic(de)
 		} else if msg := err.Error(); msg != "" {
-			fmt.Fprintln(os.Stderr, styleEachLine(red, "Error: "+msg))
+			fmt.Fprintln(styledOut(os.Stderr), styleEachLine(red, "Error: "+msg))
 		}
 		os.Exit(1)
 	}
@@ -71,6 +71,20 @@ func styleEachLine(style func(string) string, s string) string {
 // printDiagnostic styles a translated cue error: finding lines loud, their
 // indented positions and the whole raw detail dim, so the actionable line
 // carries the color weight.
+// terminalFile unwraps a styledOut writer and reports the underlying file
+// when it is an interactive terminal, for callers that switch to live UIs
+// (spinners, in-place redraw) based on where output is going.
+func terminalFile(w io.Writer) (*os.File, bool) {
+	if cw, ok := w.(*colorprofile.Writer); ok {
+		w = cw.Forward
+	}
+	f, ok := w.(*os.File)
+	if !ok || !term.IsTerminal(int(f.Fd())) {
+		return nil, false
+	}
+	return f, true
+}
+
 // styledOut wraps a writer so styled output is downsampled to its color
 // profile and stripped entirely for non-terminals -- the detection lipgloss
 // v1 ran globally at render time, done per-writer in v2. Commands that emit

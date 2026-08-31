@@ -67,8 +67,8 @@ var spinInterval = 100 * time.Millisecond
 // restartLive reports whether out is an interactive terminal, so restart can
 // redraw its unit block in place. A package var so tests exercise both paths.
 var restartLive = func(out io.Writer) bool {
-	f, ok := out.(*os.File)
-	return ok && term.IsTerminal(int(f.Fd()))
+	_, ok := terminalFile(out)
+	return ok
 }
 
 // restartTracker renders a restart's progress: each unit's line carries a
