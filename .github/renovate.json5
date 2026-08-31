@@ -30,5 +30,14 @@
       matchUpdateTypes: ['major', 'minor'],
       dependencyDashboardApproval: true,
     },
+    {
+      // lipgloss v2 lives at charm.land/lipgloss/v2 (renovate writes the
+      // broken github.com path) and drops automatic color-profile
+      // degradation, which the styled diff output relies on. Park the major
+      // until that migration is done deliberately.
+      matchPackageNames: ['github.com/charmbracelet/lipgloss'],
+      matchUpdateTypes: ['major'],
+      dependencyDashboardApproval: true,
+    },
   ],
 }
