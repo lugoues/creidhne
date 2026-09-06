@@ -1,9 +1,13 @@
 package creidhne_test
 
 import (
+	"bytes"
 	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
+
+	creidhne "github.com/lugoues/creidhne"
 )
 
 // TestReadmeInstallVersionsAgree: the README shows the release version in two
@@ -24,5 +28,19 @@ func TestReadmeInstallVersionsAgree(t *testing.T) {
 	}
 	if got, want := string(script[1]), string(mise[1]); got != want {
 		t.Fatalf("README install versions disagree: mise example says %s, download script says %s", want, got)
+	}
+}
+
+// The example project ships a copy of the config schema (what `crei init`
+// writes) so editors validate offline. It is a build artifact checked into the
+// tree, so nothing but this test stops it drifting from the embedded original
+// when a config key is added.
+func TestExampleConfigSchemaMatchesEmbedded(t *testing.T) {
+	onDisk, err := os.ReadFile(filepath.Join("example", ".crei", "config.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(onDisk, creidhne.ConfigSchema) {
+		t.Error("example/.crei/config.schema.json is stale; copy crei.schema.json over it")
 	}
 }
