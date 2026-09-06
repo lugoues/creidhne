@@ -28,6 +28,7 @@ func timeoutRuleFindings(focus []eval.Quadlet) []ruleFinding {
 			if u.Kind != "container" && u.Kind != "pod" {
 				continue
 			}
+			out = append(out, startupRuleFindings(u)...)
 			grace, graceSet := stopGrace(u)
 			stop, stopKey, stopSet, infinite := serviceStopTimeout(u.Data)
 			switch {
@@ -52,6 +53,53 @@ func timeoutRuleFindings(focus []eval.Quadlet) []ruleFinding {
 		}
 	}
 	return out
+}
+
+// restartingModes are the Restart= values that make systemd relaunch the unit,
+// so the RestartSec delay between attempts actually matters.
+var restartingModes = map[string]bool{
+	"always": true, "on-success": true, "on-failure": true,
+	"on-abnormal": true, "on-watchdog": true, "on-abort": true,
+}
+
+// startupRuleFindings checks the two [Service] settings whose absence quietly
+// hands start-up and crash-loop behavior to a host default the project cannot
+// see. Both are keyed on something the unit itself declares, so neither fires
+// on a container that never asked for the coupling.
+func startupRuleFindings(u eval.UnitRecord) []ruleFinding {
+	var out []ruleFinding
+	svc, _ := u.Data["Service"].(map[string]any)
+
+	// Notify=healthy withholds READY until the first healthcheck passes, so
+	// start-up is bounded by the health cadence rather than by the process
+	// launching, and DefaultTimeoutStartSec (a host setting, not the
+	// project's) decides when a never-healthy container is killed.
+	if u.Kind == "container" && !hasServiceKey(svc, "TimeoutStartSec", "TimeoutSec") {
+		if con, _ := u.Data["Container"].(map[string]any); con["Notify"] == "healthy" {
+			out = append(out, ruleFinding{Rule: "service/start-timeout", Unit: u.Filename,
+				Message: "Notify=healthy gates start-up on the healthcheck but no TimeoutStartSec is set: a container that never goes healthy burns the host's DefaultTimeoutStartSec (typically 90s); set it from HealthStartPeriod plus a HealthInterval or two"})
+		}
+	}
+
+	// systemd's RestartSec default is 100ms, so a container that fails on
+	// startup relaunches as fast as podman can go, burying the real error.
+	if mode, ok := svc["Restart"].(string); ok && restartingModes[mode] && !hasServiceKey(svc, "RestartSec") {
+		out = append(out, ruleFinding{Rule: "service/restart-delay", Unit: u.Filename,
+			Message: fmt.Sprintf("Restart=%s without RestartSec: systemd's 100ms default relaunches a failing container as fast as podman allows, flooding the journal; set RestartSec (5s is a reasonable floor)", mode)})
+	}
+	return out
+}
+
+// hasServiceKey reports whether [Service] sets any of keys. Presence is the
+// whole test: an explicit "infinity" or 0 is a deliberate choice, not an
+// omission.
+func hasServiceKey(svc map[string]any, keys ...string) bool {
+	for _, k := range keys {
+		if _, ok := svc[k]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // stopGrace returns the unit's effective podman grace period in seconds.

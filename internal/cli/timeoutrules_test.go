@@ -102,3 +102,65 @@ func TestParseTimeSpan(t *testing.T) {
 		}
 	}
 }
+
+// TestStartupRulesFireOnlyWhenCoupled: both rules key on something the unit
+// declared (Notify=healthy, Restart=), so a container that asked for neither
+// stays quiet. Warnings, so validate still passes.
+func TestStartupRulesFireOnlyWhenCoupled(t *testing.T) {
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+gated: creidhne.#Quadlet & {name: "gated", units: #container: {
+	Container: {Image: "docker.io/x", Notify: "healthy", HealthCmd: "CMD /bin/true"}
+	Service: Restart: "on-failure"
+}}
+plain: creidhne.#Quadlet & {name: "plain", units: #container: Container: {Image: "docker.io/y"}}
+norestart: creidhne.#Quadlet & {name: "norestart", units: #container: {
+	Container: {Image: "docker.io/z"}
+	Service: Restart: "no"
+}}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("both findings are warnings, validate must pass: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"Notify=healthy gates start-up on the healthcheck but no TimeoutStartSec is set",
+		"Restart=on-failure without RestartSec",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing warning %q:\n%s", want, out)
+		}
+	}
+	// Restart=no never relaunches, and a container with neither coupling has
+	// nothing to warn about.
+	for _, quiet := range []string{"plain.container", "norestart.container"} {
+		if strings.Contains(out, quiet) {
+			t.Fatalf("%s must not be flagged:\n%s", quiet, out)
+		}
+	}
+}
+
+// TestStartupRulesSatisfied: setting the fields silences both, including via
+// the TimeoutSec shorthand, which covers start as well as stop.
+func TestStartupRulesSatisfied(t *testing.T) {
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+explicit: creidhne.#Quadlet & {name: "explicit", units: #container: {
+	Container: {Image: "docker.io/x", Notify: "healthy", HealthCmd: "CMD /bin/true"}
+	Service: {Restart: "on-failure", TimeoutStartSec: "90s", RestartSec: "5s"}
+}}
+shorthand: creidhne.#Quadlet & {name: "shorthand", units: #container: {
+	Container: {Image: "docker.io/y", Notify: "healthy", HealthCmd: "CMD /bin/true"}
+	Service: {TimeoutSec: "120s"}
+}}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("validate must pass: %v\n%s", err, out)
+	}
+	for _, unwanted := range []string{"service/start-timeout", "service/restart-delay"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("%s must be silenced:\n%s", unwanted, out)
+		}
+	}
+}
