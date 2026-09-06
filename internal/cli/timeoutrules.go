@@ -66,6 +66,25 @@ var restartingModes = map[string]bool{
 	"on-abnormal": true, "on-watchdog": true, "on-abort": true,
 }
 
+// oneshotModes are the two Restart= values systemd refuses outright on a
+// Type=oneshot service ("Refusing", at unit load).
+var oneshotModes = map[string]bool{"always": true, "on-success": true}
+
+// oneshotKinds are the unit kinds quadlet generates as Type=oneshot, so their
+// [Service] Type is oneshot unless the unit overrides it.
+var oneshotKinds = map[string]bool{
+	"build": true, "image": true, "network": true, "volume": true, "artifact": true,
+}
+
+// isOneshot reports the unit's effective service type, honoring an explicit
+// Type= over the kind's quadlet-generated default.
+func isOneshot(u eval.UnitRecord, svc map[string]any) bool {
+	if t, ok := svc["Type"].(string); ok {
+		return t == "oneshot"
+	}
+	return oneshotKinds[u.Kind]
+}
+
 // startupRuleFindings checks the two [Service] settings whose absence quietly
 // hands start-up and crash-loop behavior to a host default the project cannot
 // see. Both are keyed on something the unit itself declares, so neither fires
@@ -85,11 +104,20 @@ func startupRuleFindings(u eval.UnitRecord) []ruleFinding {
 		}
 	}
 
-	// systemd's RestartSec default is 100ms, so a container that fails on
-	// startup relaunches as fast as podman can go, burying the real error.
-	if mode, ok := svc["Restart"].(string); ok && restartingModes[mode] && !hasServiceKey(svc, "RestartSec") {
+	mode, hasMode := svc["Restart"].(string)
+	switch {
+	case !hasMode || !restartingModes[mode]:
+		// Restart=no (or unset) never relaunches.
+	case oneshotModes[mode] && isOneshot(u, svc):
+		// No RestartSec advice here: systemd refuses to load the unit at all,
+		// so the delay between attempts is not the problem.
+		out = append(out, ruleFinding{Rule: "service/oneshot-restart", Unit: u.Filename,
+			Message: fmt.Sprintf("Restart=%s is rejected on a Type=oneshot service: systemd refuses to load the unit; use on-failure/on-abnormal/on-abort, or set an explicit non-oneshot Type", mode)})
+	case !hasServiceKey(svc, "RestartSec"):
+		// systemd's RestartSec default is 100ms, so a unit that fails on
+		// startup relaunches as fast as podman can go, burying the real error.
 		out = append(out, ruleFinding{Rule: "service/restart-delay", Unit: u.Filename,
-			Message: fmt.Sprintf("Restart=%s without RestartSec: systemd's 100ms default relaunches a failing container as fast as podman allows, flooding the journal; set RestartSec (5s is a reasonable floor)", mode)})
+			Message: fmt.Sprintf("Restart=%s without RestartSec: systemd's 100ms default relaunches a failing unit as fast as podman allows, flooding the journal; set RestartSec (5s is a reasonable floor)", mode)})
 	}
 	return out
 }

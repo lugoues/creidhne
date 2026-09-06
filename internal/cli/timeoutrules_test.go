@@ -170,3 +170,39 @@ shorthand: creidhne.#Quadlet & {name: "shorthand", units: #container: {
 		}
 	}
 }
+
+// TestOneshotRestartRejected: systemd refuses Restart=always/on-success on a
+// Type=oneshot service, so the RestartSec advice would be useless there; the
+// unit gets the accurate finding instead, and it is an error, not a warning.
+func TestOneshotRestartRejected(t *testing.T) {
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+vol: creidhne.#Quadlet & {name: "vol", units: #volume: {
+	Volume: {}
+	Service: Restart: "always"
+}}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err == nil || !strings.Contains(out, "service/oneshot-restart") {
+		t.Fatalf("Restart=always on a oneshot must be an error: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "service/restart-delay") {
+		t.Fatalf("RestartSec advice cannot fix a unit systemd refuses to load:\n%s", out)
+	}
+
+	// on-failure is legal on a oneshot, so that path keeps the delay advice.
+	proj = setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+vol: creidhne.#Quadlet & {name: "vol", units: #volume: {
+	Volume: {}
+	Service: Restart: "on-failure"
+}}
+`)
+	out, err = runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("on-failure on a oneshot is legal: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "service/restart-delay") {
+		t.Fatalf("expected the delay warning:\n%s", out)
+	}
+}

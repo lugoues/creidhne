@@ -38,6 +38,7 @@ var ruleDefaults = map[string]string{
 	"service/stop-timeout-default": sevWarn,  // incoherent against assumed 10s/90s defaults
 	"service/start-timeout":        sevWarn,  // Notify=healthy without TimeoutStartSec
 	"service/restart-delay":        sevWarn,  // Restart= without RestartSec (100ms default)
+	"service/oneshot-restart":      sevError, // Restart=always/on-success on Type=oneshot: systemd refuses the unit
 	// Image registry (imagerules.go).
 	"image/unpinned": sevWarn, // registry entry with a tag but no digest
 	// Off by default: not using the registry is a supported choice ("if it's
