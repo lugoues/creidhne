@@ -76,9 +76,13 @@ var oneshotKinds = map[string]bool{
 	"build": true, "image": true, "network": true, "volume": true, "artifact": true,
 }
 
-// isOneshot reports the unit's effective service type, honoring an explicit
-// Type= over the kind's quadlet-generated default.
+// isOneshot reports the unit's effective service type as quadlet will
+// generate it: an explicit Type= survives for every kind except pods, which
+// ConvertPod unconditionally rewrites to forking.
 func isOneshot(u eval.UnitRecord, svc map[string]any) bool {
+	if u.Kind == "pod" {
+		return false
+	}
 	if t, ok := svc["Type"].(string); ok {
 		return t == "oneshot"
 	}

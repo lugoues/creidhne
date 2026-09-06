@@ -106,7 +106,7 @@ type restartTracker struct {
 	// 0 waits forever. A unit whose job is still queued is not on this
 	// clock: systemd's own TimeoutStartSec governs that window.
 	settleWait time.Duration
-	stalled map[string]bool // units that blew the settle budget
+	stalled    map[string]bool // units that blew the settle budget
 	// settleFrom starts the current unqueued-and-transitional streak;
 	// settleAccrued banks the streaks before it. Split because an
 	// auto-restart queues a fresh job partway through: that window belongs to

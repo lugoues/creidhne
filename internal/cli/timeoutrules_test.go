@@ -190,6 +190,20 @@ vol: creidhne.#Quadlet & {name: "vol", units: #volume: {
 		t.Fatalf("RestartSec advice cannot fix a unit systemd refuses to load:\n%s", out)
 	}
 
+	// Quadlet forces Type=forking on pods, so an explicit oneshot there never
+	// reaches systemd and Restart=always is fine; only the delay advice applies.
+	proj = setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+p: creidhne.#Quadlet & {name: "p", units: #pod: {
+	Pod: {}
+	Service: {Type: "oneshot", Restart: "always"}
+}}
+`)
+	out, err = runCmd(t, "--dir", proj, "validate")
+	if err != nil || strings.Contains(out, "service/oneshot-restart") || !strings.Contains(out, "service/restart-delay") {
+		t.Fatalf("pod must not be treated as oneshot: %v\n%s", err, out)
+	}
+
 	// on-failure is legal on a oneshot, so that path keeps the delay advice.
 	proj = setupProject(t, `package config
 import "github.com/lugoues/creidhne@v0"
