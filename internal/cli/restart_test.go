@@ -213,12 +213,14 @@ func TestRestartReportsFailed(t *testing.T) {
 
 // fakeClock advances restartNow by step on every restartSleep, so the settle
 // budget is exercised without real waiting.
-func fakeClock(t *testing.T, step time.Duration) {
+func fakeClock(t *testing.T, step time.Duration) func() time.Duration {
 	t.Helper()
-	now, oldNow, oldSleep := time.Unix(0, 0), restartNow, restartSleep
+	start := time.Unix(0, 0)
+	now, oldNow, oldSleep := start, restartNow, restartSleep
 	t.Cleanup(func() { restartNow, restartSleep = oldNow, oldSleep })
 	restartNow = func() time.Time { return now }
 	restartSleep = func(time.Duration) { now = now.Add(step) }
+	return func() time.Duration { return now.Sub(start) }
 }
 
 // A unit whose job clears while it is still activating is flapping under
@@ -235,7 +237,7 @@ func TestRestartStallsOnActivating(t *testing.T) {
 			}, nil
 		},
 	)
-	fakeClock(t, time.Second)
+	_ = fakeClock(t, time.Second)
 
 	var buf bytes.Buffer
 	err := trackedRestart(&buf, strings.NewReader(""), rowsOf("flap.service"), false, false, 5*time.Second)
@@ -267,7 +269,7 @@ func TestRestartWaitsOutTransientActivating(t *testing.T) {
 			return map[string]systemd.UnitStatus{"slow.service": st}, nil
 		},
 	)
-	fakeClock(t, time.Second)
+	_ = fakeClock(t, time.Second)
 
 	var buf bytes.Buffer
 	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("slow.service"), false, false, 30*time.Second); err != nil {
@@ -275,5 +277,51 @@ func TestRestartWaitsOutTransientActivating(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "✓") {
 		t.Fatalf("a unit that settled must be checked off:\n%s", buf.String())
+	}
+}
+
+// The settle budget covers the window after a unit's job clears, not time a
+// queued job already owns: systemd's TimeoutStartSec bounds that. An
+// auto-restart enqueues a fresh job partway through, so the budget must pause
+// for it rather than draining against wall time the unit never owed.
+func TestSettleBudgetPausesWhileJobQueued(t *testing.T) {
+	forceRestartLive(t, false)
+	polls := 0
+	stubRestart(t,
+		func(bool, []string) error { return nil },
+		func(bool, []string) (map[string]string, error) {
+			polls++
+			// A replacement job occupies polls 4..12.
+			if polls >= 4 && polls <= 12 {
+				return map[string]string{"flap.service": "running"}, nil
+			}
+			return map[string]string{}, nil
+		},
+		func(bool, []string) (map[string]systemd.UnitStatus, error) {
+			return map[string]systemd.UnitStatus{
+				"flap.service": {ActiveState: "activating", SubState: "auto-restart"},
+			}, nil
+		},
+	)
+	elapsed := fakeClock(t, time.Second)
+
+	var buf bytes.Buffer
+	err := trackedRestart(&buf, strings.NewReader(""), rowsOf("flap.service"), false, false, 5*time.Second)
+	if err == nil {
+		t.Fatal("a unit stuck activating must still fail once its own budget runs out")
+	}
+	// Nine of those seconds belonged to the queued job, so a 5s budget cannot
+	// have expired before ~14s of wall time.
+	if got := elapsed(); got < 13*time.Second {
+		t.Fatalf("budget ran during the queued job: gave up after %s, want >= 13s", got)
+	}
+}
+
+// systemd's own man page lists six ActiveStates, but maintenance is a real one
+// (unit_active_state_table): a unit in it has not landed and must not be
+// checked off as done.
+func TestMaintenanceIsNotSettled(t *testing.T) {
+	if !transitional("maintenance") {
+		t.Fatal("maintenance must count as still transitional")
 	}
 }

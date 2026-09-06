@@ -417,7 +417,9 @@ func TestResolveConfigRestartTimeout(t *testing.T) {
 		t.Fatalf("zero: %s (%s)", cfg.RestartTimeout, cfg.restartTimeoutSrc)
 	}
 
-	for _, bad := range []string{"restart_timeout = \"soon\"\n", "restart_timeout = \"-5s\"\n"} {
+	// An explicit "" is a malformed duration, not an absent key: silently
+	// defaulting it would be the same trap a mistyped quadlet_dir is.
+	for _, bad := range []string{"restart_timeout = \"soon\"\n", "restart_timeout = \"-5s\"\n", "restart_timeout = \"\"\n"} {
 		d := t.TempDir()
 		writeConfig(t, d, bad)
 		flagProjectDir = d

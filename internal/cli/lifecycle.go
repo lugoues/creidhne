@@ -39,7 +39,7 @@ var (
 // job queue alone reports success on a crash loop.
 func transitional(activeState string) bool {
 	switch activeState {
-	case "activating", "deactivating", "reloading", "refreshing":
+	case "activating", "deactivating", "reloading", "refreshing", "maintenance":
 		return true
 	}
 	return false
@@ -106,8 +106,22 @@ type restartTracker struct {
 	// 0 waits forever. A unit whose job is still queued is not on this
 	// clock: systemd's own TimeoutStartSec governs that window.
 	settleWait time.Duration
-	stalled    map[string]bool      // units that blew the settle budget
-	settling   map[string]time.Time // first "job cleared, still transitional" sighting
+	stalled map[string]bool // units that blew the settle budget
+	// settleFrom starts the current unqueued-and-transitional streak;
+	// settleAccrued banks the streaks before it. Split because an
+	// auto-restart queues a fresh job partway through: that window belongs to
+	// systemd's TimeoutStartSec, so the budget pauses rather than running
+	// down against wall time the unit did not owe.
+	settleFrom    map[string]time.Time
+	settleAccrued map[string]time.Duration
+}
+
+// bankSettle stops a unit's settle clock, keeping what it has already spent.
+func (t *restartTracker) bankSettle(unit string, now time.Time) {
+	if from, running := t.settleFrom[unit]; running {
+		t.settleAccrued[unit] += now.Sub(from)
+		delete(t.settleFrom, unit)
+	}
 }
 
 // trackedRestart lists the units, optionally confirms, then enqueues a
@@ -133,7 +147,8 @@ func trackedTransition(out io.Writer, in io.Reader, rows []statusRow, userScope 
 		return nil
 	}
 	t := &restartTracker{out: out, rows: rows, units: units, verb: verb, notes: preDone, userScope: userScope,
-		done: map[string]bool{}, settleWait: settleWait, stalled: map[string]bool{}, settling: map[string]time.Time{}}
+		done: map[string]bool{}, settleWait: settleWait, stalled: map[string]bool{},
+		settleFrom: map[string]time.Time{}, settleAccrued: map[string]time.Duration{}}
 	for _, u := range units {
 		if _, ok := preDone[u]; ok {
 			t.done[u] = true
@@ -158,9 +173,17 @@ func (t *restartTracker) poll() error {
 	if err != nil {
 		return err
 	}
+	now := restartNow()
 	var cleared []string
 	for _, u := range t.enqueue {
-		if _, still := pending[u]; still || t.done[u] || t.stalled[u] {
+		if t.done[u] || t.stalled[u] {
+			continue
+		}
+		if _, still := pending[u]; still {
+			// A queued job owns this window; systemd's own TimeoutStartSec
+			// bounds it, so stop the settle clock rather than spending the
+			// budget on it.
+			t.bankSettle(u, now)
 			continue
 		}
 		cleared = append(cleared, u)
@@ -172,21 +195,19 @@ func (t *restartTracker) poll() error {
 	if err != nil {
 		return err
 	}
-	now := restartNow()
 	for _, u := range cleared {
 		st, known := statuses[u]
 		// No state at all is not something waiting can fix; let failures()
 		// report the missing unit.
 		if !known || !transitional(st.ActiveState) {
 			t.done[u] = true
-			delete(t.settling, u)
+			delete(t.settleFrom, u)
 			continue
 		}
-		if _, seen := t.settling[u]; !seen {
-			t.settling[u] = now
-			continue
+		if _, running := t.settleFrom[u]; !running {
+			t.settleFrom[u] = now
 		}
-		if t.settleWait > 0 && now.Sub(t.settling[u]) >= t.settleWait {
+		if t.settleWait > 0 && t.settleAccrued[u]+now.Sub(t.settleFrom[u]) >= t.settleWait {
 			t.stalled[u] = true
 		}
 	}

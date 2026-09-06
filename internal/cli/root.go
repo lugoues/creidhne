@@ -225,7 +225,7 @@ type fileConfig struct {
 	SecretsField     string            `toml:"secrets_field"`
 	ContextLines     *int              `toml:"context_lines"`     // pointer: distinguish unset from an explicit 0 (unlimited)
 	ContextThreshold *int              `toml:"context_threshold"` // pointer: unset = auto (2*context_lines+4)
-	RestartTimeout   string            `toml:"restart_timeout"`   // duration string ("90s", "2m"); "0" waits forever
+	RestartTimeout   *string           `toml:"restart_timeout"`   // pointer: an explicit "" is a malformed duration, not "unset"
 	Style            styleConfig       `toml:"style"`
 	Lint             map[string]string `toml:"lint"`
 }
@@ -479,13 +479,13 @@ func resolveConfig() (config, error) {
 	// health start period settles, short enough that a crash loop reports
 	// rather than spinning.
 	restartTimeout, restartTimeoutSrc := 60*time.Second, "default"
-	if fc.RestartTimeout != "" {
-		d, err := time.ParseDuration(fc.RestartTimeout)
+	if fc.RestartTimeout != nil {
+		d, err := time.ParseDuration(*fc.RestartTimeout)
 		if err != nil {
-			return config{}, fmt.Errorf("invalid restart_timeout %q in %s: %w", fc.RestartTimeout, configRelPath, err)
+			return config{}, fmt.Errorf("invalid restart_timeout %q in %s: %w", *fc.RestartTimeout, configRelPath, err)
 		}
 		if d < 0 {
-			return config{}, fmt.Errorf("invalid restart_timeout %q in %s (want >= 0; 0 waits forever)", fc.RestartTimeout, configRelPath)
+			return config{}, fmt.Errorf("invalid restart_timeout %q in %s (want >= 0; 0 waits forever)", *fc.RestartTimeout, configRelPath)
 		}
 		restartTimeout, restartTimeoutSrc = d, configRelPath
 	}
