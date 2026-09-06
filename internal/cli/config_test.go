@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -425,6 +426,36 @@ func TestResolveConfigRestartTimeout(t *testing.T) {
 		flagProjectDir = d
 		if _, err := resolveConfig(); err == nil {
 			t.Fatalf("%q must be a hard error", bad)
+		}
+	}
+}
+
+// The schema drives offline editor validation, so its restart_timeout pattern
+// must agree with time.ParseDuration: a form the CLI accepts must not show up
+// as an editor error, and vice versa.
+func TestConfigSchemaDurationPatternMatchesParser(t *testing.T) {
+	var schema struct {
+		Properties map[string]struct {
+			Pattern string `json:"pattern"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(creidhne.ConfigSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	re, err := regexp.Compile(schema.Properties["restart_timeout"].Pattern)
+	if err != nil {
+		t.Fatalf("restart_timeout pattern does not compile: %v", err)
+	}
+	// Odd but legal Go durations alongside the ordinary ones, plus forms the
+	// CLI rejects (negative, empty, unparseable).
+	for _, v := range []string{"60s", "2m", "0", "+0", "0s", "1m30s", "500ms", "1.5h", ".5s", "1.s", "+1s", "1μs", "1µs", "", "soon", "-5s", "5S"} {
+		d, perr := time.ParseDuration(v)
+		want := perr == nil && d >= 0
+		if v == "" {
+			want = false
+		}
+		if got := re.MatchString(v); got != want {
+			t.Errorf("%q: schema accepts=%v, CLI accepts=%v", v, got, want)
 		}
 	}
 }
