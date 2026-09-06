@@ -109,7 +109,7 @@ func newStartCmd() *cobra.Command {
 				fmt.Fprintf(out, "Nothing to start: all %d unit(s) already running.\n", len(rows))
 				return nil
 			}
-			return trackedTransition(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), false, startSpec, preDone)
+			return trackedTransition(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), false, startSpec, preDone, cfg.RestartTimeout)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "start every quadlet in the project")
@@ -161,7 +161,7 @@ func newStopCmd() *cobra.Command {
 				fmt.Fprintf(out, "Nothing to stop: no unit(s) running.\n")
 				return nil
 			}
-			return trackedTransition(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), !yes, stopSpec, preDone)
+			return trackedTransition(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), !yes, stopSpec, preDone, cfg.RestartTimeout)
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "stop every quadlet in the project")

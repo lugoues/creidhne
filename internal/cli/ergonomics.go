@@ -151,6 +151,12 @@ func printConfig(out io.Writer, cfg config) {
 	row("context lines", cl, cfg.contextLinesSource)
 	row("context threshold", fmt.Sprintf("%d", cfg.ContextThreshold), cfg.contextThresholdSrc)
 
+	rt := cfg.RestartTimeout.String()
+	if cfg.RestartTimeout == 0 {
+		rt = "wait forever"
+	}
+	row("restart timeout", rt, cfg.restartTimeoutSrc)
+
 	cfgFile, cfgSource := cfg.configFilePath, "loaded"
 	if cfgFile == "" {
 		cfgFile, cfgSource = filepath.Join(cfg.ProjectDir, ".crei", "config.toml"), "not found"

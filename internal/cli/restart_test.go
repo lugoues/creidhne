@@ -65,7 +65,7 @@ func TestPlainRestartStraggler(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("fast.service", "slow.service"), false, false); err != nil {
+	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("fast.service", "slow.service"), false, false, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if !enqueued {
@@ -108,7 +108,7 @@ func TestLiveRestartRedraws(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("a.service", "b.service"), false, false); err != nil {
+	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("a.service", "b.service"), false, false, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -141,7 +141,7 @@ func TestLiveRestartConfirmInPlace(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, strings.NewReader("y\n"), rowsOf("a.service"), false, true); err != nil {
+	if err := trackedRestart(&buf, strings.NewReader("y\n"), rowsOf("a.service"), false, true, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -175,7 +175,7 @@ func TestLiveRestartConfirmAborts(t *testing.T) {
 		func(bool, []string) (map[string]systemd.UnitStatus, error) { return nil, nil },
 	)
 	var buf bytes.Buffer
-	if err := trackedRestart(&buf, strings.NewReader("n\n"), rowsOf("a.service"), false, true); err != nil {
+	if err := trackedRestart(&buf, strings.NewReader("n\n"), rowsOf("a.service"), false, true, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if enqueued {
@@ -199,7 +199,7 @@ func TestRestartReportsFailed(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	err := trackedRestart(&buf, strings.NewReader(""), rowsOf("bad.service"), false, false)
+	err := trackedRestart(&buf, strings.NewReader(""), rowsOf("bad.service"), false, false, time.Minute)
 	if err == nil {
 		t.Fatal("a unit that came back failed must return an error")
 	}
@@ -208,5 +208,72 @@ func TestRestartReportsFailed(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "✗") || !strings.Contains(buf.String(), "bad.service") {
 		t.Fatalf("failure not marked:\n%s", buf.String())
+	}
+}
+
+// fakeClock advances restartNow by step on every restartSleep, so the settle
+// budget is exercised without real waiting.
+func fakeClock(t *testing.T, step time.Duration) {
+	t.Helper()
+	now, oldNow, oldSleep := time.Unix(0, 0), restartNow, restartSleep
+	t.Cleanup(func() { restartNow, restartSleep = oldNow, oldSleep })
+	restartNow = func() time.Time { return now }
+	restartSleep = func(time.Duration) { now = now.Add(step) }
+}
+
+// A unit whose job clears while it is still activating is flapping under
+// Restart=, not up: it must not be checked off, and once the settle budget is
+// gone the restart fails rather than reporting success.
+func TestRestartStallsOnActivating(t *testing.T) {
+	forceRestartLive(t, false)
+	stubRestart(t,
+		func(bool, []string) error { return nil },
+		func(bool, []string) (map[string]string, error) { return map[string]string{}, nil },
+		func(bool, []string) (map[string]systemd.UnitStatus, error) {
+			return map[string]systemd.UnitStatus{
+				"flap.service": {ActiveState: "activating", SubState: "auto-restart"},
+			}, nil
+		},
+	)
+	fakeClock(t, time.Second)
+
+	var buf bytes.Buffer
+	err := trackedRestart(&buf, strings.NewReader(""), rowsOf("flap.service"), false, false, 5*time.Second)
+	if err == nil {
+		t.Fatal("a unit stuck activating must fail the restart")
+	}
+	if !strings.Contains(err.Error(), "flap.service") || !strings.Contains(err.Error(), "mid-transition") {
+		t.Fatalf("error should name the unit and why: %v", err)
+	}
+	if strings.Contains(buf.String(), "✓") {
+		t.Fatalf("a stalled unit must not be checked off:\n%s", buf.String())
+	}
+}
+
+// The same wait must not punish a unit that is merely slow to settle: one that
+// reaches active inside the budget succeeds.
+func TestRestartWaitsOutTransientActivating(t *testing.T) {
+	forceRestartLive(t, false)
+	polls := 0
+	stubRestart(t,
+		func(bool, []string) error { return nil },
+		func(bool, []string) (map[string]string, error) { return map[string]string{}, nil },
+		func(bool, []string) (map[string]systemd.UnitStatus, error) {
+			polls++
+			st := systemd.UnitStatus{ActiveState: "activating", SubState: "start"}
+			if polls > 2 {
+				st = systemd.UnitStatus{ActiveState: "active", SubState: "running"}
+			}
+			return map[string]systemd.UnitStatus{"slow.service": st}, nil
+		},
+	)
+	fakeClock(t, time.Second)
+
+	var buf bytes.Buffer
+	if err := trackedRestart(&buf, strings.NewReader(""), rowsOf("slow.service"), false, false, 30*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "✓") {
+		t.Fatalf("a unit that settled must be checked off:\n%s", buf.String())
 	}
 }

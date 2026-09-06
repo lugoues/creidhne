@@ -59,7 +59,7 @@ func TestTrackedTransitionPreDone(t *testing.T) {
 	rows := rowsOf("up.service", "down.service")
 	var buf bytes.Buffer
 	err := trackedTransition(&buf, strings.NewReader(""), rows, false, false, startSpec,
-		map[string]string{"up.service": "already running"})
+		map[string]string{"up.service": "already running"}, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

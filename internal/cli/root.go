@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"charm.land/huh/v2"
@@ -197,6 +198,12 @@ type config struct {
 	// ContextThreshold is the minimum run length before truncation engages
 	// (auto when unset: 2*ContextLines+4, so at least 4 lines are hidden).
 	ContextThreshold int
+	// RestartTimeout bounds how long restart/start/stop wait on a unit that
+	// is still transitional after its systemd job has cleared (a crash loop
+	// under Restart= has no queued job to wait on). 0 waits forever. Units
+	// with a job still queued are governed by systemd's own TimeoutStartSec,
+	// not this.
+	RestartTimeout time.Duration
 
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
@@ -206,6 +213,7 @@ type config struct {
 	secretsFieldSource  string
 	contextLinesSource  string
 	contextThresholdSrc string
+	restartTimeoutSrc   string
 	configFilePath      string // config file path if present, else ""
 }
 
@@ -217,6 +225,7 @@ type fileConfig struct {
 	SecretsField     string            `toml:"secrets_field"`
 	ContextLines     *int              `toml:"context_lines"`     // pointer: distinguish unset from an explicit 0 (unlimited)
 	ContextThreshold *int              `toml:"context_threshold"` // pointer: unset = auto (2*context_lines+4)
+	RestartTimeout   string            `toml:"restart_timeout"`   // duration string ("90s", "2m"); "0" waits forever
 	Style            styleConfig       `toml:"style"`
 	Lint             map[string]string `toml:"lint"`
 }
@@ -465,6 +474,21 @@ func resolveConfig() (config, error) {
 			threshold, thresholdSource = *fc.ContextThreshold, configRelPath
 		}
 	}
+	// How long a unit may stay transitional after its job clears before the
+	// transition is called failed. Long enough that a container with a slow
+	// health start period settles, short enough that a crash loop reports
+	// rather than spinning.
+	restartTimeout, restartTimeoutSrc := 60*time.Second, "default"
+	if fc.RestartTimeout != "" {
+		d, err := time.ParseDuration(fc.RestartTimeout)
+		if err != nil {
+			return config{}, fmt.Errorf("invalid restart_timeout %q in %s: %w", fc.RestartTimeout, configRelPath, err)
+		}
+		if d < 0 {
+			return config{}, fmt.Errorf("invalid restart_timeout %q in %s (want >= 0; 0 waits forever)", fc.RestartTimeout, configRelPath)
+		}
+		restartTimeout, restartTimeoutSrc = d, configRelPath
+	}
 	return config{
 		ProjectDir:          flagProjectDir,
 		QuadletDir:          expanded,
@@ -475,6 +499,7 @@ func resolveConfig() (config, error) {
 		Lint:                fc.Lint,
 		ContextLines:        contextLines,
 		ContextThreshold:    threshold,
+		RestartTimeout:      restartTimeout,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
 		diffStyleSource:     ds.source,
@@ -482,6 +507,7 @@ func resolveConfig() (config, error) {
 		secretsFieldSource:  sf.source,
 		contextLinesSource:  contextLinesSource,
 		contextThresholdSrc: thresholdSource,
+		restartTimeoutSrc:   restartTimeoutSrc,
 		configFilePath:      fcPath,
 	}, nil
 }

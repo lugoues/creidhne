@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/lugoues/creidhne"
@@ -383,5 +384,45 @@ func TestConfigUnknownKeyRejected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "quadlet_dr") {
 		t.Fatalf("error should name the unknown key: %v", err)
+	}
+}
+
+func TestResolveConfigRestartTimeout(t *testing.T) {
+	defer func() { flagProjectDir, flagQuadletDir, flagDiffTool = ".", "", "" }()
+	flagQuadletDir, flagDiffTool = "", ""
+	t.Setenv("QUADLET_DIR", "")
+	t.Setenv("DIFF_TOOL", "")
+
+	flagProjectDir = t.TempDir() // no config file
+	cfg, err := resolveConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RestartTimeout != 60*time.Second || cfg.restartTimeoutSrc != "default" {
+		t.Fatalf("default: %s (%s)", cfg.RestartTimeout, cfg.restartTimeoutSrc)
+	}
+
+	dir := t.TempDir()
+	writeConfig(t, dir, "restart_timeout = \"2m\"\n")
+	flagProjectDir = dir
+	if cfg, _ = resolveConfig(); cfg.RestartTimeout != 2*time.Minute || cfg.restartTimeoutSrc != configRelPath {
+		t.Fatalf("config: %s (%s)", cfg.RestartTimeout, cfg.restartTimeoutSrc)
+	}
+
+	// 0 is a real choice (wait forever), not a typo, so it must survive.
+	zero := t.TempDir()
+	writeConfig(t, zero, "restart_timeout = \"0\"\n")
+	flagProjectDir = zero
+	if cfg, _ = resolveConfig(); cfg.RestartTimeout != 0 || cfg.restartTimeoutSrc != configRelPath {
+		t.Fatalf("zero: %s (%s)", cfg.RestartTimeout, cfg.restartTimeoutSrc)
+	}
+
+	for _, bad := range []string{"restart_timeout = \"soon\"\n", "restart_timeout = \"-5s\"\n"} {
+		d := t.TempDir()
+		writeConfig(t, d, bad)
+		flagProjectDir = d
+		if _, err := resolveConfig(); err == nil {
+			t.Fatalf("%q must be a hard error", bad)
+		}
 	}
 }

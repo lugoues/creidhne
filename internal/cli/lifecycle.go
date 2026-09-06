@@ -24,12 +24,26 @@ import (
 var (
 	restartPoll     = 400 * time.Millisecond
 	restartSleep    = time.Sleep
+	restartNow      = time.Now
 	restartAsyncFn  = systemd.RestartAsync
 	startAsyncFn    = systemd.StartAsync
 	stopAsyncFn     = systemd.StopAsync
 	pendingJobsFn   = systemd.PendingJobs
 	restartStatusFn = systemd.Show
 )
+
+// transitional reports whether a unit is still mid-transition, so its
+// systemd job clearing does not yet mean the transition landed. The case
+// that matters is "activating (auto-restart)": a container that sent
+// READY=1 and then died has no queued job while Restart= flaps it, so the
+// job queue alone reports success on a crash loop.
+func transitional(activeState string) bool {
+	switch activeState {
+	case "activating", "deactivating", "reloading", "refreshing":
+		return true
+	}
+	return false
+}
 
 // verbSpec is one lifecycle transition (restart/start/stop): its display
 // wording, how the transaction is enqueued, and what counts as a failed unit
@@ -43,12 +57,15 @@ type verbSpec struct {
 }
 
 var (
+	// A unit still activating when its job has cleared is not up: it is
+	// almost always flapping under Restart=. crei status already calls that
+	// a problem; restart/start agree with it rather than checking it off.
 	restartSpec = verbSpec{"Restarting", "Restart?", "restart",
 		func(u bool, units []string) error { return restartAsyncFn(u, units) },
-		func(st systemd.UnitStatus) bool { return st.ActiveState == "failed" }}
+		func(st systemd.UnitStatus) bool { return st.ActiveState == "failed" || transitional(st.ActiveState) }}
 	startSpec = verbSpec{"Starting", "Start?", "start",
 		func(u bool, units []string) error { return startAsyncFn(u, units) },
-		func(st systemd.UnitStatus) bool { return st.ActiveState == "failed" }}
+		func(st systemd.UnitStatus) bool { return st.ActiveState == "failed" || transitional(st.ActiveState) }}
 	// A stop failed when the unit is still up after its job cleared; a unit
 	// left in the systemd "failed" state is down, which is what stop wanted.
 	stopSpec = verbSpec{"Stopping", "Stop?", "stop",
@@ -83,7 +100,14 @@ type restartTracker struct {
 	notes     map[string]string // service -> dim note ("already running")
 	userScope bool
 	width     int             // widest service name, for note alignment
-	done      map[string]bool // units whose job has left the queue
+	done      map[string]bool // units whose job has cleared and whose state settled
+	// settleWait bounds how long a unit may sit in a transitional state
+	// after its job has cleared before crei calls the transition failed.
+	// 0 waits forever. A unit whose job is still queued is not on this
+	// clock: systemd's own TimeoutStartSec governs that window.
+	settleWait time.Duration
+	stalled    map[string]bool      // units that blew the settle budget
+	settling   map[string]time.Time // first "job cleared, still transitional" sighting
 }
 
 // trackedRestart lists the units, optionally confirms, then enqueues a
@@ -94,20 +118,22 @@ type restartTracker struct {
 // confirm prompt sitting below the block and erased before the animation, so
 // there is a single list. Off a terminal each unit prints once as it completes.
 // needConfirm asks before restarting; a failed unit turns the command non-zero.
-func trackedRestart(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool) error {
-	return trackedTransition(out, in, rows, userScope, needConfirm, restartSpec, nil)
+func trackedRestart(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool, settleWait time.Duration) error {
+	return trackedTransition(out, in, rows, userScope, needConfirm, restartSpec, nil, settleWait)
 }
 
 // trackedTransition runs one lifecycle verb over rows with the live/plain
 // progress display. preDone marks units already in the target state (service ->
 // note): they render checked with the note from the outset and are not
-// enqueued, so start/stop stay idempotent.
-func trackedTransition(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool, verb verbSpec, preDone map[string]string) error {
+// enqueued, so start/stop stay idempotent. settleWait bounds the post-job
+// transitional window (see restartTracker.settleWait).
+func trackedTransition(out io.Writer, in io.Reader, rows []statusRow, userScope bool, needConfirm bool, verb verbSpec, preDone map[string]string, settleWait time.Duration) error {
 	units := serviceNames(rows)
 	if len(units) == 0 {
 		return nil
 	}
-	t := &restartTracker{out: out, rows: rows, units: units, verb: verb, notes: preDone, userScope: userScope, done: map[string]bool{}}
+	t := &restartTracker{out: out, rows: rows, units: units, verb: verb, notes: preDone, userScope: userScope,
+		done: map[string]bool{}, settleWait: settleWait, stalled: map[string]bool{}, settling: map[string]time.Time{}}
 	for _, u := range units {
 		if _, ok := preDone[u]; ok {
 			t.done[u] = true
@@ -122,23 +148,56 @@ func trackedTransition(out io.Writer, in io.Reader, rows []statusRow, userScope 
 	return t.plainFlow(in, needConfirm)
 }
 
-// poll refreshes the done set: a unit absent from the job queue has finished.
+// poll refreshes the done set. A unit leaving the job queue is necessary but
+// not sufficient: systemd completes a start job the moment podman sends
+// READY=1, so a container that dies straight after and flaps under Restart=
+// sits in "activating (auto-restart)" with no queued job. Those units keep
+// spinning until they settle or blow settleWait, whichever comes first.
 func (t *restartTracker) poll() error {
 	pending, err := pendingJobsFn(t.userScope, t.enqueue)
 	if err != nil {
 		return err
 	}
+	var cleared []string
 	for _, u := range t.enqueue {
-		if _, still := pending[u]; !still {
+		if _, still := pending[u]; still || t.done[u] || t.stalled[u] {
+			continue
+		}
+		cleared = append(cleared, u)
+	}
+	if len(cleared) == 0 {
+		return nil
+	}
+	statuses, err := restartStatusFn(t.userScope, cleared)
+	if err != nil {
+		return err
+	}
+	now := restartNow()
+	for _, u := range cleared {
+		st, known := statuses[u]
+		// No state at all is not something waiting can fix; let failures()
+		// report the missing unit.
+		if !known || !transitional(st.ActiveState) {
 			t.done[u] = true
+			delete(t.settling, u)
+			continue
+		}
+		if _, seen := t.settling[u]; !seen {
+			t.settling[u] = now
+			continue
+		}
+		if t.settleWait > 0 && now.Sub(t.settling[u]) >= t.settleWait {
+			t.stalled[u] = true
 		}
 	}
 	return nil
 }
 
+// allDone reports whether every unit has stopped moving, either by settling
+// or by exhausting its settle budget.
 func (t *restartTracker) allDone() bool {
 	for _, u := range t.units {
-		if !t.done[u] {
+		if !t.done[u] && !t.stalled[u] {
 			return false
 		}
 	}
@@ -198,6 +257,11 @@ func printRestartPreview(out io.Writer, rows []statusRow, verb verbSpec) {
 // silently passing as success (green checks with no verification behind them).
 func (t *restartTracker) failures() (map[string]bool, error) {
 	failed := map[string]bool{}
+	// A unit that never settled is already a failure; the state read below
+	// only adds to the set.
+	for u := range t.stalled {
+		failed[u] = true
+	}
 	statuses, err := restartStatusFn(t.userScope, t.enqueue)
 	if err != nil {
 		return nil, fmt.Errorf("jobs finished, but verifying unit states failed: %w", err)
@@ -230,14 +294,18 @@ func (t *restartTracker) failedError(failed map[string]bool) error {
 	if len(names) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%d unit(s) failed to %s: %s", len(names), t.verb.past, strings.Join(names, ", "))
+	msg := fmt.Sprintf("%d unit(s) failed to %s: %s", len(names), t.verb.past, strings.Join(names, ", "))
+	if len(t.stalled) > 0 {
+		msg += fmt.Sprintf("; %d still mid-transition after %s (check 'crei status' and 'crei logs')", len(t.stalled), t.settleWait)
+	}
+	return errors.New(msg)
 }
 
 // glyph is a unit's leading status marker: cross if failed, check if done, else
 // the current spinner frame.
 func (t *restartTracker) glyph(svc string, frame int, failed map[string]bool) string {
 	switch {
-	case failed[svc]:
+	case failed[svc], t.stalled[svc]:
 		return red("✗")
 	case t.done[svc]:
 		return green("✓")
@@ -450,7 +518,12 @@ func newRestartCmd() *cobra.Command {
 			"a warning; see 'crei diff --stale' for what each restart would change.\n\n" +
 			"The restart runs as one ordered systemctl transaction (dependencies are\n" +
 			"honored); crei then tracks the job queue and checks off each unit as it\n" +
-			"finishes, so a slow unit is visible rather than a silent wait.",
+			"finishes, so a slow unit is visible rather than a silent wait. A unit is\n" +
+			"checked off only once its state settles too: systemd completes a start job\n" +
+			"as soon as podman reports ready, so a container that dies straight after\n" +
+			"and flaps under Restart= sits in 'activating (auto-restart)' with no queued\n" +
+			"job. Those keep spinning until they settle or exhaust restart_timeout\n" +
+			"(default 60s), which fails the restart.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 && !staleOnly {
@@ -522,7 +595,7 @@ func newRestartCmd() *cobra.Command {
 			// TTY) still confirm. trackedRestart lists the units and prompts, so
 			// the confirm isn't blind.
 			needConfirm := !yes && (!staleOnly || !stdinIsTTY(cmd.InOrStdin()))
-			return trackedRestart(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), needConfirm)
+			return trackedRestart(out, cmd.InOrStdin(), rows, underHome(cfg.QuadletDir), needConfirm, cfg.RestartTimeout)
 		},
 	}
 	cmd.Flags().BoolVar(&staleOnly, "stale", false, "restart only units whose running process predates the last applied config")

@@ -86,6 +86,11 @@
       "minimum": 0,
       "default": 0,
       "description": "Minimum run length before diff truncation engages. 0 = auto (2*context_lines+4)."
+    },
+    "restart_timeout": {
+      "type": "string",
+      "default": "60s",
+      "description": "How long restart/start/stop wait on a unit still transitional after its systemd job cleared (e.g. a container flapping under Restart=), as a Go duration such as \"90s\" or \"2m\". Exceeding it fails the transition. \"0\" waits forever."
     }
   },
   "definitions": {
