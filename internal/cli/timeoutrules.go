@@ -25,10 +25,14 @@ func timeoutRuleFindings(focus []eval.Quadlet) []ruleFinding {
 	var out []ruleFinding
 	for _, q := range focus {
 		for _, u := range q.Units {
+			// Restart= means the same thing in any unit's [Service], so this
+			// runs ahead of the container/pod guard the stop-timeout rules
+			// need: a .kube retries just as fast, and even a oneshot .build
+			// accepts Restart=on-failure.
+			out = append(out, startupRuleFindings(u)...)
 			if u.Kind != "container" && u.Kind != "pod" {
 				continue
 			}
-			out = append(out, startupRuleFindings(u)...)
 			grace, graceSet := stopGrace(u)
 			stop, stopKey, stopSet, infinite := serviceStopTimeout(u.Data)
 			switch {

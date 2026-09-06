@@ -118,6 +118,10 @@ norestart: creidhne.#Quadlet & {name: "norestart", units: #container: {
 	Container: {Image: "docker.io/z"}
 	Service: Restart: "no"
 }}
+kube: creidhne.#Quadlet & {name: "kube", units: #kube: {
+	Kube: Yaml: ["app.yaml"]
+	Service: Restart: "always"
+}}
 `)
 	out, err := runCmd(t, "--dir", proj, "validate")
 	if err != nil {
@@ -126,6 +130,8 @@ norestart: creidhne.#Quadlet & {name: "norestart", units: #container: {
 	for _, want := range []string{
 		"Notify=healthy gates start-up on the healthcheck but no TimeoutStartSec is set",
 		"Restart=on-failure without RestartSec",
+		// Restart= is not container-only: a .kube retries just as fast.
+		"Restart=always without RestartSec",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing warning %q:\n%s", want, out)
