@@ -220,3 +220,45 @@ vol: creidhne.#Quadlet & {name: "vol", units: #volume: {
 		t.Fatalf("expected the delay warning:\n%s", out)
 	}
 }
+
+// TestRestartFlapNeverTripsLimiter: RestartSec=5s against systemd's default
+// limiter (5 starts in 10s) spaces the burst over 20s, so the limiter can
+// never trip and the unit flaps forever; raising StartLimitIntervalSec or
+// disabling the limiter outright silences it.
+func TestRestartFlapNeverTripsLimiter(t *testing.T) {
+	proj := setupProject(t, `package config
+import "github.com/lugoues/creidhne@v0"
+flap: creidhne.#Quadlet & {name: "flap", units: #container: {
+	Container: {Image: "docker.io/x"}
+	Service: {Restart: "on-failure", RestartSec: "5s"}
+}}
+fixed: creidhne.#Quadlet & {name: "fixed", units: #container: {
+	Unit: StartLimitIntervalSec: "300s"
+	Container: {Image: "docker.io/y"}
+	Service: {Restart: "on-failure", RestartSec: "5s"}
+}}
+off: creidhne.#Quadlet & {name: "off", units: #container: {
+	Unit: StartLimitIntervalSec: "0"
+	Container: {Image: "docker.io/z"}
+	Service: {Restart: "always", RestartSec: "30s"}
+}}
+quick: creidhne.#Quadlet & {name: "quick", units: #container: {
+	Container: {Image: "docker.io/w"}
+	Service: {Restart: "on-failure", RestartSec: "2s"}
+}}
+`)
+	out, err := runCmd(t, "--dir", proj, "validate")
+	if err != nil {
+		t.Fatalf("restart-flap is a warning, validate must pass: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "flap.container") || !strings.Contains(out, "RestartSec=5s can never trip the start rate limiter") {
+		t.Fatalf("expected the flap warning on flap.container:\n%s", out)
+	}
+	// 300s window, explicit 0 (limiter off on purpose), and 2s spacing (4 gaps
+	// = 8s < 10s, still trips) are all fine.
+	for _, quiet := range []string{"fixed.container", "off.container", "quick.container"} {
+		if strings.Contains(out, quiet) {
+			t.Fatalf("%s must not be flagged:\n%s", quiet, out)
+		}
+	}
+}

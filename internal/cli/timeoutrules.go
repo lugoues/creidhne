@@ -122,8 +122,73 @@ func startupRuleFindings(u eval.UnitRecord) []ruleFinding {
 		// startup relaunches as fast as podman can go, burying the real error.
 		out = append(out, ruleFinding{Rule: "service/restart-delay", Unit: u.Filename,
 			Message: fmt.Sprintf("Restart=%s without RestartSec: systemd's 100ms default relaunches a failing unit as fast as podman allows, flooding the journal; set RestartSec (5s is a reasonable floor)", mode)})
+	default:
+		if f := restartFlapFinding(u, svc, mode); f != nil {
+			out = append(out, *f)
+		}
 	}
 	return out
+}
+
+// systemd's start rate limiter defaults (DefaultStartLimitIntervalSec,
+// DefaultStartLimitBurst): host settings, assumed here like the stop-timeout
+// defaults are.
+const (
+	systemdDefaultStartLimitInterval = 10.0
+	systemdDefaultStartLimitBurst    = 5
+)
+
+// restartFlapFinding checks that a relaunching unit can still hit the start
+// rate limiter. The limiter trips when StartLimitBurst starts land inside
+// StartLimitIntervalSec; with RestartSec between attempts the burst-th start
+// comes no sooner than (burst-1)*RestartSec, so once that meets the window a
+// permanently failing unit never reaches "failed": it flaps in
+// "activating (auto-restart)" until someone notices. An explicit 0/infinity
+// interval, or burst 0, disables the limiter on purpose and is left alone.
+func restartFlapFinding(u eval.UnitRecord, svc map[string]any, mode string) *ruleFinding {
+	delay, ok := timeSpanField(svc["RestartSec"])
+	if !ok {
+		return nil
+	}
+	unit, _ := u.Data["Unit"].(map[string]any)
+	interval, intervalSrc := systemdDefaultStartLimitInterval, "systemd default"
+	if v, set := unit["StartLimitIntervalSec"]; set {
+		iv, ok := timeSpanField(v)
+		if !ok || iv == 0 {
+			return nil // unparseable (leave to systemd) or deliberately disabled
+		}
+		interval, intervalSrc = iv, "explicit"
+	}
+	burst := int64(systemdDefaultStartLimitBurst)
+	if v, set := unit["StartLimitBurst"].(int64); set {
+		if v == 0 {
+			return nil
+		}
+		burst = v
+	}
+	span := float64(burst-1) * delay
+	if span < interval {
+		return nil
+	}
+	return &ruleFinding{Rule: "service/restart-flap", Unit: u.Filename,
+		Message: fmt.Sprintf("Restart=%s with RestartSec=%ss can never trip the start rate limiter (StartLimitBurst %d within StartLimitIntervalSec %ss, %s): the %d gaps alone span %ss, so a permanently failing unit restarts forever in activating (auto-restart) and never reaches failed; set Unit.StartLimitIntervalSec above that, e.g. 300s",
+			mode, trimFloat(delay), burst, trimFloat(interval), intervalSrc, burst-1, trimFloat(span))}
+}
+
+// timeSpanField reads a #TimeSpan-typed field as seconds: a bare integer
+// means seconds, a string is a systemd time span, "infinity" is unbounded
+// (reported as not-ok so callers treat it as "no finite value").
+func timeSpanField(v any) (float64, bool) {
+	switch v := v.(type) {
+	case int64:
+		return float64(v), true
+	case string:
+		if v == "infinity" {
+			return 0, false
+		}
+		return parseTimeSpan(v)
+	}
+	return 0, false
 }
 
 // hasServiceKey reports whether [Service] sets any of keys. Presence is the
