@@ -169,10 +169,7 @@ func restartFlapFinding(u eval.UnitRecord, svc map[string]any, mode string) *rul
 		}
 		burst = v
 	}
-	span := 0.0
-	for i := int64(1); i <= burst; i++ {
-		span += restartGap(svc, delay, i)
-	}
+	span := restartSpan(svc, delay, burst)
 	if span < interval {
 		return nil
 	}
@@ -187,20 +184,26 @@ func restartFlapFinding(u eval.UnitRecord, svc map[string]any, mode string) *rul
 			mode, trimFloat(delay), burst, trimFloat(interval), intervalSrc, burst, trimFloat(span), trimFloat(example))}
 }
 
-// restartGap is the delay before the n-th restart (1-based), following
-// service_restart_usec_next: a flat RestartSec unless RestartSteps and a
-// finite RestartMaxDelaySec turn it into an exponential ramp that reaches
-// the max at step RestartSteps.
-func restartGap(svc map[string]any, delay float64, n int64) float64 {
+// restartSpan is the time the first `burst` restart gaps take, per
+// service_restart_usec_next. Without a backoff every gap is RestartSec.
+// With RestartSteps and a finite RestartMaxDelaySec the gaps ramp
+// geometrically from RestartSec to the max over RestartSteps restarts, then
+// hold at the max, so the prefix is a geometric series and the tail is flat.
+// Closed form throughout: burst and steps are user-supplied uints, and a loop
+// over either is a hang waiting for a large value.
+func restartSpan(svc map[string]any, delay float64, burst int64) float64 {
 	steps, _ := svc["RestartSteps"].(int64)
 	maxDelay, hasMax := timeSpanField(svc["RestartMaxDelaySec"])
-	if n <= 1 || steps == 0 || delay == 0 || !hasMax || delay >= maxDelay {
-		return delay
+	n := float64(burst)
+	if steps <= 0 || delay == 0 || !hasMax || delay >= maxDelay {
+		return n * delay
 	}
-	if n > steps {
-		return maxDelay
-	}
-	return delay * math.Pow(maxDelay/delay, float64(n-1)/float64(steps))
+	// gap_i = delay * r^(i-1) for i <= steps, r = (max/delay)^(1/steps) > 1.
+	k := math.Min(n, float64(steps))
+	r := math.Pow(maxDelay/delay, 1/float64(steps))
+	prefix := delay * (math.Pow(r, k) - 1) / (r - 1)
+	tail := math.Max(0, n-float64(steps)) * maxDelay
+	return prefix + tail
 }
 
 // timeSpanField reads a #TimeSpan-typed field as seconds: a bare integer
