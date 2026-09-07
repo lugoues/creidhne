@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -139,12 +140,14 @@ const (
 )
 
 // restartFlapFinding checks that a relaunching unit can still hit the start
-// rate limiter. The limiter trips when StartLimitBurst starts land inside
-// StartLimitIntervalSec; with RestartSec between attempts the burst-th start
-// comes no sooner than (burst-1)*RestartSec, so once that meets the window a
-// permanently failing unit never reaches "failed": it flaps in
-// "activating (auto-restart)" until someone notices. An explicit 0/infinity
-// interval, or burst 0, disables the limiter on purpose and is left alone.
+// rate limiter. systemd allows StartLimitBurst starts inside a
+// StartLimitIntervalSec window and refuses the next one, so the refusal can
+// only happen if the burst+1-th start (after `burst` restart gaps) lands
+// inside the window. Once those gaps alone reach the window a permanently
+// failing unit never gets refused: it flaps in "activating (auto-restart)"
+// until someone notices, instead of landing in "failed" where status shows
+// it. An explicit 0/infinity interval, or burst 0, disables the limiter on
+// purpose and is left alone.
 func restartFlapFinding(u eval.UnitRecord, svc map[string]any, mode string) *ruleFinding {
 	delay, ok := timeSpanField(svc["RestartSec"])
 	if !ok {
@@ -166,13 +169,38 @@ func restartFlapFinding(u eval.UnitRecord, svc map[string]any, mode string) *rul
 		}
 		burst = v
 	}
-	span := float64(burst-1) * delay
+	span := 0.0
+	for i := int64(1); i <= burst; i++ {
+		span += restartGap(svc, delay, i)
+	}
 	if span < interval {
 		return nil
 	}
+	// A window the burst can actually fit in: past the span with room for
+	// the failures themselves, rounded to whole minutes, never below 5min.
+	example := math.Ceil(span*2/60) * 60
+	if example < 300 {
+		example = 300
+	}
 	return &ruleFinding{Rule: "service/restart-flap", Unit: u.Filename,
-		Message: fmt.Sprintf("Restart=%s with RestartSec=%ss can never trip the start rate limiter (StartLimitBurst %d within StartLimitIntervalSec %ss, %s): the %d gaps alone span %ss, so a permanently failing unit restarts forever in activating (auto-restart) and never reaches failed; set Unit.StartLimitIntervalSec above that, e.g. 300s",
-			mode, trimFloat(delay), burst, trimFloat(interval), intervalSrc, burst-1, trimFloat(span))}
+		Message: fmt.Sprintf("Restart=%s with RestartSec=%ss can never trip the start rate limiter (StartLimitBurst %d within StartLimitIntervalSec %ss, %s): the %d restart gaps alone span %ss, so a permanently failing unit restarts forever in activating (auto-restart) and never reaches failed; set Unit.StartLimitIntervalSec well above that, e.g. %ss",
+			mode, trimFloat(delay), burst, trimFloat(interval), intervalSrc, burst, trimFloat(span), trimFloat(example))}
+}
+
+// restartGap is the delay before the n-th restart (1-based), following
+// service_restart_usec_next: a flat RestartSec unless RestartSteps and a
+// finite RestartMaxDelaySec turn it into an exponential ramp that reaches
+// the max at step RestartSteps.
+func restartGap(svc map[string]any, delay float64, n int64) float64 {
+	steps, _ := svc["RestartSteps"].(int64)
+	maxDelay, hasMax := timeSpanField(svc["RestartMaxDelaySec"])
+	if n <= 1 || steps == 0 || delay == 0 || !hasMax || delay >= maxDelay {
+		return delay
+	}
+	if n > steps {
+		return maxDelay
+	}
+	return delay * math.Pow(maxDelay/delay, float64(n-1)/float64(steps))
 }
 
 // timeSpanField reads a #TimeSpan-typed field as seconds: a bare integer

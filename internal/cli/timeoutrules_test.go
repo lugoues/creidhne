@@ -244,7 +244,19 @@ off: creidhne.#Quadlet & {name: "off", units: #container: {
 }}
 quick: creidhne.#Quadlet & {name: "quick", units: #container: {
 	Container: {Image: "docker.io/w"}
-	Service: {Restart: "on-failure", RestartSec: "2s"}
+	Service: {Restart: "on-failure", RestartSec: "1900ms"}
+}}
+edge: creidhne.#Quadlet & {name: "edge", units: #container: {
+	Container: {Image: "docker.io/v"}
+	Service: {Restart: "on-failure", RestartSec: "2100ms"}
+}}
+ramp: creidhne.#Quadlet & {name: "ramp", units: #container: {
+	Container: {Image: "docker.io/u"}
+	Service: {Restart: "on-failure", RestartSec: "1s", RestartSteps: 1, RestartMaxDelaySec: "20s"}
+}}
+long: creidhne.#Quadlet & {name: "long", units: #container: {
+	Container: {Image: "docker.io/t"}
+	Service: {Restart: "on-failure", RestartSec: "100s"}
 }}
 `)
 	out, err := runCmd(t, "--dir", proj, "validate")
@@ -254,8 +266,21 @@ quick: creidhne.#Quadlet & {name: "quick", units: #container: {
 	if !strings.Contains(out, "flap.container") || !strings.Contains(out, "RestartSec=5s can never trip the start rate limiter") {
 		t.Fatalf("expected the flap warning on flap.container:\n%s", out)
 	}
-	// 300s window, explicit 0 (limiter off on purpose), and 2s spacing (4 gaps
-	// = 8s < 10s, still trips) are all fine.
+	// systemd refuses the burst+1-th start, so five gaps count, not four:
+	// 2.1s spaces them over 10.5s and the 10s window can never catch it.
+	if !strings.Contains(out, "edge.container") {
+		t.Fatalf("2100ms must be flagged (5 gaps = 10.5s >= 10s):\n%s", out)
+	}
+	// RestartSteps/RestartMaxDelaySec ramp: gaps 1s,20s,20s,20s,20s.
+	if !strings.Contains(out, "ramp.container") {
+		t.Fatalf("backoff ramp must be flagged:\n%s", out)
+	}
+	// The suggested window must exceed the span it just reported (500s).
+	if !strings.Contains(out, "span 500s, so a permanently failing unit restarts forever in activating (auto-restart) and never reaches failed; set Unit.StartLimitIntervalSec well above that, e.g. 1020s") {
+		t.Fatalf("suggestion must clear the 500s span:\n%s", out)
+	}
+	// 300s window, explicit 0 (limiter off on purpose), and 1.9s spacing (5
+	// gaps = 9.5s < 10s, still trips) are all fine.
 	for _, quiet := range []string{"fixed.container", "off.container", "quick.container"} {
 		if strings.Contains(out, quiet) {
 			t.Fatalf("%s must not be flagged:\n%s", quiet, out)
