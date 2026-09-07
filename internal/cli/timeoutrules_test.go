@@ -312,10 +312,11 @@ func TestRestartSpanClosedForm(t *testing.T) {
 		t.Fatalf("ratio rounding to 1 must not produce NaN: got %v, want 5", flatRatio)
 	}
 	// Same rounding, but a burst that covers the ramp: 4e9 steps from 10s to
-	// 10.000004s is a per-step ratio float64 cannot see, yet the whole ramp
-	// adds ~6000s over the flat 4e10. The naive form loses it; Expm1 keeps it.
+	// 10.000004s is a per-step ratio float64 cannot see, yet the ramp averages
+	// 2us of excess per gap, ~8000s over the flat 4e10. The naive form loses
+	// it; Expm1 keeps it.
 	wide := restartSpan(map[string]any{"RestartSteps": int64(4000000000), "RestartMaxDelaySec": "10s 4us"}, 10, 4000000000)
-	if extra := wide - 4e10; extra < 5000 || extra > 7000 {
-		t.Fatalf("wide ramp: got %v over flat, want ~6000", extra)
+	if extra := wide - 4e10; extra < 7500 || extra > 8500 {
+		t.Fatalf("wide ramp: got %v over flat, want ~8000", extra)
 	}
 }
