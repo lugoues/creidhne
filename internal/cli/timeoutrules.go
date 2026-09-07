@@ -198,13 +198,13 @@ func restartSpan(svc map[string]any, delay float64, burst int64) float64 {
 	if steps <= 0 || delay == 0 || !hasMax || delay >= maxDelay {
 		return n * delay
 	}
-	// gap_i = delay * r^(i-1) for i <= steps, r = (max/delay)^(1/steps) > 1.
+	// gap_i = delay * e^(a(i-1)) for i <= steps, a = ln(max/delay)/steps > 0.
+	// Sum of the first k: delay * (e^(ka) - 1) / (e^a - 1), written with
+	// Expm1 so a huge RestartSteps (a below float64 resolution around 1)
+	// still yields the ramp instead of 0/0.
 	k := math.Min(n, float64(steps))
-	r := math.Pow(maxDelay/delay, 1/float64(steps))
-	prefix := k * delay // r so close to 1 it rounds there: the ramp is flat at this scale
-	if r > 1 {
-		prefix = delay * (math.Pow(r, k) - 1) / (r - 1)
-	}
+	a := math.Log(maxDelay/delay) / float64(steps)
+	prefix := delay * math.Expm1(k*a) / math.Expm1(a)
 	tail := math.Max(0, n-float64(steps)) * maxDelay
 	return prefix + tail
 }
