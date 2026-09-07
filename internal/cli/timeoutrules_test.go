@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -285,5 +286,29 @@ long: creidhne.#Quadlet & {name: "long", units: #container: {
 		if strings.Contains(out, quiet) {
 			t.Fatalf("%s must not be flagged:\n%s", quiet, out)
 		}
+	}
+}
+
+// TestRestartSpanClosedForm pins the series against hand-computed gaps, and
+// the case where a huge RestartSteps makes the per-step ratio round to exactly
+// 1 (0/0 in the naive closed form): the ramp is flat at that scale.
+func TestRestartSpanClosedForm(t *testing.T) {
+	flat := restartSpan(map[string]any{}, 5, 5)
+	if flat != 25 {
+		t.Fatalf("flat: got %v, want 25", flat)
+	}
+	// gaps 1, 20, 20, 20, 20
+	ramp := restartSpan(map[string]any{"RestartSteps": int64(1), "RestartMaxDelaySec": "20s"}, 1, 5)
+	if ramp != 81 {
+		t.Fatalf("ramp: got %v, want 81", ramp)
+	}
+	// gaps 1, 2, 4, 8 then 16, 16: 15 + 32
+	geo := restartSpan(map[string]any{"RestartSteps": int64(4), "RestartMaxDelaySec": "16s"}, 1, 6)
+	if math.Abs(geo-47) > 1e-9 {
+		t.Fatalf("geometric: got %v, want 47", geo)
+	}
+	flatRatio := restartSpan(map[string]any{"RestartSteps": int64(100000000000000000), "RestartMaxDelaySec": "20s"}, 1, 5)
+	if math.IsNaN(flatRatio) || math.Abs(flatRatio-5) > 1e-9 {
+		t.Fatalf("ratio rounding to 1 must not produce NaN: got %v, want 5", flatRatio)
 	}
 }
