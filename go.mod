@@ -1,6 +1,6 @@
 module github.com/lugoues/creidhne
 
-go 1.25.8
+go 1.26.0
 
 require (
 	charm.land/huh/v2 v2.0.3
@@ -10,12 +10,12 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/colorprofile v0.4.3
-	github.com/compose-spec/compose-go/v2 v2.14.0
-	github.com/google/go-containerregistry v0.22.0
+	github.com/compose-spec/compose-go/v2 v2.15.0
+	github.com/google/go-containerregistry v0.22.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/term v0.45.0
+	golang.org/x/term v0.46.0
 )
 
 require (
@@ -66,7 +66,7 @@ require (
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )
