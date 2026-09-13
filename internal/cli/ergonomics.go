@@ -157,6 +157,12 @@ func printConfig(out io.Writer, cfg config) {
 	}
 	row("restart timeout", rt, cfg.restartTimeoutSrc)
 
+	ma := cfg.ImageMinAge
+	if ma == "" {
+		ma = "none"
+	}
+	row("image min-age", ma, cfg.imageMinAgeSrc)
+
 	cfgFile, cfgSource := cfg.configFilePath, "loaded"
 	if cfgFile == "" {
 		cfgFile, cfgSource = filepath.Join(cfg.ProjectDir, ".crei", "config.toml"), "not found"

@@ -42,7 +42,7 @@ func newImageAddCmd() *cobra.Command {
 				return fmt.Errorf("could not derive a name from %q; pass one explicitly", ref)
 			}
 
-			entries, projectDir, err := loadImages()
+			entries, cfg, err := loadImages()
 			if err != nil {
 				return err
 			}
@@ -85,7 +85,7 @@ func newImageAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path := filepath.Join(projectDir, "registries", "images.cue")
+			path := filepath.Join(cfg.ProjectDir, "registries", "images.cue")
 			if err := os.WriteFile(path, content, 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", path, err)
 			}

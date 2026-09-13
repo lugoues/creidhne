@@ -98,7 +98,7 @@ func newImageLockCmd() *cobra.Command {
 			if reason == "" {
 				return fmt.Errorf("a lock needs a reason: crei image lock %s <why>", name)
 			}
-			entries, projectDir, err := loadImages()
+			entries, cfg, err := loadImages()
 			if err != nil {
 				return err
 			}
@@ -123,7 +123,7 @@ func newImageLockCmd() *cobra.Command {
 			} else {
 				pin = short(pin)
 			}
-			if err := writeImages(projectDir, entries); err != nil {
+			if err := writeImages(cfg.ProjectDir, entries); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "%s %s locked at %s (%s)\n  %s\n", green("+"), name, image, pin, reason)
@@ -142,7 +142,7 @@ func newImageUnlockCmd() *cobra.Command {
 			"'crei image update' afterwards to actually move it.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			entries, projectDir, err := loadImages()
+			entries, cfg, err := loadImages()
 			if err != nil {
 				return err
 			}
@@ -169,7 +169,7 @@ func newImageUnlockCmd() *cobra.Command {
 				fmt.Fprintln(out, "Nothing to unlock.")
 				return nil
 			}
-			if err := writeImages(projectDir, entries); err != nil {
+			if err := writeImages(cfg.ProjectDir, entries); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "\nCleared %d lock(s). Run 'crei image update' to move them.\n", cleared)

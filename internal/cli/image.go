@@ -27,18 +27,29 @@ func newImageCmd() *cobra.Command {
 	return cmd
 }
 
-// loadImages loads the project's image registry with the schema overlay.
-func loadImages() ([]eval.ImageEntry, string, error) {
+// loadImages loads the project's image registry with the schema overlay,
+// returning the resolved config alongside (project dir, [image] policy).
+func loadImages() ([]eval.ImageEntry, config, error) {
 	cfg, err := resolveConfig()
 	if err != nil {
-		return nil, "", err
+		return nil, config{}, err
 	}
 	overlay, err := buildOverlay(cfg.ProjectDir)
 	if err != nil {
-		return nil, "", err
+		return nil, config{}, err
 	}
 	entries, err := eval.LoadImageRegistry(cfg.ProjectDir, overlay)
-	return entries, cfg.ProjectDir, err
+	return entries, cfg, err
+}
+
+// effectiveMinAge resolves the default min-age for a command: --min-age when
+// given (even ""), else the config's [image] min_age, else none. A per-entry
+// minAge in the registry still wins over the result (see nextPin).
+func effectiveMinAge(flag string, flagSet bool, cfg config) (time.Duration, error) {
+	if flagSet {
+		return registry.ParseAge(flag)
+	}
+	return registry.ParseAge(cfg.ImageMinAge)
 }
 
 func newImageOutdatedCmd() *cobra.Command {
@@ -48,17 +59,18 @@ func newImageOutdatedCmd() *cobra.Command {
 		Short: "Report managed images whose tracked tag has a newer digest",
 		Long: "outdated resolves each managed entry's tag to its current registry\n" +
 			"digest and reports the ones whose pin is behind. A candidate younger\n" +
-			"than the min-age (per-entry minAge, else --min-age) is still reported,\n" +
+			"than the min-age (per-entry minAge, else --min-age, else the config's\n" +
+			"[image] min_age) is still reported,\n" +
 			"marked '! younger than min-age' (min-age is information, not a gate).\n" +
 			"A locked entry is reported as locked and never counts as an available\n" +
 			"update. Read-only; exits non-zero when an update is available.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			defAge, err := registry.ParseAge(minAgeFlag)
+			entries, cfg, err := loadImages()
 			if err != nil {
 				return err
 			}
-			entries, _, err := loadImages()
+			defAge, err := effectiveMinAge(minAgeFlag, cmd.Flags().Changed("min-age"), cfg)
 			if err != nil {
 				return err
 			}
@@ -84,7 +96,7 @@ func newImageOutdatedCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "mark updates younger than this (e.g. 7d); per-entry minAge overrides")
+	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "mark updates younger than this (e.g. 7d); overrides [image] min_age, per-entry minAge overrides both")
 	return cmd
 }
 

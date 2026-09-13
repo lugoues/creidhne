@@ -1,3 +1,4 @@
+| Image update min-age | `--min-age` (`image update`/`outdated`) | n/a | `[image] min_age` | none (per-entry `minAge` overrides both) |
 <div align="center">
 
 <picture>

@@ -459,3 +459,58 @@ func TestConfigSchemaDurationPatternMatchesParser(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigImageMinAge(t *testing.T) {
+	t.Setenv("QUADLET_DIR", "")
+	t.Setenv("DIFF_TOOL", "")
+
+	flagProjectDir = t.TempDir() // no config file
+	cfg, err := resolveConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ImageMinAge != "" || cfg.imageMinAgeSrc != "default" {
+		t.Fatalf("default: %q (%s)", cfg.ImageMinAge, cfg.imageMinAgeSrc)
+	}
+
+	dir := t.TempDir()
+	writeConfig(t, dir, "[image]\nmin_age = \"7d\"\n")
+	flagProjectDir = dir
+	if cfg, err = resolveConfig(); err != nil || cfg.ImageMinAge != "7d" || cfg.imageMinAgeSrc != configRelPath {
+		t.Fatalf("config: %q (%s) %v", cfg.ImageMinAge, cfg.imageMinAgeSrc, err)
+	}
+
+	// Same trap as restart_timeout: a malformed or empty value is a hard
+	// error, not a silent fallback to "no minimum".
+	for _, bad := range []string{"[image]\nmin_age = \"soon\"\n", "[image]\nmin_age = \"7\"\n", "[image]\nmin_age = \"\"\n", "[image]\nmin_age = 7\n"} {
+		d := t.TempDir()
+		writeConfig(t, d, bad)
+		flagProjectDir = d
+		if _, err := resolveConfig(); err == nil {
+			t.Fatalf("%q must be a hard error", bad)
+		}
+	}
+}
+
+// --min-age beats [image] min_age, and an explicit --min-age "" clears it.
+func TestEffectiveMinAge(t *testing.T) {
+	cfg := config{ImageMinAge: "7d"}
+	day := 24 * time.Hour
+	for _, tc := range []struct {
+		flag    string
+		flagSet bool
+		want    time.Duration
+	}{
+		{"", false, 7 * day},
+		{"2d", true, 2 * day},
+		{"", true, 0},
+	} {
+		got, err := effectiveMinAge(tc.flag, tc.flagSet, cfg)
+		if err != nil || got != tc.want {
+			t.Errorf("flag=%q set=%v: got %s, %v; want %s", tc.flag, tc.flagSet, got, err, tc.want)
+		}
+	}
+	if _, err := effectiveMinAge("soon", true, cfg); err == nil {
+		t.Error("malformed --min-age must error")
+	}
+}

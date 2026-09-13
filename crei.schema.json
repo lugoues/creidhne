@@ -92,6 +92,18 @@
       "pattern": "^\\+?(0|(([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(ns|us|\u00b5s|\u03bcs|ms|s|m|h))+)$",
       "default": "60s",
       "description": "How long restart/start/stop wait on a unit still transitional after its systemd job cleared (e.g. a container flapping under Restart=), as a Go duration such as \"90s\" or \"2m\". Exceeding it fails the transition. \"0\" waits forever."
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Defaults for the image registry commands (crei image update/outdated).",
+      "properties": {
+        "min_age": {
+          "type": "string",
+          "pattern": "^[0-9]+[dwh]$",
+          "description": "Mark update candidates whose image is younger than this (e.g. \"7d\", \"2w\", \"12h\"). Information, not a gate: they start unselected in the picker and are skipped by -y. A per-entry minAge overrides it; --min-age overrides both."
+        }
+      }
     }
   },
   "definitions": {

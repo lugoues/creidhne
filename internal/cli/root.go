@@ -26,6 +26,7 @@ import (
 	"github.com/lugoues/creidhne"
 	"github.com/lugoues/creidhne/internal/eval"
 	"github.com/lugoues/creidhne/internal/reconcile"
+	"github.com/lugoues/creidhne/internal/registry"
 	"github.com/lugoues/creidhne/internal/render"
 )
 
@@ -204,6 +205,10 @@ type config struct {
 	// with a job still queued are governed by systemd's own TimeoutStartSec,
 	// not this.
 	RestartTimeout time.Duration
+	// ImageMinAge is the project-wide min-age for crei image update/outdated
+	// ("7d", "2w", "12h"; "" for none). A per-entry minAge in the registry
+	// overrides it, and --min-age overrides both. Information, not a gate.
+	ImageMinAge string
 
 	// Provenance for `crei config`, which layer supplied each value.
 	quadletDirSource    string
@@ -214,6 +219,7 @@ type config struct {
 	contextLinesSource  string
 	contextThresholdSrc string
 	restartTimeoutSrc   string
+	imageMinAgeSrc      string
 	configFilePath      string // config file path if present, else ""
 }
 
@@ -227,7 +233,14 @@ type fileConfig struct {
 	ContextThreshold *int              `toml:"context_threshold"` // pointer: unset = auto (2*context_lines+4)
 	RestartTimeout   *string           `toml:"restart_timeout"`   // pointer: an explicit "" is a malformed duration, not "unset"
 	Style            styleConfig       `toml:"style"`
+	Image            imageConfig       `toml:"image"`
 	Lint             map[string]string `toml:"lint"`
+}
+
+// imageConfig is the [image] table: policy defaults for the image registry
+// commands.
+type imageConfig struct {
+	MinAge *string `toml:"min_age"` // pointer: an explicit "" is malformed, not "unset"
 }
 
 // diff_style values: how a modified line renders in plan/diff/apply.
@@ -489,6 +502,13 @@ func resolveConfig() (config, error) {
 		}
 		restartTimeout, restartTimeoutSrc = d, configRelPath
 	}
+	imageMinAge, imageMinAgeSrc := "", "default"
+	if fc.Image.MinAge != nil {
+		if _, err := registry.ParseAge(*fc.Image.MinAge); err != nil || *fc.Image.MinAge == "" {
+			return config{}, fmt.Errorf("invalid image.min_age %q in %s (want <int>[dwh], e.g. \"7d\")", *fc.Image.MinAge, configRelPath)
+		}
+		imageMinAge, imageMinAgeSrc = *fc.Image.MinAge, configRelPath
+	}
 	return config{
 		ProjectDir:          flagProjectDir,
 		QuadletDir:          expanded,
@@ -500,6 +520,7 @@ func resolveConfig() (config, error) {
 		ContextLines:        contextLines,
 		ContextThreshold:    threshold,
 		RestartTimeout:      restartTimeout,
+		ImageMinAge:         imageMinAge,
 		quadletDirSource:    qd.source,
 		diffToolSource:      dt.source,
 		diffStyleSource:     ds.source,
@@ -508,6 +529,7 @@ func resolveConfig() (config, error) {
 		contextLinesSource:  contextLinesSource,
 		contextThresholdSrc: thresholdSource,
 		restartTimeoutSrc:   restartTimeoutSrc,
+		imageMinAgeSrc:      imageMinAgeSrc,
 		configFilePath:      fcPath,
 	}, nil
 }

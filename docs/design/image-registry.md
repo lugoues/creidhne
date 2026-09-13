@@ -85,7 +85,9 @@ Containers reference the handle; crei resolves it at eval time, like
 
 ## Policy
 
-Attaches per-entry (struct form) or globally (`.crei/config.toml`):
+Attaches per-entry (struct form) or globally (`[image] min_age` in
+`.crei/config.toml`); precedence is per-entry `minAge` > `--min-age` >
+`[image] min_age`:
 
 - **min-age**: do not offer a digest whose image `created` is younger than
   N days (dodges yank-and-repatch churn). crane reads the config's

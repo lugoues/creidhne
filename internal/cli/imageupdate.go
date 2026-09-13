@@ -185,20 +185,20 @@ func newImageUpdateCmd() *cobra.Command {
 			"floating tags follow their digest — and presents the candidates for\n" +
 			"selection. Everything starts unselected: applying is an explicit\n" +
 			"choice. Candidates younger than min-age (per-entry minAge, else\n" +
-			"--min-age) carry a ! marker. The selection is written back to\n" +
-			"registries/images.cue — a reviewable config edit; apply follows\n" +
-			"normally.\n\n" +
+			"--min-age, else the config's [image] min_age) carry a ! marker. The\n" +
+			"selection is written back to registries/images.cue — a reviewable\n" +
+			"config edit; apply follows normally.\n\n" +
 			"-y skips the picker and applies every aged candidate; naming entries\n" +
 			"restricts (and pre-selects) just those.\n\n" +
 			"Locked entries (crei image lock) are listed with their reason but are\n" +
 			"never offered, and naming one does not override that: unlock it first.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			defAge, err := registry.ParseAge(minAgeFlag)
+			entries, cfg, err := loadImages()
 			if err != nil {
 				return err
 			}
-			entries, projectDir, err := loadImages()
+			defAge, err := effectiveMinAge(minAgeFlag, cmd.Flags().Changed("min-age"), cfg)
 			if err != nil {
 				return err
 			}
@@ -299,7 +299,7 @@ func newImageUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path := filepath.Join(projectDir, "registries", "images.cue")
+			path := filepath.Join(cfg.ProjectDir, "registries", "images.cue")
 			if err := os.WriteFile(path, content, 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", path, err)
 			}
@@ -308,6 +308,6 @@ func newImageUpdateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the picker; apply all aged candidates")
-	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "mark candidates younger than this (e.g. 7d) and exclude them from -y; per-entry minAge overrides")
+	cmd.Flags().StringVar(&minAgeFlag, "min-age", "", "mark candidates younger than this (e.g. 7d) and exclude them from -y; overrides [image] min_age, per-entry minAge overrides both")
 	return cmd
 }

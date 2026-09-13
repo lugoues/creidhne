@@ -40,7 +40,7 @@ func newImagePinCmd() *cobra.Command {
 			"Given names, only those entries are pinned.",
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			entries, projectDir, err := loadImages()
+			entries, cfg, err := loadImages()
 			if err != nil {
 				return err
 			}
@@ -114,7 +114,7 @@ func newImagePinCmd() *cobra.Command {
 				return pinErr()
 			}
 
-			path := filepath.Join(projectDir, "registries", "images.cue")
+			path := filepath.Join(cfg.ProjectDir, "registries", "images.cue")
 			content, err := emitImageRegistry(entries)
 			if err != nil {
 				return err
