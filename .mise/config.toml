@@ -7,7 +7,7 @@
 aube = "latest"
 cue = "0.17.1"
 go = "latest"
-golangci-lint = "2.13.2"
+golangci-lint = "2.14.0"
 
 [settings]
 activate_aggressive = true
