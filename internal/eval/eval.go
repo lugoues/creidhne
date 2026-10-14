@@ -471,6 +471,13 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 			if label == "" {
 				label = "a " + ur.Kind
 			}
+			if fs, _ := missingRequired(v, "", name); len(fs) > 0 {
+				msgs := make([]string, len(fs))
+				for i, f := range fs {
+					msgs[i] = f.msg
+				}
+				return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s (%s)", label, strings.Join(msgs, "; "), incompleteHint(err))
+			}
 			if fs, _ := diagnose(v, "", err); len(fs) > 0 {
 				return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s: %s (%s)", label, fs[0].loc, fs[0].msg, incompleteHint(err))
 			}

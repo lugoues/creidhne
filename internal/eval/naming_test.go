@@ -316,6 +316,21 @@ func loadSourceErr(t *testing.T, src string) error {
 	return err
 }
 
+// validateSourceErr is loadSourceErr through the strict whole-package check
+// (`crei validate`), which reports every incomplete value at once.
+func validateSourceErr(t *testing.T, src string) error {
+	t.Helper()
+	tmp := t.TempDir()
+	overlay, err := eval.Overlay(tmp, creidhne.SchemaFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlay[filepath.Join(tmp, "cue.mod", "module.cue")] = load.FromString(
+		"module: \"example.com/naming@v0\"\nlanguage: version: \"v0.17.0\"\n")
+	overlay[filepath.Join(tmp, "main.cue")] = load.FromString(src)
+	return eval.Validate(tmp, overlay)
+}
+
 // TestRejectsTraversalAndEmptyName locks down the unit-identity guard: a quadlet
 // or unit name that is empty or contains path separators / ".." must be rejected
 // at validation, since it feeds the on-disk filename (see the reconcile/render

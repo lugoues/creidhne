@@ -265,3 +265,125 @@ app: q.#Quadlet & {
 		t.Fatalf("finding should point at the .#ref handle:\n%v", err)
 	}
 }
+
+// An unset required input (`field!:`) must be named. cue reports only the
+// fallout, which can be an unrelated conflict (a UserNS interpolation over
+// the missing field surfaces as "Container.Image: field not allowed") or a
+// bare "invalid interpolation", neither of which mentions the input.
+func TestDiagMissingRequiredInput(t *testing.T) {
+	hdr := "package naming\nimport q \"github.com/lugoues/creidhne@v0\"\n"
+	cases := []struct {
+		name     string
+		src      string
+		validate bool // through Validate instead of LoadAndValidate
+		want     []string
+		not      string
+	}{
+		{
+			name: "build-time conflict",
+			src: hdr + `app: q.#Quadlet & {name: "app", #gid!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#gid):1"]}}}`,
+			want: []string{
+				"app: required input #gid is not set (int & >0)",
+				"    main.cue:3:1\n    main.cue:3:33",
+			},
+			not: "field not allowed", // fallout is dropped, raw detail too
+		},
+		{
+			name: "incomplete unit",
+			src: hdr + `app: q.#Quadlet & {name: "app", #port!: int, units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["P=\(#port)"]}}`,
+			want: []string{"unit app.container is incomplete", "required input #port is not set (int)"},
+		},
+		{
+			name: "nested under a definition",
+			src: hdr + `app: q.#Quadlet & {name: "app", #images: {debian!: string}, units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["I=\(#images.debian)"]}}`,
+			want: []string{"required input #images.debian is not set (string)"},
+		},
+		{
+			name: "nested quadlet",
+			src: hdr + `stacks: web: q.#Quadlet & {name: "web", #gid!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#gid):1"]}}}`,
+			want: []string{"stacks.web: required input #gid is not set"},
+		},
+		// The typo breaks the same Container disjunction, so filling #gid
+		// clears nothing and it is not blamed yet; the typo must still show.
+		{
+			name: "independent error is not masked",
+			src: hdr + `app: q.#Quadlet & {name: "app", #gid!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", Enviroment: ["A=1"], UserNS: {mode: "auto", gidmapping: ["1000:\(#gid):1"]}}}`,
+			want: []string{`did you mean "Environment"?`},
+		},
+		// A stand-in the input's own constraint rejects can't be judged; the
+		// typo must not be swallowed as fallout of the bottomed probe.
+		{
+			name: "constraint rejects the stand-in",
+			src: hdr + `app: q.#Quadlet & {name: "app", #target!: string & =~"^[^:]+:[0-9]+$", units: #container: Container: {` +
+				`Image: "docker.io/x", Enviroment: ["A=1"], Environment: ["T=\(#target)"]}}`,
+			want: []string{`did you mean "Environment"?`},
+		},
+		{
+			name: "bytes input",
+			src: hdr + `app: q.#Quadlet & {name: "app", #payload!: bytes, units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["P=\(#payload)"]}}`,
+			want: []string{"required input #payload is not set (bytes)"},
+		},
+		// An ordinary field named manifest on an ancestor is not a quadlet;
+		// ownership must reach the nested one beneath it.
+		{
+			name: "non-quadlet manifest on an ancestor",
+			src: hdr + `stacks: {manifest: "metadata", web: q.#Quadlet & {name: "web", #gid!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#gid):1"]}}}}`,
+			want: []string{"stacks.web: required input #gid is not set"},
+		},
+		// "stacks.web" and stacks.web are distinct owners; both must be
+		// scanned. Only validate reports both at once (a build error carries
+		// just the first failing value).
+		{
+			name:     "quoted and nested owners stay distinct",
+			validate: true,
+			src: hdr + `"stacks.web": q.#Quadlet & {name: "a", #pa!: int, units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["P=\(#pa)"]}}` + "\n" +
+				`stacks: web: q.#Quadlet & {name: "b", #pb!: int, units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["P=\(#pb)"]}}`,
+			want: []string{"required input #pa is not set", "required input #pb is not set"},
+		},
+		// Unset but inert: an unused required field, or one under an absent
+		// optional definition, must not take the blame for an unrelated typo.
+		{
+			name: "unused required field",
+			src: hdr + `app: q.#Quadlet & {name: "app", #unused: {foo!: string}, units: #container: Container: {` +
+				`Image: "docker.io/x", Enviroment: ["A=1"]}}`,
+			want: []string{`did you mean "Environment"?`},
+			not:  "#unused",
+		},
+		{
+			name: "absent optional definition",
+			src: hdr + `app: q.#Quadlet & {name: "app", #opt?: {foo!: string}, units: #container: Container: {` +
+				`Image: "docker.io/x", Enviroment: ["A=1"]}}`,
+			want: []string{`did you mean "Environment"?`},
+			not:  "#opt",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			load := loadSourceErr
+			if tc.validate {
+				load = validateSourceErr
+			}
+			err := load(t, tc.src)
+			if err == nil {
+				t.Fatal("specimen must fail")
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("missing %q in:\n%v", want, err)
+				}
+			}
+			if tc.not != "" && strings.Contains(err.Error(), tc.not) {
+				t.Fatalf("%q must not be a finding:\n%v", tc.not, err)
+			}
+		})
+	}
+}

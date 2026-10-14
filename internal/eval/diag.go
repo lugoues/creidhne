@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/errors"
 	"cuelang.org/go/cue/token"
 
@@ -57,7 +58,34 @@ func diagError(root cue.Value, dir, context string, err error) error {
 	if RawErrors {
 		return cueError(context, err)
 	}
-	findings, lossy := diagnose(root, dir, err)
+	// An unset required input the failure depends on is the cause, and cue's
+	// fallout for it rarely names it; lead with the input and drop the
+	// fallout (the errors filling it in clears) entirely. Dropping it alone
+	// doesn't carry the raw detail: it is noise by construction, and
+	// --raw-errors still shows it.
+	var findings []finding
+	var rest errors.Error
+	fallout := map[string]bool{}
+	scanned := map[string]bool{}
+	for _, e := range errors.Errors(err) {
+		if quad, ok := quadletOwner(root, e.Path()); ok && !scanned[quad.Path().String()] {
+			scanned[quad.Path().String()] = true
+			fs, cleared := missingRequired(quad, dir, displayPath(quad.Path()))
+			findings = append(findings, fs...)
+			for k := range cleared {
+				fallout[k] = true
+			}
+		}
+		if !fallout[errKey(e)] {
+			rest = errors.Append(rest, e)
+		}
+	}
+	lossy := false
+	if rest != nil {
+		fs, l := diagnose(root, dir, rest)
+		findings = append(findings, fs...)
+		lossy = lossy || l
+	}
 	if len(findings) == 0 {
 		return cueError(context, err)
 	}
@@ -73,6 +101,164 @@ func diagError(root cue.Value, dir, context string, err error) error {
 		de.Detail = cueError(context, err).Error()
 	}
 	return de
+}
+
+// quadletOwner resolves the #Quadlet owning an error path: the shortest
+// prefix carrying a manifest list, so a nested stacks.web is found as well as
+// a top-level app, and an ordinary field that happens to be named manifest
+// is passed over. A quadlet that failed to build may report its manifest as
+// bottom, so that counts too. Discovery stops at a quadlet, so they never nest.
+func quadletOwner(root cue.Value, p []string) (cue.Value, bool) {
+	for i := 1; i <= len(p); i++ {
+		path := cue.ParsePath(strings.Join(p[:i], "."))
+		if path.Err() != nil {
+			return cue.Value{}, false
+		}
+		v := root.LookupPath(path)
+		mf := v.LookupPath(cue.ParsePath("manifest"))
+		if k := mf.IncompleteKind(); mf.Exists() && (k&cue.ListKind != 0 || k == cue.BottomKind) {
+			return v, true
+		}
+	}
+	return cue.Value{}, false
+}
+
+// displayPath renders a value path for a finding label: plain-name string
+// labels are unquoted (otel-collector, not "otel-collector"); any other label
+// keeps cue's quoting, so a separator ("stacks.web" vs stacks.web) stays
+// distinguishable and an escape never reaches the terminal as a raw control
+// character. Identity stays with the canonical cue.Path.
+func displayPath(p cue.Path) string {
+	var parts []string
+	for _, sel := range p.Selectors() {
+		if sel.LabelType() == cue.StringLabel && plainLabelRe.MatchString(sel.Unquoted()) {
+			parts = append(parts, sel.Unquoted())
+		} else {
+			parts = append(parts, sel.String())
+		}
+	}
+	return strings.Join(parts, ".")
+}
+
+var plainLabelRe = regexp.MustCompile(`^[A-Za-z0-9_$-]+$`)
+
+// missingRequired reports the inputs of a quadlet still marked required
+// (`field!:`) that its failure depends on, located at their declaration, plus
+// the errors filling them in clears (the fallout, keyed by errKey). It
+// descends only through definition fields (#images: debian!), where helper
+// inputs live; units and the manifest are cue's to report, and optional
+// fields are absent by design. Asking the value directly is the only
+// reliable source: an unset input often surfaces as an unrelated conflict
+// (Container.Image: field not allowed) that never names it.
+func missingRequired(quad cue.Value, dir, name string) ([]finding, map[string]bool) {
+	var out []finding
+	cleared := map[string]bool{}
+	before := errorSet(quad)
+	var walk func(v cue.Value, prefix string, depth int)
+	walk = func(v cue.Value, prefix string, depth int) {
+		// No kind guard: a quadlet that failed to build reports bottom yet
+		// still iterates, and Fields rejects anything that is not a struct.
+		if depth > 4 {
+			return
+		}
+		it, err := v.Fields(cue.All())
+		if err != nil {
+			return
+		}
+		for it.Next() {
+			sel, fv := it.Selector(), it.Value()
+			if sel.ConstraintType()&cue.OptionalConstraint != 0 {
+				continue
+			}
+			label := prefix + strings.TrimSuffix(sel.String(), "!")
+			if sel.ConstraintType()&cue.RequiredConstraint == 0 {
+				if sel.IsDefinition() {
+					walk(fv, label+".", depth+1)
+				}
+				continue
+			}
+			gone := implicated(quad, label, fv.IncompleteKind(), before)
+			if len(gone) == 0 {
+				continue // unset, but not why this quadlet fails
+			}
+			for k := range gone {
+				cleared[k] = true
+			}
+			f := finding{loc: name, msg: fmt.Sprintf("required input %s is not set", label)}
+			if want := fmt.Sprint(fv); fv.IncompleteKind() != cue.StructKind && len(want) <= 40 {
+				f.msg += " (" + want + ")"
+			}
+			// The declaration alone is usually in a vendored helper; lead
+			// with the quadlet itself, the value the user sets the input on.
+			for _, pos := range []token.Pos{quad.Pos(), fv.Pos()} {
+				if pos.IsValid() {
+					f.pos = append(f.pos, strings.TrimPrefix(pos.String(), dir+"/"))
+				}
+			}
+			out = append(out, f)
+		}
+	}
+	walk(quad, "", 0)
+	return out, cleared
+}
+
+// implicated fills the input at label with a stand-in of its kind and
+// returns the quadlet errors that disappear. None means the input is inert
+// here (an unused declaration that merely is unset too), or that no stand-in
+// could be judged: one the input's own constraints reject turns it bottom,
+// which can rewrite unrelated errors, so that verdict is discarded rather
+// than risk hiding a real error as fallout.
+func implicated(quad cue.Value, label string, kind cue.Kind, before map[string]bool) map[string]bool {
+	var stand any
+	switch {
+	case kind&cue.StringKind != 0:
+		stand = "x"
+	case kind&cue.IntKind != 0:
+		stand = 1
+	case kind&cue.FloatKind != 0:
+		stand = 1.0
+	case kind&cue.BoolKind != 0:
+		stand = true
+	case kind&cue.BytesKind != 0:
+		stand = []byte("x")
+	case kind&cue.ListKind != 0:
+		stand = []any{}
+	case kind&cue.StructKind != 0:
+		stand = map[string]any{}
+	case kind&cue.NullKind != 0:
+		stand = cuecontext.New().CompileString("null")
+	default:
+		return nil
+	}
+	path := cue.ParsePath(label)
+	if path.Err() != nil {
+		return nil
+	}
+	filled := quad.FillPath(path, stand)
+	if filled.LookupPath(path).Err() != nil {
+		return nil
+	}
+	after := errorSet(filled)
+	gone := map[string]bool{}
+	for k := range before {
+		if !after[k] {
+			gone[k] = true
+		}
+	}
+	return gone
+}
+
+// errorSet is a quadlet's concrete-validation errors, keyed by errKey.
+func errorSet(v cue.Value) map[string]bool {
+	set := map[string]bool{}
+	for _, e := range errors.Errors(v.Validate(cue.Concrete(true))) {
+		set[errKey(e)] = true
+	}
+	return set
+}
+
+func errKey(e errors.Error) string {
+	return strings.Join(e.Path(), ".") + "\x00" + msgOf(e)
 }
 
 // diagnose groups the flattened errors by path, collapses disjunction arms

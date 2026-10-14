@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"cuelang.org/go/cue"
+
 	"github.com/lugoues/creidhne"
 )
 
@@ -48,5 +50,28 @@ func TestFieldFromSchemaLine(t *testing.T) {
 	}
 	if got := fieldFromSchemaLine("container.cue:1:1"); got != "" {
 		t.Fatalf("package line should resolve to no field, got %q", got)
+	}
+}
+
+// TestDisplayPath: only plain names lose their quotes. A label holding a
+// separator or an escape keeps cue's quoting, so "stacks.web" stays distinct
+// from stacks.web and "a\nb" never prints a raw newline.
+func TestDisplayPath(t *testing.T) {
+	cases := map[string]string{
+		`stacks.web`:        `stacks.web`,
+		`"otel-collector"`:  `otel-collector`,
+		`"stacks.web"`:      `"stacks.web"`,
+		`stacks."app.prod"`: `stacks."app.prod"`,
+		`"a\nb"`:           `"a\nb"`,
+		`"\u001b[31m"`:     `"\u001b[31m"`,
+	}
+	for in, want := range cases {
+		p := cue.ParsePath(in)
+		if p.Err() != nil {
+			t.Fatalf("parse %s: %v", in, p.Err())
+		}
+		if got := displayPath(p); got != want {
+			t.Errorf("displayPath(%s) = %q, want %q", in, got, want)
+		}
 	}
 }
