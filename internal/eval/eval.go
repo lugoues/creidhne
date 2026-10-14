@@ -441,26 +441,11 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 
 	for list.Next() {
 		rec := list.Value()
-		kind, _ := rec.LookupPath(cue.ParsePath("kind")).String()
-		if kind == "" {
-			// A list-typed field named `manifest` whose records lack the `kind`
-			// contract field is not a #Quadlet manifest (e.g. a user value that
-			// happens to be named `manifest`). Skip it rather than failing with a
-			// cryptic error. This matters now that discovery recurses the whole
-			// value tree, not just top-level values.
+		ur, ok, err := checkRecord(rec)
+		if !ok {
 			return Quadlet{}, false, nil
 		}
-		ur := UnitRecord{Kind: kind}
-		ur.Stem, _ = rec.LookupPath(cue.ParsePath("stem")).String()
-		ur.Filename, _ = rec.LookupPath(cue.ParsePath("filename")).String()
-		ur.Service, _ = rec.LookupPath(cue.ParsePath("service")).String()
-		dataV := rec.LookupPath(cue.ParsePath("data"))
-		// Validate concreteness first: MarshalJSON on an incomplete unit emits a
-		// multi-KB dump of the whole resolved struct; report a concise hint
-		// instead and point at `crei validate` for the full diagnostic.
-		// Final() matters too: validators that wait for a finalized value
-		// (e.g. struct.MinFields on a build Context) stay silent without it.
-		if err := dataV.Validate(cue.Concrete(true), cue.Final()); err != nil {
+		if err != nil {
 			// The filename is derived from name, so when name itself is the unset
 			// field the filename is empty too; fall back to the stem, then the
 			// kind, so the message never reads "unit  is incomplete".
@@ -471,7 +456,7 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 			if label == "" {
 				label = "a " + ur.Kind
 			}
-			if fs, _ := missingRequired(v, "", name); len(fs) > 0 {
+			if fs, _ := missingRequired(v, renderErrors, "", name); len(fs) > 0 {
 				msgs := make([]string, len(fs))
 				for i, f := range fs {
 					msgs[i] = f.msg
@@ -483,6 +468,7 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 			}
 			return Quadlet{}, false, fmt.Errorf("unit %s is incomplete: %s", label, incompleteHint(err))
 		}
+		dataV := rec.LookupPath(cue.ParsePath("data"))
 		b, err := dataV.MarshalJSON()
 		if err != nil {
 			return Quadlet{}, false, fmt.Errorf("marshal data for %s: %w", ur.Filename, err)
@@ -495,6 +481,48 @@ func tryQuadlet(v cue.Value) (Quadlet, bool, error) {
 		q.Units = append(q.Units, ur)
 	}
 	return q, true, nil
+}
+
+// checkRecord is the render contract for one manifest record, shared by
+// tryQuadlet and the diagnostic scan (renderErrors) so the two can't
+// disagree on what fails. ok is false when the record has no kind: the value
+// is then no #Quadlet manifest at all (a user field that happens to be named
+// manifest), which matters since discovery recurses the whole value tree.
+// err is what render fails on: an identity field present but not concrete
+// (it would decode as "" and fail later as an unsafe path), or data that
+// isn't concrete, absent data included. An absent identity field is fine;
+// some kinds generate no service.
+func checkRecord(rec cue.Value) (ur UnitRecord, ok bool, err error) {
+	ur.Kind, _ = rec.LookupPath(cue.ParsePath("kind")).String()
+	if ur.Kind == "" {
+		return ur, false, nil
+	}
+	var errs errors.Error
+	for _, f := range []struct {
+		name string
+		dst  *string
+	}{{"stem", &ur.Stem}, {"filename", &ur.Filename}, {"service", &ur.Service}} {
+		fv := rec.LookupPath(cue.ParsePath(f.name))
+		if !fv.Exists() {
+			continue
+		}
+		if verr := fv.Validate(cue.Concrete(true)); verr != nil {
+			errs = errors.Append(errs, errors.Promote(verr, ""))
+			continue
+		}
+		*f.dst, _ = fv.String()
+	}
+	// Validate data's concreteness before anyone marshals it: MarshalJSON on
+	// an incomplete unit emits a multi-KB dump of the whole resolved struct.
+	// Final() matters too: validators that wait for a finalized value (e.g.
+	// struct.MinFields on a build Context) stay silent without it.
+	if verr := rec.LookupPath(cue.ParsePath("data")).Validate(cue.Concrete(true), cue.Final()); verr != nil {
+		errs = errors.Append(errs, errors.Promote(verr, ""))
+	}
+	if errs != nil {
+		return ur, true, errs
+	}
+	return ur, true, nil
 }
 
 // incompleteHint renders a concise message for an incomplete-value error. CUE

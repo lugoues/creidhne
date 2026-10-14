@@ -349,6 +349,117 @@ func TestDiagMissingRequiredInput(t *testing.T) {
 				`Image: "docker.io/x", Environment: ["P=\(#pb)"]}}`,
 			want: []string{"required input #pa is not set", "required input #pb is not set"},
 		},
+		// Several missing inputs all surface in one run.
+		{
+			name: "two inputs breaking the same field",
+			src: hdr + `app: q.#Quadlet & {name: "app", #gid!: int & >0, #uid!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#gid):1"], uidmapping: ["1000:\(#uid):1"]}}}`,
+			want: []string{"required input #gid is not set", "required input #uid is not set"},
+			not:  "field not allowed",
+		},
+		{
+			name:     "input hidden behind another's build failure",
+			validate: true,
+			src: hdr + `app: q.#Quadlet & {name: "app", #gid!: int & >0, #port!: int, units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["P=\(#port)"], UserNS: {mode: "auto", gidmapping: ["1000:\(#gid):1"]}}}`,
+			want: []string{"required input #gid is not set", "required input #port is not set"},
+		},
+		{
+			name:     "every failing quadlet",
+			validate: true,
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: q.#Quadlet & {name: "b", #gb!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#gb):1"]}}}`,
+			want: []string{"a: required input #ga is not set", "b: required input #gb is not set"},
+		},
+		// A grouping value with an ordinary manifest list is not a quadlet;
+		// the scan must still reach the quadlet beneath it.
+		{
+			name: "quadlet below a non-quadlet manifest list",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`stacks: {manifest: [{note: "x"}], web: q.#Quadlet & {name: "web", #gb!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#gb):1"]}}}}`,
+			want: []string{"a: required input #ga is not set", "stacks.web: required input #gb is not set"},
+		},
+		// Interchangeable inputs: filling either one alone satisfies the
+		// field, so leave-one-out clears both; each must still be named.
+		{
+			name: "alternative inputs",
+			src: hdr + `app: q.#Quadlet & {name: "app", #inputs: {a!: string, b!: string}, units: #container: Container: {` +
+				`Image: #inputs.a | #inputs.b}}`,
+			want: []string{"required input #inputs.a is not set", "required input #inputs.b is not set"},
+		},
+		// A render-path build error must not drag in another quadlet whose
+		// unset input only matters to strict validation (it never reaches
+		// the manifest, so render and apply succeed without it).
+		{
+			name: "strict-only input stays out of an ordinary load",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: q.#Quadlet & {name: "b", #value!: string, note: "\(#value)", units: #container: Container: Image: "docker.io/x"}`,
+			want: []string{"a: required input #ga is not set"},
+			not:  "#value",
+		},
+		// The second quadlet isn't bottom, only its manifest is incomplete:
+		// it fails render too, so it's named in the same run. Its strict-only
+		// input (feeding a field outside the manifest) still isn't.
+		{
+			name: "incomplete manifest beside a build failure",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: q.#Quadlet & {name: "b", #port!: int, #value!: string, note: "\(#value)", units: #container: Container: {` +
+				`Image: "docker.io/x", Environment: ["P=\(#port)"]}}`,
+			want: []string{"a: required input #ga is not set", "b: required input #port is not set"},
+			not:  "#value",
+		},
+		// Render only validates each manifest record's data; an incomplete
+		// extra field on a record must not be blamed just because another
+		// quadlet failed.
+		{
+			name: "incomplete field beside manifest data",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: q.#Quadlet & {name: "b", #value!: string, manifest: [{debug: #value}, ...], units: #container: Container: Image: "docker.io/x"}`,
+			want: []string{"a: required input #ga is not set"},
+			not:  "#value",
+		},
+		// renderErrors applies checkRecord, tryQuadlet's contract: data is
+		// validated even when absent, and an identity field present but not
+		// concrete fails too. Hand-built manifests isolate both.
+		{
+			name: "absent data counts, as render fails on it",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: {#enabled!: bool, manifest: [{kind: "volume", stem: "b", filename: "b.volume", service: "b-volume.service", ` +
+				`if #enabled {data: {Volume: {}}}}]}`,
+			want: []string{"a: required input #ga is not set", "b: required input #enabled is not set"},
+		},
+		{
+			name: "incomplete identity field",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: {#svc!: string, manifest: [{kind: "volume", stem: "b", filename: "b.volume", service: #svc, data: {Volume: {}}}]}`,
+			want: []string{"a: required input #ga is not set", "b: required input #svc is not set"},
+		},
+		// A record with an empty kind isn't a quadlet to tryQuadlet, so its
+		// absent data isn't a render failure either.
+		{
+			name: "empty kind is not a quadlet",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: {#enabled!: bool, manifest: [{kind: "", if #enabled {data: {}}}]}`,
+			want: []string{"a: required input #ga is not set"},
+			not:  "#enabled",
+		},
+		{
+			name: "failure before an empty kind still counts",
+			src: hdr + `a: q.#Quadlet & {name: "a", #ga!: int & >0, units: #container: Container: {` +
+				`Image: "docker.io/x", UserNS: {mode: "auto", gidmapping: ["1000:\(#ga):1"]}}}` + "\n" +
+				`b: {#enabled!: bool, manifest: [{kind: "volume", if #enabled {data: {Volume: {}}}}, {kind: ""}]}`,
+			want: []string{"a: required input #ga is not set", "b: required input #enabled is not set"},
+		},
 		// Unset but inert: an unused required field, or one under an absent
 		// optional definition, must not take the blame for an unrelated typo.
 		{
@@ -385,5 +496,19 @@ func TestDiagMissingRequiredInput(t *testing.T) {
 				t.Fatalf("%q must not be a finding:\n%v", tc.not, err)
 			}
 		})
+	}
+}
+
+// An identity field present but not concrete used to decode as "" and fail
+// later in render as an unsafe output path; it now fails at load, naming the
+// input. An absent one is fine (some kinds generate no service).
+func TestRecordIdentityFields(t *testing.T) {
+	hdr := "package naming\n"
+	err := loadSourceErr(t, hdr+`b: {#fn!: string, manifest: [{kind: "volume", stem: "b", filename: #fn, service: "b-volume.service", data: {Volume: {}}}]}`)
+	if err == nil || !strings.Contains(err.Error(), "required input #fn is not set") {
+		t.Fatalf("incomplete filename: want the input named, got %v", err)
+	}
+	if err := loadSourceErr(t, hdr+`b: {manifest: [{kind: "volume", stem: "b", filename: "b.volume", data: {Volume: {}}}]}`); err != nil {
+		t.Fatalf("absent service must load: %v", err)
 	}
 }
