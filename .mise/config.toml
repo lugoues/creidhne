@@ -3,7 +3,7 @@
 
 [tools]
 "aqua:cli/cli" = "latest"
-"aqua:tombi-toml/tombi" = "1.8.4"
+"aqua:tombi-toml/tombi" = "1.9.3"
 aube = "latest"
 cue = "0.17.1"
 go = "latest"
